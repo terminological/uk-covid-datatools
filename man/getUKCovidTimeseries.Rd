@@ -6,6 +6,9 @@
 \usage{
 getUKCovidTimeseries()
 }
+\value{
+a data frame with several timeseries in it
+}
 \description{
 data held in google sheets:
 https://docs.google.com/spreadsheets/d/1snb-vYuH7fVpTuyoQrM8zWiABYoXbSrnn44w-zlhM90/edit?usp=sharing

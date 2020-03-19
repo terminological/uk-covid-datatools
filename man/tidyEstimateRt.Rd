@@ -24,6 +24,9 @@ tidyEstimateRt(
 
 \item{window}{- the width of the smoothing function applied (default 2)}
 }
+\value{
+a dataframe with groupwise Rt estimates
+}
 \description{
 N.B. EpiEstim has a bug affecting 0.25 quantiles which is being looked at
 }

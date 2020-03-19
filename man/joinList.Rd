@@ -13,6 +13,9 @@ joinList(df, groupVars = NULL, defaultJoin = NULL)
 
 \item{defaultJoin}{- if there is no grouping we need one column to join by.}
 }
+\value{
+a join List
+}
 \description{
 Calculates a join list
 }

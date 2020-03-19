@@ -7,7 +7,7 @@
 print_and_capture(x)
 }
 \arguments{
-\item{x}{a datafram}
+\item{x}{a dataframe}
 }
 \description{
 capture a data fram for an error message

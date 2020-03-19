@@ -5,7 +5,8 @@
 #' @param df - a df which may be grouped
 #' @param groupVars - the grouping for which we want to create a label as a list of columns quoted by vars(...)
 #' @param defaultJoin - if there is no grouping we need one column to join by.
-#' @import tidyverse
+#' @import dplyr
+#' @return a join List
 #' @export
 joinList = function(df,groupVars=NULL,defaultJoin=NULL) {
   grps = df %>% groups()
@@ -26,7 +27,7 @@ joinList = function(df,groupVars=NULL,defaultJoin=NULL) {
 #' capture a data fram for an error message
 #'
 #' @import tidyverse
-#' @param x a datafram
+#' @param x a dataframe
 print_and_capture <- function(x)
 {
   paste(capture.output(print(x)), collapse = "\n")
@@ -41,7 +42,8 @@ print_and_capture <- function(x)
 #' @param dateVar - the variable containing the seqence of dates
 #' @param incidenceVar - the sequence of daily incidence
 #' @param window - the width of the smoothing function applied (default 2)
-#' @import tidyverse
+#' @return a dataframe with groupwise Rt estimates
+#' @import dplyr
 #' @export
 tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "incidence", window=2,...) {
   grps = groups(groupedDf)
@@ -92,7 +94,8 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
 #' data held in google sheets:
 #' https://docs.google.com/spreadsheets/d/1snb-vYuH7fVpTuyoQrM8zWiABYoXbSrnn44w-zlhM90/edit?usp=sharing
 #' 
-#' @import tidyverse
+#' @import dplyr
+#' @return a data frame with several timeseries in it
 #' @export
 getUKCovidTimeseries = function() {
   UKregional=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=163112336&single=true&output=csv", 
@@ -107,7 +110,7 @@ getUKCovidTimeseries = function() {
   
   # tidy Unitary authority region
   tmp = englandUnitAuth %>% 
-    pivot_longer(cols=starts_with("2020"),names_to = "date",values_to = "cumulative_cases") %>%
+    pivot_longer(cols=starts_with("20"),names_to = "date",values_to = "cumulative_cases") %>%
     mutate(date = as.Date(as.character(date),"%Y-%m-%d"))
   tmp = tmp %>% left_join(UKregional %>% select(date,daily_total=england_cumulative_cases), by="date")
   tidyEnglandUnitAuth = tmp %>% group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases,na.rm = TRUE)) %>%
@@ -154,7 +157,7 @@ getUKCovidTimeseries = function() {
 #' @param cumulativeCasesVar 
 #' @param totalVar
 #' @param unknownVar 
-#' @import tidyverse
+#' @import dplyr
 #' @export
 normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar = "cumulative_cases", totalVar = "daily_total", unknownVar = "daily_unknown", adjustUnknowns=TRUE) {
   grps = groups(groupedDf)

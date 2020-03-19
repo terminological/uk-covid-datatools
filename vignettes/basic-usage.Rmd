@@ -15,7 +15,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-devtools::install_github("terminological/uk-covid-datatools")
+devtools::load_all("~/Git/uk-covid-datatools/")
+#devtools::install_github("terminological/uk-covid-datatools", force = TRUE)
 
 library(ukcovidtools)
 library(ggplot2)
