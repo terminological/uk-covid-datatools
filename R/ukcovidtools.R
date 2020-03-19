@@ -110,21 +110,21 @@ getUKCovidTimeseries = function() {
   
   # tidy Unitary authority region
   tmp = englandUnitAuth %>% 
-    pivot_longer(cols=starts_with("20"),names_to = "date",values_to = "cumulative_cases") %>%
+    tidyr::pivot_longer(cols=starts_with("20"),names_to = "date",values_to = "cumulative_cases") %>%
     mutate(date = as.Date(as.character(date),"%Y-%m-%d"))
   tmp = tmp %>% left_join(UKregional %>% select(date,daily_total=england_cumulative_cases), by="date")
   tidyEnglandUnitAuth = tmp %>% group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases,na.rm = TRUE)) %>%
     ungroup() %>% group_by(GSS_CD, GSS_NM)
   
   # tidy NHS region
-  tmp = englandNHS %>% pivot_longer(cols=!date,names_to = "england_nhs_region",values_to = "cumulative_cases")
+  tmp = englandNHS %>% tidyr::pivot_longer(cols=!date,names_to = "england_nhs_region",values_to = "cumulative_cases")
   tmp = tmp %>% left_join(UKregional %>% select(date,daily_total=england_cumulative_cases), by="date")
   tidyEnglandNHS = tmp %>% group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases,na.rm = TRUE)) %>%
     ungroup() %>% group_by(england_nhs_region)
   
   # tidy UK regional
   tidyUKRegional = UKregional %>% select(date,england_cumulative_cases,scotland_cumulative_cases,wales_cumulative_cases,northern_ireland_cumulative_cases,daily_total=uk_cumulative_cases) %>% 
-    pivot_longer(cols=ends_with("cumulative_cases"),names_to = "uk_region",values_to = "cumulative_cases") %>%
+    tidyr::pivot_longer(cols=ends_with("cumulative_cases"),names_to = "uk_region",values_to = "cumulative_cases") %>%
     filter(!is.na(cumulative_cases)) %>%
     mutate(uk_region = stringr::str_remove(uk_region,"_cumulative_cases")) %>%
     mutate(uk_region = stringr::str_replace(uk_region,"_"," "))  %>% 
