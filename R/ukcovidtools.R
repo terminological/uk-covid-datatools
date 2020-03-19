@@ -96,10 +96,10 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
 #' @export
 getUKCovidTimeseries = function() {
   UKregional=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=163112336&single=true&output=csv", 
-                    col_types = cols(date = col_date(format = "%Y-%m-%d")))
+                    col_types = readr::cols(date = readr::col_date(format = "%Y-%m-%d")))
   
   englandNHS=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=0&single=true&output=csv", 
-                      col_types = cols(date = col_date(format = "%Y-%m-%d")))
+                      col_types = readr::cols(date = readr::col_date(format = "%Y-%m-%d")))
   
   englandUnitAuth=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=796246456&single=true&output=csv")
   
