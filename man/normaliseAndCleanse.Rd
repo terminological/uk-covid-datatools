@@ -14,11 +14,13 @@ normaliseAndCleanse(
 )
 }
 \arguments{
-\item{groupedDf}{the tidy dataframe grouped by region / geography / demography whatever you have}
+\item{groupedDf}{the tidy dataframe grouped by regional geographical areas whatever you have}
 
 \item{dateVar}{the column containing the date}
 
 \item{cumulativeCasesVar}{}
+
+\item{totalVar}{the total over all the whole geography}
 
 \item{unknownVar}{}
 }

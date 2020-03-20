@@ -26,7 +26,6 @@ joinList = function(df,groupVars=NULL,defaultJoin=NULL) {
 
 #' capture a data fram for an error message
 #'
-#' @import tidyverse
 #' @param x a dataframe
 print_and_capture <- function(x)
 {
@@ -152,10 +151,10 @@ getUKCovidTimeseries = function() {
 #' * calculates incidence and makes sure no negative incidences recorded
 #' * updated cumulative_cases to reflect cleaned incidences
 #' 
-#' @param groupedDf the tidy dataframe grouped by region / geography / demography whatever you have
+#' @param groupedDf the tidy dataframe grouped by regional geographical areas whatever you have
 #' @param dateVar the column containing the date
 #' @param cumulativeCasesVar 
-#' @param totalVar
+#' @param totalVar the total over all the whole geography
 #' @param unknownVar 
 #' @import dplyr
 #' @export
@@ -175,9 +174,9 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
   ) %>% filter(!is.na(cumulative_cases))
   # clear out NA's if there are any
   if(adjustUnknowns) {
-    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases*(1+unknown/total))
+    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases*(1+unknown/total))# %>% mutate(adj_cumulative_cases = cummax(adj_cumulative_cases))
   } else {
-    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases)
+    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases)# %>% mutate(adj_cumulative_cases = cummax(adj_cumulative_cases))
   }
   # calculate incidece
   tmp3 = tmp2 %>% group_by(!!!grps) %>% arrange(date) %>%
@@ -191,4 +190,14 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
     mutate(cumulative_cases = cumsum(ifelse(is.na(incidence),0,incidence))-incidence+min(cumulative_cases)) %>% select(-total,-unknown,-adj_cumulative_cases) %>% 
     rename(!!dateVar := date) %>% filter(!is.na(cumulative_cases)) # make sure date is same as input.
   return(tmp5)
+}
+
+
+getDemographics = function() {
+  library(readxl)
+  url <- "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2fpopulationestimatesforukenglandandwalesscotlandandnorthernireland%2fmid20182019laboundaries/ukmidyearestimates20182019ladcodes.xls"
+  destfile <- "ukmidyearestimates20182019ladcodes.xls"
+  curl::curl_download(url, destfile)
+  ukmidyearestimates20182019ladcodes <- read_excel(destfile)
+  View(ukmidyearestimates20182019ladcodes)
 }
