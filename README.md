@@ -16,6 +16,16 @@ library(EpiEstim)
 ```{r}
 UK = ukcovidtools::getUKCovidTimeseries()
 cleanRegional = UK$tidyUKRegional %>% ukcovidtools::normaliseAndCleanse()
+
+
+# A list of 7 data sets of similar nature and formats
+glimpse(UK$UKregional)
+glimpse(UK$englandNHS)
+glimpse(UK$englandUnitAuth)
+glimpse(UK$englandUnitAuth2NHSregion)
+glimpse(UK$tidyUKRegional)
+glimpse(UK$tidyEnglandNHS)
+glimpse(UK$tidyEnglandUnitAuth)
 ```
 
 timeseries has UK region, England NHS region, and England Unitary Authority
@@ -30,7 +40,23 @@ siConfig = EpiEstim::make_config(list(
 ))
 
 regionalRt = cleanRegional %>% ukcovidtools::tidyEstimateRt(siConfig)
-ggplot(regionalRt %>% filter(!is.na(`Median(R)`)), aes(x=date,y=`Median(R)`,ymin=`Quantile.0.05(R)`,ymax=`Quantile.0.95(R)`,fill=uk_region,colour=uk_region))+
+ggplot(regionalRt, aes(x=date,y=`Median(R)`,ymin=`Quantile.0.05(R)`,ymax=`Quantile.0.95(R)`,fill=uk_region,colour=uk_region))+
   geom_ribbon(alpha=0.2, colour=NA)+geom_line()+geom_hline(yintercept = 1, colour="red")+expand_limits(y=0)
 
 ```
+
+## Supporting data sets
+
+included in the package are 2 data sets:
+
+```{r}
+
+# Demographic breakdown of UK in single year age bands in a tidy format
+glimpse(UK2019Demographics)
+
+# UK ILI data in a tidy format going back to 2014
+glimpse(UKILIdata)
+
+```
+
+the ili data can also be found as a csv file in data-raw/ilidata.csv
