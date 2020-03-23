@@ -108,6 +108,6 @@ LAD2Hospital = postcode2LAD %>% inner_join(postcode2Hospital, by="pcds") %>% gro
 # aggregate hospitals to NHS trusts
 LAD2Trust = LAD2Hospital %>% inner_join(NHSCapacity2019$hospitals, by="hospitalId") %>% group_by(ladcd,trustId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
 
-NHSCatchmentAreas = LAD2Trust %>% rename(fractionOfLADPopulation = fracPop)
+NHSCatchmentAreas = LAD2Trust %>% rename(fractionOfLADPopulation = fracPop) %>% filter(!is.na(ladcd))
 
-usethis::use_data(NHSCatchmentAreas)
+usethis::use_data(NHSCatchmentAreas,overwrite = TRUE)
