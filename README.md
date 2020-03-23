@@ -47,7 +47,7 @@ ggplot(regionalRt, aes(x=date,y=`Median(R)`,ymin=`Quantile.0.05(R)`,ymax=`Quanti
 
 ## Supporting data sets
 
-included in the package are 2 data sets:
+included in the package are a number of supporting data sets:
 
 ```{r}
 
@@ -57,6 +57,17 @@ glimpse(UK2019Demographics)
 # UK ILI data in a tidy format going back to 2014
 glimpse(UKILIdata)
 
+# UK capacity in NHS hospitals & lists of all UK hospitals and locations
+glimpse(NHSCapacity2019$hospitals)
+
+# UK capacity in NHS hospitals - acute general medical beds and ICUs
+glimpse(NHSCapacity2019$trusts)
+# includes lat/long
+
+# Guestimated UK Catchment areas for hospitals in terms of a LAD and a fraction of the LAD population that will end up in a NHS trust
+# This uses population estimates in each postcode and closest hospital (straight line distance) to each postcode to calculate an overall fraction for the LAD population which will use any given hospital
+glimpse(NHSCatchmentAreas)
+
 ```
 
-the ili data can also be found as a csv file in data-raw/ilidata.csv
+N.B. the ili data can also be found as a csv file in data-raw/ilidata.csv
