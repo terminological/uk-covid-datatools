@@ -66,7 +66,9 @@ glimpse(NHSCapacity2019$trusts)
 
 # Guestimated UK Catchment areas for hospitals in terms of a LAD and a fraction of the LAD population that will end up in a NHS trust
 # This uses population estimates in each postcode and closest hospital (straight line distance) to each postcode to calculate an overall fraction for the LAD population which will use any given hospital
-glimpse(NHSCatchmentAreas)
+glimpse(NHSCatchmentAreas$acuteBeds)
+
+glimpse(NHSCatchmentAreas$icuBeds)
 
 ```
 

@@ -1,5 +1,7 @@
 ## code to prepare `NHSCatchmentAreas` dataset goes here
 
+### N.B. NHSCapacity2019.R must be run first (or devtools::load_all())
+
 postcodesZip <- "~/Git/uk-covid-datatools/data-raw/Postcodes/postcodes.zip"
 if(!file.exists(postcodesZip)) {
   download.file("https://www.doogal.co.uk/files/postcodes.zip",postcodesZip)
@@ -86,28 +88,46 @@ postcode2LAD_tmp = read_csv("~/Git/uk-covid-datatools/data-raw/Postcodes/NSPCL_N
 
 postcode2LAD = postcode2LAD_tmp %>% left_join(postcodes %>% select(Postcode,lat=Latitude,long=Longitude,pop=Population,houses=Households,deprivation=`Index of Multiple Deprivation`) %>% distinct(), by=c("pcds"="Postcode"))
 postcode2LAD = postcode2LAD %>% filter(!is.na(lat))
-# all some sort of temporary test stuff
+# all some sort of temporary test stuff in there with NA latitudes
 
+# quality checks
 # length(unique(postcode2LAD$pcds)) == length(postcode2LAD$pcds)
-
 # any(is.na(NHSCapacity2019$hospitals$long)) == FALSE
 # any(is.na(NHSCapacity2019$hospitals$lat)) == FALSE
 # any(is.na(postcode2LAD$lat)) == FALSE
 # any(is.na(postcode2LAD$long)) == FALSE
 
 # find the nearest hospital to all post codes
-postcode2Hospital = postcode2LAD %>% ungroup() %>% tidyinfostats::findKNN(NHSCapacity2019$hospitals %>% filter(!is.na(lat)), pcds, hospitalId, k = 1, matchVars = vars(lat,long))
 
 # calculate the fraction of the population of a LAD that each post code represents
 postcode2LAD = postcode2LAD %>% group_by(ladcd) %>% mutate(ladPop = sum(pop,na.rm=TRUE)) %>% ungroup()
 postcode2LAD = postcode2LAD %>% mutate(fracPop = pop/ladPop)
 
 # aggregate to LAD, calculation fractions of population and assign them to a hospital
-LAD2Hospital = postcode2LAD %>% inner_join(postcode2Hospital, by="pcds") %>% group_by(ladcd, hospitalId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
+acuteBedHospitals = NHSCapacity2019$hospitals %>% semi_join(NHSCapacity2019$trusts %>% filter(acuteBeds>0), by="trustId")
+postcode2Acute = postcode2LAD %>% ungroup() %>% tidyinfostats::findKNN(acuteBedHospitals, pcds, hospitalId, k = 1, matchVars = vars(lat,long))
+LAD2Hospital_acute = postcode2LAD %>% inner_join(postcode2Acute, by="pcds") %>% group_by(ladcd, hospitalId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
+LAD2Trust_acute = LAD2Hospital %>% inner_join(acuteBedHospitals, by="hospitalId") %>% group_by(ladcd,trustId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
+
 
 # aggregate hospitals to NHS trusts
-LAD2Trust = LAD2Hospital %>% inner_join(NHSCapacity2019$hospitals, by="hospitalId") %>% group_by(ladcd,trustId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
+icuBedHospitals = NHSCapacity2019$hospitals %>% filter(hasIcu)
+postcode2ICU = postcode2LAD %>% ungroup() %>% tidyinfostats::findKNN(icuBedHospitals, pcds, hospitalId, k = 1, matchVars = vars(lat,long))
+LAD2Hospital_icu = postcode2LAD %>% inner_join(postcode2ICU, by="pcds") %>% group_by(ladcd, hospitalId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
+LAD2Trust_icu = LAD2Hospital %>% inner_join(icuBedHospitals, by="hospitalId") %>% group_by(ladcd,trustId) %>% summarise(fracPop = sum(fracPop,na.rm=TRUE))
 
-NHSCatchmentAreas = LAD2Trust %>% rename(fractionOfLADPopulation = fracPop) %>% filter(!is.na(ladcd))
+NHSCatchmentAreas = list(
+  acuteBeds = LAD2Trust_acute %>% group_by(ladcd) %>% mutate(fracPop = fracPop/sum(fracPop)) %>% rename(fractionOfLADPopulation = fracPop) %>% filter(!is.na(ladcd)),
+  icuBeds = LAD2Trust_icu %>% group_by(ladcd) %>% mutate(fracPop = fracPop/sum(fracPop)) %>% rename(fractionOfLADPopulation = fracPop) %>% filter(!is.na(ladcd))
+)
 
 usethis::use_data(NHSCatchmentAreas,overwrite = TRUE)
+
+# NHSCatchmentAreas %>% group_by(ladcd) %>% summarise(frac = sum(fractionOfLADPopulation)) %>% filter(frac != 1) # should be empty
+
+# TODO: lots of possible options here
+
+rm(acuteBedHospitals, icuBedHospitals, LAD2Hospital, LAD2Hospital_acute, LAD2Hospital_icu, LAD2Trust_acute, LAD2Trust_icu, postcode2Acute, postcode2Hospital, postcode2ICU, 
+   postcode2LAD, postcode2LAD_tmp, postcodes)
+
+rm(postcodes2LADZip, postcodesZip)
