@@ -1,0 +1,87 @@
+---
+title: "A spatiotemporal model of ventilator demand in the NHS due to COVID-19"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{A spatiotemporal model of ventilator demand in the NHS due to COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+
+library(tidyverse)
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/standard-print-output")
+# library(standardPrintOutput)
+devtools::load_all("~/Git/standard-print-output/")
+# devtools::install_github("terminological/tidy-info-stats")
+# library(tidyinfostats)
+devtools::load_all("~/Git/tidy-info-stats/")
+
+library(rgdal)
+library(ggplot2)
+library(rgeos)
+library(maptools)
+library(lubridate)
+
+ggplot::theme_set(standardPrintOutput::defaultFigureLayout())
+```
+
+Load and test the MetaWard epidemiological model
+
+```{r}
+
+#### model output ----
+
+sim = readSpatialFile("~/Dropbox/covid19/ventilator-demand/ForMattData.dat")
+glimpse(UKCovidMaps$ward)
+unique(sim$time)
+tmpSim = UKCovidMaps$ward %>% left_join(sim %>% filter(time==100), by=c("wd11cd" = "WD11CD"))
+
+ggplot(tmpSim)+geom_sf(aes(fill=value),lwd = 0)+scale_fill_gradient(low="white",high="red",trans="sqrt",na.value = "grey90")+standardPrintOutput::mapTheme()
+
+```
+
+```{r}
+#### get data about beds etc ----
+
+glimpse(NHSCapacity2019$hospitals)
+glimpse(NHSCapacity2019$trusts)
+
+#### ICU beds by NHS trust (maybe spread between hospitals) ----
+
+glimpse(NHSCatchmentAreas$acuteBeds)
+glimpse(NHSCatchmentAreas$icuBeds)
+
+# icu provision per LAD:
+NHSCatchmentAreas$icuBeds %>% left_join(NHSCapacity2019$trusts, by="trustId")
+
+icuTrusts = NHSCapacity2019$trusts %>% filter(icuBeds>0)
+
+icuToIcuNetwork = icuTrusts %>% mutate(sourceTrustId = trustId) %>% 
+  tidyinfostats::findKNN(icuTrusts %>% mutate(targetTrustId = trustId), sourceTrustId, targetTrustId, matchVars = vars(approxLat,approxLong), k=5)
+
+closestTrustToLAD = LADlocation %>% tidyinfostats::findKNN(icuBedsByTrustLocation %>% ungroup() %>% 
+  mutate(lat_mean = Latitude, long_mean = Longitude), ladcd, trustId, matchVars = vars(lat_mean,long_mean), k=2)
+
+write_csv(icuTrusts, "icuBedsByTrustLocation.csv")
+write_csv(icuToIcuNetwork, "icuToIcuNetwork.csv")
+#write_csv(closestTrustToLAD, "closestIcuToLAD.csv")
+
+#### Integrate demographics ----
+# 
+tmp = LADlocation %>% inner_join(UK2019Demographics, by=c("ladcd"="code"))
+# 
+
+
+# summarise all postcodes in a LAD location to lat long
+```

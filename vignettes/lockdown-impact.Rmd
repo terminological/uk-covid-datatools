@@ -1,0 +1,343 @@
+---
+title: "Impact of the social distancing on regional infectivity of COVID-19"
+output: rmarkdown::html_vignette
+fig_width: 7
+fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Impact of the social distancing on regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+```
+
+## Serial interval estimation from the literature:
+
+```{r}
+serialIntervals = tibble(
+  mean_si_estimate = c(3.96, 6.3, 4.22, 4.56, 3.95, 5.21, 4.7, 7.5,6.6),
+  mean_si_estimate_low_ci = c(3.53, 5.2, 3.43, 2.69,-4.47, -3.35, 3.7, 5.3, 0.7),
+  mean_si_estimate_high_ci = c(4.39, 7.6, 5.01, 6.42, 12.51,13.94, 6.0, 19.0, 19.0),
+  std_si_estimate = c(4.75,4.2, 0.4, 0.95, 4.24, 4.32, 2.3, 3.4, NA),
+  std_si_estimate_low_ci = c(4.46, 3.1, NA, NA, 4.03, 4.06, 1.6, NA, NA),
+  std_si_estimate_high_ci = c(5.07, 5.3, NA, NA, 4.95, 5.58, 3.5, NA, NA),
+  sample_size = c(468,48,135,93,45,54,28,16,90),
+  population = c("China", "Shenzhen","Taijin","Singapore","Taijin","Singapore", "SE Asia", "Wuhan","Italy"),
+  source = c(
+    "Zhanwei Du et al. Serial Interval of COVID-19 among Publicly Reported Confirmed Cases. Emerging Infectious Disease journal 26, (2020)",
+    "Bi, Q. et al. Epidemiology and Transmission of COVID-19 in Shenzhen China: Analysis of 391 cases and 1,286 of their close contacts. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.03.20028423",
+    "Tindale, L. et al. Transmission interval estimates suggest pre-symptomatic spread of COVID-19. Epidemiology (2020) doi:10.1101/2020.03.03.20029983",
+    "Tindale, L. et al. Transmission interval estimates suggest pre-symptomatic spread of COVID-19. Epidemiology (2020) doi:10.1101/2020.03.03.20029983",
+    "Ganyani, T. et al. Estimating the generation interval for COVID-19 based on symptom onset data. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.05.20031815",
+    "Ganyani, T. et al. Estimating the generation interval for COVID-19 based on symptom onset data. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.05.20031815",
+    "Nishiura, H., Linton, N. M. & Akhmetzhanov, A. R. Serial interval of novel coronavirus (COVID-19) infections. Int. J. Infect. Dis. (2020) doi:10.1016/j.ijid.2020.02.060",
+    "Li, Q. et al. Early Transmission Dynamics in Wuhan, China, of Novel Coronavirus-Infected Pneumonia. N. Engl. J. Med. (2020) doi:10.1056/NEJMoa2001316",
+    "Cereda, D. et al. The early phase of the COVID-19 outbreak in Lombardy, Italy. arXiv [q-bio.PE] (2020)")
+)
+
+unk=function(x) ifelse(is.na(x),"unk",x)
+
+table = serialIntervals %>% mutate(
+  `Mean SI\n(95% CrI) days`=paste0(mean_si_estimate,"\n(",unk(mean_si_estimate_low_ci),"-",
+                                   unk(mean_si_estimate_high_ci),")"),
+  `Std SI\n(95% CrI) days`=paste0(unk(std_si_estimate),"\n(",unk(std_si_estimate_low_ci),"-",unk(std_si_estimate_high_ci),")")
+) %>% select(-contains("estimate")) %>% select(
+  `Reference`=source,
+  `Mean SI\n(95% CrI) days`,
+  `Std SI\n(95% CrI) days`,
+  `N`=sample_size,
+  `Population`=population
+)
+
+table %>% group_by(`Reference`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,2,0.5,1))
+```
+
+```{r}
+
+wtSIs = serialIntervals %>% summarise(
+  mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
+  min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
+  max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
+  std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
+  min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
+  max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
+  #total = sum(sample_size)
+) %>% mutate(
+  std_mean_si = (max_mean_si - min_mean_si) / 3.92, # TODO: fit gamma
+  std_std_si = (max_std_si - min_std_si) / 3.92
+)
+
+tdp = function(x,y,z) sprintf("%1.2f (%1.2f - %1.2f)", x ,y, z)
+
+tdp(wtSIs$mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si)
+tdp(wtSIs$std_si, wtSIs$min_std_si, wtSIs$max_std_si)
+
+```
+
+## Significant dates in epididemic UK
+
+https://en.wikipedia.org/wiki/2020_coronavirus_pandemic_in_the_United_Kingdom
+
+* Surveillance testing: https://www.gov.uk/government/news/new-surveillance-system-for-early-detection-of-covid-19: 2020-02-26
+* Sport fixtures cancelled: 2020-03-13
+* Tests only for inpatients: https://www.gov.uk/government/publications/wuhan-novel-coronavirus-initial-investigation-of-possible-cases/investigation-and-initial-clinical-management-of-possible-cases-of-wuhan-novel-coronavirus-wn-cov-infection: 2020-03-13
+* Voluntary self isolation of any symptoms & vunerable people: https://www.gov.uk/government/publications/covid-19-guidance-on-social-distancing-and-for-vulnerable-people: 2020-03-16
+* Non essential travel worldwide banned: https://www.gov.uk/guidance/travel-advice-novel-coronavirus#history: 2020-03-19
+* School closures: https://www.gov.uk/government/publications/closure-of-educational-settings-information-for-parents-and-carers#history: 2020-03-19
+* Full lockdown: https://www.gov.uk/government/publications/full-guidance-on-staying-at-home-and-away-from-others - 2020-03-23
+
+```{r}
+
+keyDates = tibble(
+  date = as.Date(c("2020-03-13","2020-03-16","2020-03-19","2020-03-23")), #max(r0shapes$date-1, na.rm=TRUE)),
+  impactDate = as.Date(c("2020-03-14","2020-03-21","2020-03-24","2020-03-28")), #max(r0shapes$date-1, na.rm=TRUE)),
+  event = c("Inpatient only testing","Social isolation of vulnerable","Travel ban / school closure","Stay at home") #,"Latest")
+) %>% mutate(label = paste0(date,": \n",event))
+
+```
+
+## Construct a R_t timeseries for Regional breakdowns 
+
+```{r}
+ts = ukcovidtools::getUKCovidTimeseries()
+#TODO: update these estimates of SI and use credible interval
+# cfg = EpiEstim::make_config(list(
+#   mean_si = wtSIs$mean_si,
+#   std_si = wtSIs$std_si
+# ))
+
+cfg = EpiEstim::make_config(list(
+  mean_si = wtSIs$mean_si, 
+  std_mean_si = wtSIs$std_mean_si,
+  min_mean_si = wtSIs$min_mean_si, 
+  max_mean_si = wtSIs$max_mean_si,
+  std_si = wtSIs$std_si, 
+  std_std_si = wtSIs$std_si,
+  min_std_si = wtSIs$min_std_si, 
+  max_std_si = wtSIs$max_std_si), method="uncertain_si")
+```
+
+### UK coutries
+
+```{r}
+#glimpse(ts$tidyUKRegional)
+R0regionaltimeseries = ts$tidyUKRegional %>% group_by(uk_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) 
+R0regionaltimeseries = R0regionaltimeseries %>% filter(!is.na(`Median(R)`))
+ukregionalplot = ggplot(R0regionaltimeseries, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+ #, colour=uk_region, fill=uk_region))+
+  geom_ribbon(alpha=0.2)+geom_line()+geom_hline(yintercept = 1, colour="grey50", linetype="dashed")+facet_wrap(vars(uk_region)) + 
+  coord_cartesian(ylim=c(0, 5))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  #geom_vline(aes(xintercept=impactDate,colour=event,linetype="dashed"),data=keyDates, show.legend = FALSE)+
+  ggrepel::geom_text_repel(
+          aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 day", date_labels = "%d-%b")+theme(axis.text.x=element_text(angle = 90, vjust =0.5))
+ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/ukRegionRt")
+```
+
+### NHS regions
+
+```{r}
+#glimpse(ts$tidyEnglandNHS)
+R0nhstimeseries = ts$tidyEnglandNHS %>% group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) 
+R0nhstimeseries = R0nhstimeseries %>% filter(!is.na(`Median(R)`))
+englandnhsplot = ggplot(R0nhstimeseries, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+ #, colour=uk_region, fill=uk_region))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey50", linetype="dashed")+facet_wrap(vars(england_nhs_region)) + 
+  standardPrintOutput::narrowAndTall()+
+  coord_cartesian(ylim=c(0, 5))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
+  #geom_vline(aes(xintercept=impactDate,colour=event,linetype="dashed"),data=keyDates, show.legend = FALSE) #, show.legend = FALSE) #+
+  # ggrepel::geom_text_repel(
+  #         aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+  #         size=(10/ggplot2:::.pt/(96/72)))
+  scale_x_date(date_breaks="1 day", date_labels = "%d-%b")+theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/englandNHSRt")
+```
+
+## Unitary Authoriy Timeseries
+
+Initial focus is on localised Rt at Unitary Authority level timeseries in England:
+
+```{r}
+
+R0timeseries = ts$tidyEnglandUnitAuth %>% normaliseAndCleanse() %>% group_by(GSS_CD, GSS_NM) %>% tidyEstimateRt(cfg, window=5)
+
+write_csv(R0timeseries, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Unitary_Authority.csv")
+
+```
+
+Create static maps
+
+```{r}
+data("UKCovidMaps")
+
+# https://github.com/tidyverse/ggplot2/issues/3391
+# some issues joining tibble onto sf - which 
+
+r0shapes = UKCovidMaps$unitaryAuthority %>% 
+  left_join(R0timeseries, by=c("ctyua19cd"="GSS_CD")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+  filter(!is.na(date))
+
+r0shapes = r0shapes %>% mutate(`Median(R)` = ifelse(`Median(R)`>10, 9.999,`Median(R)`))
+
+r0shapes_key = r0shapes %>% inner_join(keyDates, by="date")
+
+ukwide = ggplot(r0shapes_key)+
+  geom_sf(aes(fill=`Median(R)`),data=r0shapes_key)+
+  scale_fill_gradient2(
+    low="green",
+    mid="white",
+    high="red",
+    midpoint=0,
+    trans="log",
+    na.value = "grey80", 
+    limits=c(0.1,10), 
+    breaks=c(0.1,0.4,1,2.5,10), 
+    labels=c("<0.1","0.4","1","2.5",">10"))+
+  standardPrintOutput::narrowAndTall()+
+  standardPrintOutput::mapTheme()+
+  facet_wrap(vars(label), nrow = 1)
+  
+london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
+  
+  # layout <- c(
+  #  patchwork::area(t = 1, l = 1, b = 10, r = 10),
+  #  patchwork::area(t = 1, l = 1, b = 3, r = 3)
+  # )
+  # combined = ukwide / london + plot_layout(guides="collect")
+
+ukwide %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/englandMap")
+london %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/londonMap")
+
+```
+
+
+create and save animated map
+
+```{r}
+
+ukwide = ggplot(r0shapes)+
+  geom_sf(aes(fill=`Median(R)`), data=r0shapes)+
+  scale_fill_gradient2(
+    low="green",
+    mid="white",
+    high="red",
+    midpoint=0,
+    trans="log",
+    na.value = "grey80", 
+    limits=c(0.1,10), 
+    breaks=c(0.1,0.4,1,2.5,10), 
+    labels=c("<0.1","0.4","1","2.5",">10"))+
+  standardPrintOutput::narrowAndTall()+
+  standardPrintOutput::mapTheme()
+
+london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
+
+anim = ukwide+gganimate::transition_time(date)
+gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer())
+gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/Rt_by_unitary_authority_over_time.gif",gif)
+
+anim2 = london+gganimate::transition_time(date)
+gif2 = gganimate::animate(anim2, renderer=gganimate::gifski_renderer())
+gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/London_Rt_by_unitary_authority_over_time.gif",gif2)
+
+
+```
+
+## Unitary authority trajectories
+
+* Basically select the last 5 days
+* fit a linear model
+* get the gradient
+
+```{r}
+# UA level
+lastDate = max(R0timeseries$date)-5
+
+toFit = R0timeseries %>% filter(date >= lastDate) %>% select(GSS_CD, GSS_NM, date, r=`Median(R)`)
+rateOfChange = toFit %>% group_by(GSS_CD,GSS_NM) %>% group_modify(function(d,g,...) {
+  lmResult = lm(r~date, d)
+  slope = coef(lmResult)["date"]
+  return(tibble(slope=slope))
+})
+
+r0rateOfChange = UKCovidMaps$unitaryAuthority %>% 
+  inner_join(rateOfChange, by=c("ctyua19cd"="GSS_CD")) %>% mutate(slope = ifelse(slope < -1, -1, ifelse( slope > 1, 1, slope)))
+
+# National level
+toFit = R0regionaltimeseries %>% filter(date >= lastDate) %>% select(uk_region, date, r=`Median(R)`)
+rateOfChangeUKregion = toFit %>% group_by(uk_region) %>% group_modify(function(d,g,...) {
+  lmResult = lm(r~date, d)
+  slope = coef(lmResult)["date"]
+  return(tibble(slope=slope))
+})
+
+```
+
+```{r}
+ukwideRateOfChange = ggplot(r0rateOfChange)+
+  geom_sf(aes(fill=slope))+
+  scale_fill_gradient2(
+    low="cyan",
+    mid="white",
+    high="magenta",
+    midpoint=0,
+    #trans="log",
+    na.value = "grey80",
+    limits=c(-1,1), 
+    breaks=c(-1,-0.5,0,0.5,1), 
+    labels=c("<-1","-0.5","0","0.5",">1")
+    )+
+  standardPrintOutput::mapTheme()
+
+londonRateofChange = ukwideRateOfChange + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
+
+rateOfChangeDist = ggplot(rateOfChange, aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-1,1))
+
+ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope))+
+  scale_fill_gradient2(
+    low="cyan",
+    mid="white",
+    high="magenta",
+    midpoint=0,
+    #trans="log",
+    na.value = "grey80",
+    limits=c(-1,1), 
+    breaks=c(-1,-0.5,0,0.5,1), 
+    labels=c("<-1","-0.5","0","0.5",">1")
+    ) + geom_bar(stat="identity", colour="black")
+
+(ukwideRateOfChange + londonRateofChange  + ukRateOfChange + rateOfChangeDist + plot_annotation(tag_levels = 'A')  + plot_layout(nrow = 2, , guides="collect")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/RateOfChangeMap")
+
+
+```
+
+```{r}
+rateOfChange %>% ungroup() %>% arrange(desc(slope)) %>% head(5) %>% select(`Unitary authority`=GSS_NM,`dR/dt`=slope) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Top5UnitaryAuthoritiesByDeltaR_t")
+```
