@@ -88,7 +88,7 @@ readILI <- function(fname) {
 #years = ifelse(is.na(years),2017,years)
 
 UKILIdata_toAdd = tibble(missingfilenames) %>%
-  mutate(contents = map(missingfilenames,~readILI(paste0("~/Git/uk-covid-datatools/data-raw/",.))))%>%
+  mutate(contents = map(missingfilenames,~readILI(.))) %>%
   #mutate(Year = years) %>%
   #mutate(Week = weeks) %>%
   # select(-filename) %>%
