@@ -33,7 +33,7 @@ ggplot(unitaryAuthorityShapefile)+geom_sf()
 # https://geoportal.statistics.gov.uk/datasets/wards-december-2011-boundaries-ew-bfe
 wards = getShapefile("Wards_December_2011_Boundaries_EW_BFE", 
           "https://opendata.arcgis.com/datasets/f04efac388f049508ecf91cafbe70343_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D")
-ggplot(wardsShapefile)+geom_sf()
+ggplot(wards)+geom_sf()
 
 # https://geoportal.statistics.gov.uk/datasets/local-authority-districts-december-2019-boundaries-uk-buc
 ladShapefile = getShapefile("Local_Authority_Districts_December_2019_Boundaries_UK_BUC",
@@ -41,9 +41,15 @@ ladShapefile = getShapefile("Local_Authority_Districts_December_2019_Boundaries_
 ggplot(ladShapefile)+geom_sf()
 
 
+wards2019 = getShapefile("Wards_December_2019_Boundaries_EW_BFE",
+  "https://opendata.arcgis.com/datasets/24fd788001d941c5a244dda6fe81dbb2_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D")
+ggplot(wards2019)+geom_sf()
+
+
 UKCovidMaps = list(
   unitaryAuthority = unitaryAuthorityShapefile,
-  ward = wardsShapefile,
+  ward = wards,
+  ward2019 = wards2019,
   localAuthorityDistrict = ladShapefile
 )
 

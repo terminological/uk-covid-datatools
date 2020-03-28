@@ -103,9 +103,13 @@ getUKCovidTimeseries = function() {
   englandNHS=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=0&single=true&output=csv", 
                       col_types = readr::cols(date = readr::col_date(format = "%Y-%m-%d")))
   
+  scotlandHealthBoard = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=490497042&single=true&output=csv")
+  walesHealthBoard = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=762770891&single=true&output=csv")
+  northernIreland = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=1217212942&single=true&output=csv")
   englandUnitAuth=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=796246456&single=true&output=csv")
   
   englandUnitAuth2NHSregion=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=1933702254&single=true&output=csv")
+  
   
   # tidy Unitary authority region
   tmp = englandUnitAuth %>% 
@@ -136,6 +140,9 @@ getUKCovidTimeseries = function() {
     UKregional=UKregional,
     englandNHS=englandNHS,
     englandUnitAuth=englandUnitAuth,
+    scotlandHealthBoard=scotlandHealthBoard,
+    walesHealthBoard=walesHealthBoard,
+    northernIrelandLocalGovernmentDistrict=northernIreland,
     englandUnitAuth2NHSregion=englandUnitAuth2NHSregion,
     tidyUKRegional=tidyUKRegional,
     tidyEnglandNHS=tidyEnglandNHS,
