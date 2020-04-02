@@ -51,58 +51,6 @@ config = config::get(file = "~/Dropbox/ventilator_demand.yaml")
 
 Load and test the MetaWard epidemiological model
 
-```{r eval = FALSE, echo = FALSE}
-# print(config$scenarios$uncontrolled$modelFile)
-# #### metawards model output ----
-# sim = readSpatialFile(config$scenarios$uncontrolled$modelFile, ignoreErrors=TRUE)
-# 
-# # glimpse(UKCovidMaps$ward)
-# # unique(sim$time)
-# tmpSim = UKCovidMaps$ward %>% left_join(sim %>% filter(time==100), by=c("wd11cd" = "WD11CD"))
-# 
-# ggplot(tmpSim)+geom_sf(aes(fill=value),lwd = 0)+scale_fill_gradient(low="white",high="red",trans="sqrt",na.value = "grey90")+standardPrintOutput::mapTheme()
-# 
-# # check various parameters correct:
-# # TODO: use ensurer for this
-# # length(unique(sim$ward))
-# # length(unique(sim$time))
-# # sim %>% group_by(time) %>% summarise(ukwideDaily = sum(value,na.rm=TRUE)) %>% pull(ukwideDaily) %>% max()
-# # sim %>% group_by(time) %>% summarise(ukwideDaily = sum(value,na.rm=TRUE)) %>% pull(ukwideDaily) %>% max()
-# # sim %>% ungroup() %>% summarise(ukwide = sum(value,na.rm=TRUE)) %>% pull(ukwide)
-# # File is unique for ward and time point
-# sim %>% group_by(time,ward) %>% count() %>% filter(n > 1) %>% ensure(nrow(.) == 0) %>% invisible()
-# 
-# ggplot(sim %>% group_by(time) %>% summarise(ukwide = sum(value,na.rm=TRUE)), aes(x=time,y=ukwide))+geom_line()
-
-
-```
-# Aggregate model to LAD level
-
-```{r eval = FALSE, echo = FALSE}
-# dateOrigin = as.Date(config$dateOrigin)
-# simByLAD = sim %>% group_by(time,LAD19CD,LAD19NM) %>% summarise(value = sum(value)) %>% mutate(date = dateOrigin+time) %>% ungroup() %>% select(-time)
-
-```
-
-# Demographics by LAD
-
-```{r eval = FALSE, echo = FALSE}
-# 
-# # glimpse(UK2019Demographics)
-# aggDemographics = UK2019Demographics %>% mutate(ageGroup = cut(age,
-#       breaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,44,60,65,70,75,80,Inf),
-#       labels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
-#       include.lowest = TRUE, ordered_result = TRUE
-# )) %>% group_by(ageGroup,code,name) %>% summarise(
-#   count = sum(count),
-#   total = first(total)
-# )
-# 
-# 
-# aggDemographics %>% group_by(code) %>% summarise(total2 = sum(count), total=first(total)) %>% 
-#   ensure(all.equal(.$total,.$total2)) %>% invisible()
-
-```
 
 ```{r}
 
@@ -114,180 +62,24 @@ ageCatToFactor = function(ageCat) {
   )
 }
 
-```
-# Combine Sim and demographics
-
-```{r eval = FALSE, echo = FALSE}
-# 
-# # simByLAD %>% anti_join(aggDemographics, by=c("LAD19CD"="code")) %>% select(LAD11CD) %>% distinct()
-# 
-# simByLADandDemography = 
-#   simByLAD %>% 
-#   left_join(aggDemographics, by=c("LAD19CD"="code")) %>% 
-#   ensure_that(!all(is.na(.$ageGroup)))
-# 
-# simByLADandDemography = simByLADandDemography %>% mutate(predictedInfected = value*count/total)
-# # TODO: at this point we are breaking prediction down by proportion of the population in that age category
-# # however we never check if the integral of the prediction is smaller than the population for each category.
-# # If may be that the prediction is made on 2011 census numbers and actually we should scale this for up 2019 population estimates on a region by region basis
+ageToAgeCat = function(age) {
+  return(cut(age,
+    breaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,44,60,65,70,75,80,Inf),
+    labels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
+    include.lowest = TRUE, ordered_result = TRUE
+  ))
+}
 
 ```
 
-# Aggregate to hospital catchment areas
-
-```{r eval = FALSE, echo = FALSE}
-# #### get data about beds etc ----
-# 
-# # glimpse(NHSCapacity2019$hospitals)
-# # glimpse(NHSCapacity2019$trusts) 
-# # glimpse(NHSCatchmentAreas$icuBeds)
-# 
-# # OK data missing for some local authority districts. Probably in the calculation for ICU beds. Need to cvalidate / visualise these are working
-# # sidestepped this using inner_join but problem remains #TODO: fix
-# # LAD_unmatched = simByLADandDemography %>% anti_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) #%>% pull(LAD19CD) %>% unique()
-# # Lets push on regardless
-# simByTrustAndDemography = simByLADandDemography %>% inner_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) %>% ensure_that(!any(is.na(.$trustId)))
-# 
-# # aggregate to trust level with fractionOfLADpopulation multiplier
-# simByTrustAndDemography = simByTrustAndDemography %>% group_by(trustId, ageGroup, date) %>% summarise(
-#   predictedInfected = sum(predictedInfected*fractionOfLADPopulation),
-#   ageSpecificPopulation = sum(count*fractionOfLADPopulation)
-# ) %>% left_join(NHSCapacity2019$trusts, by="trustId")
-# 
-# # set of curves of same shape with height reflecting deographics of area
-# ggplot(simByTrustAndDemography %>% filter(trustId=="R0A"), aes(x=date, y=predictedInfected, colour=ageGroup)) +geom_line()
-# 
-# # check population size is static and appropriate over the model run
-# # simByTrustAndDemography %>% group_by(date) %>% summarise(total = sum(ageSpecificPopulation)) %>% pull(total)
-# # this is  very close to ENGLAND AND WALES 59115809
-# # which is reassuring. Mismatch could be due to some patients being assigned to more than one trust...?
-# # NHSCatchmentAreas$icuBeds %>% left_join(NHSCapacity2019$trusts, by="trustId")
-
-```
-
-# Assumptions
-
-```{r eval = FALSE, echo = FALSE}
-# 
-# infected = simByTrustAndDemography %>% rename(infectedDate = date) %>% ungroup() %>% mutate(ageGroup = as.character(ageGroup))
-# 
-# simEnd = max(infected$infectedDate)
-```
 
 ## Transform infected to symptomatic
 N.B. This filters out a large fraction of the young, as they have mild symptoms.
 It also introduces a lag because of the incubation period
 
-```{r}
-loadAgeTimeMatrix = function(url) {
-  tmp = read.csv(url) %>% 
-    pivot_longer(cols=starts_with("X"), names_to = "days", values_to = "probability") %>%
-    mutate(days = as.integer(str_remove(days,"X"))) 
-  tmp = tmp %>% 
-    rename(ageGroup = age)
-  return(tmp)
-}
-
-applyAgeTimeMatrix = function(inputDf, matrixDf, 
-                              oldIncidenceVar = "incidence", newIncidenceVar = "incidence",
-                              oldDateVar = "date", newDateVar = "date",
-                              ageCatVar = "ageGroup") {
-  
-  oldIncidenceVar = ensym(oldIncidenceVar)
-  newIncidenceVar = ensym(newIncidenceVar)
-  oldDateVar = ensym(oldDateVar)
-  newDateVar = ensym(newDateVar)
-  ageCatGrp = ensym(ageCatVar)
-  
-  simEnd = max(inputDf %>% pull(!!oldDateVar))
-  
-  outputDf = inputDf %>% left_join(matrixDf, by=ageCatVar) %>% 
-    mutate(
-      !!newDateVar := !!oldDateVar+days,
-      !!newIncidenceVar := !!oldIncidenceVar*probability
-    ) %>%
-    group_by(
-      trustId,ageSpecificPopulation,regionId,trustName,acuteBeds,
-      dayBeds,icuBeds,approxLat,approxLong, !!newDateVar, !!ageCatGrp
-    ) %>%
-    summarise (
-      !!newIncidenceVar := sum(!!newIncidenceVar)
-    ) %>% filter(
-      simEnd >= !!newDateVar
-    ) 
-  outputDf %>% ensure(
-      all(!is.na(.[as_label(newIncidenceVar)]))
-    ) %>% ensure(
-      nrow(.) == nrow(inputDf)
-    ) %>% invisible()
-  
-  return(outputDf)
-}
-```
-
-```{r eval = FALSE, echo = FALSE}
-# infected2SymptomaticUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=2044085188&single=true&output=csv"
-# 
-# #loadAgeTimeMatrix(infected2SymptomaticUrl)
-# 
-# symptomatic = infected %>% applyAgeTimeMatrix(
-#   loadAgeTimeMatrix(infected2SymptomaticUrl), 
-#   predictedInfected, predictedSymptomatic,
-#   infectedDate, symptomaticDate
-# )
-# 
-# ggplot(symptomatic %>% filter(trustId=="R0A"), aes(x=symptomaticDate, y=predictedSymptomatic, colour=ageGroup))+geom_line()
-
-```
-
-```{r eval = FALSE, echo = FALSE}
-# symptomaticToHospitalisationUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1708683854&single=true&output=csv"
-# 
-# hospitalised = symptomatic %>% applyAgeTimeMatrix(
-#   loadAgeTimeMatrix(symptomaticToHospitalisationUrl), 
-#   predictedSymptomatic, predictedHospitalised,
-#   symptomaticDate, hospitalisedDate
-# )
-# 
-# ggplot(hospitalised %>% filter(trustId=="R0A"), 
-#        aes(x=hospitalisedDate, y=predictedHospitalised, colour=ageGroup))+geom_line()
-```
-
-```{r eval = FALSE, echo = FALSE}
-# symptomaticToItuUrl =
-# "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=895816136&single=true&output=csv"
-# 
-# itu = symptomatic %>% applyAgeTimeMatrix(
-#   loadAgeTimeMatrix(symptomaticToItuUrl), 
-#   predictedSymptomatic, predictedAdmitItu,
-#   symptomaticDate, admitItuDate
-# )
-# 
-# ggplot(itu %>% mutate(ageGroup = ageCatToFactor(ageGroup)) %>% filter(trustId=="RBZ"), 
-#   aes(x=admitItuDate, y=ageGroup, fill=predictedAdmitItu))+geom_tile()+
-#   scale_fill_gradient(low="white",high="red",trans="sqrt")
-```
-
-#### As function
-
-
 
 ```{r}
-infected2SymptomaticUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=2044085188&single=true&output=csv"
-infected2Symptomatic = loadAgeTimeMatrix(infected2SymptomaticUrl)
-
-symptomaticToHospitalisationUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1708683854&single=true&output=csv"
-symptomaticToHospitalisation = loadAgeTimeMatrix(symptomaticToHospitalisationUrl)
-
- hospitalisedToInpatientUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1784137714&single=true&output=csv"
-hospitalisedToInpatient=loadAgeTimeMatrix(hospitalisedToInpatientUrl)
-
-symptomaticToItuUrl =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=895816136&single=true&output=csv"
-symptomaticToItu = loadAgeTimeMatrix(symptomaticToItuUrl)
-
-ituAdmitToItuInpatientUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=68691773&single=true&output=csv"
-ituAdmitToItuInpatient = loadAgeTimeMatrix(ituAdmitToItuInpatientUrl)
+matrix = loadDefaultAgeTimeMatrices()
 ```
 
 ```{r}
@@ -309,11 +101,7 @@ prepareModelResult = function(scenario) {
   simByLAD = sim %>% group_by(time,LAD19CD,LAD19NM) %>% 
     summarise(value = sum(value)) %>% 
     mutate(date = dateOrigin+time) %>% ungroup() %>% select(-time)
-  aggDemographics = UK2019Demographics %>% mutate(ageGroup = cut(age,
-    breaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,44,60,65,70,75,80,Inf),
-    labels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
-    include.lowest = TRUE, ordered_result = TRUE
-  )) %>% group_by(ageGroup,code,name) %>% summarise(
+  aggDemographics = UK2019Demographics %>% mutate(ageGroup = ageToAgeCat(age)) %>% group_by(ageGroup,code,name) %>% summarise(
     count = sum(count),
     total = first(total)
   )
@@ -334,6 +122,7 @@ prepareModelResult = function(scenario) {
   # sidestepped this using inner_join but problem remains #TODO: fix
   # LAD_unmatched = simByLADandDemography %>% anti_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) %>% pull(LAD19CD) %>% unique()
   # Lets push on regardless
+  # TODO: need to have paralell data processing stream here involing NHSCatchmentAreas for hospital beds
   simByTrustAndDemography = simByLADandDemography %>% inner_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) %>%
     ensure_that(!any(is.na(.$trustId)))
   # aggregate to trust level with fractionOfLADpopulation multiplier
@@ -358,14 +147,18 @@ extractDemographics = function(modelResult, trustList=c("RBA","RBZ","RH8","RRK")
 }
 
 processModelResult = function(infected, trustList=c("RBA","RBZ","RH8","RRK")) {
-  infected = infected %>% filter(trustId %in% trustList)
+  infected = infected %>% filter(trustId %in% trustList) %>% group_by(trustId, trustName) #,ageSpecificPopulation,regionId,trustName,acuteBeds,dayBeds,icuBeds,approxLat,approxLong)
   simEnd = max(infected$infectedDate)
   # Transform infected to symptomatic
   # N.B. This filters out a large fraction of the young, as they have mild symptoms.
   # It also introduces a lag because of the incubation period
   
+  # TODO: probably could combine all the matrices first and do the larger processing in one step.
+  # This woudl be quicker and could be made configurable
+  # So we can implement the the model for different catchment areas. (hospital versus ITU)
+  
   symptomatic = infected %>% applyAgeTimeMatrix(
-    infected2Symptomatic, 
+    matrix$infected2Symptomatic, 
     predictedInfected, predictedSymptomatic,
     infectedDate, symptomaticDate
   )
@@ -373,14 +166,14 @@ processModelResult = function(infected, trustList=c("RBA","RBZ","RH8","RRK")) {
   # Transform symptomatic to hospitalised
   
   hospitalised = symptomatic %>% applyAgeTimeMatrix(
-    symptomaticToHospitalisation, 
+    matrix$symptomaticToHospitalisation, 
     predictedSymptomatic, predictedHospitalised,
     symptomaticDate, hospitalisedDate
   )
   
  
   inpatient = hospitalised %>%  applyAgeTimeMatrix(
-    hospitalisedToInpatient, 
+    matrix$hospitalisedToInpatient, 
     predictedHospitalised, predictedInpatient,
     hospitalisedDate, inpatientDate
   )
@@ -388,14 +181,14 @@ processModelResult = function(infected, trustList=c("RBA","RBZ","RH8","RRK")) {
   # Transform symptomatic to itu admission
   
   ituAdmit = symptomatic %>% applyAgeTimeMatrix(
-    symptomaticToItu, 
+    matrix$symptomaticToItu, 
     predictedSymptomatic, predictedAdmitItu,
     symptomaticDate, admitItuDate
   )
   
   
   ituInpatient = ituAdmit %>% applyAgeTimeMatrix(
-    ituAdmitToItuInpatient, 
+    matrix$ituAdmitToItuInpatient, 
     predictedAdmitItu, predictedItuInpatient,
     admitItuDate, ituInpatientDate
   )
@@ -439,37 +232,11 @@ scenarioResult = lapply(config$scenarios, function(s) {
 
 ```
 
-```{r}
 
-# demographics = scenarioResult[[1]]$modelResult %>% extractDemographics(trustList)
-# ggplot(demographics,aes(x=ageGroup,y=population))+geom_bar(stat="identity")+facet_wrap(vars(trustName))+narrowAndTall()
-```
-
-```{r}
-# predictions = modelResult %>% processModelResult(trustList)
-# summaryPredictions = predictions %>% group_by(trustName, trustId, date) %>%
-#   summarise(
-#     newInfections = sum(newInfections),
-#     newSymptomatic = sum(newSymptomatic),
-#     newHospitalised = sum(newHospitalised),
-#     newItuAdmission = sum(newItuAdmission),
-#     inpatient = sum(inpatient),
-#     ituInpatient = sum(ituInpatient)
-#   ) %>% filter(date < as.Date("2020-09-01"))
-# 
-# infectionsPlot = ggplot(summaryPredictions,aes(x=date,y=newInfections,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# symptomaticPlot = ggplot(summaryPredictions,aes(x=date,y=newSymptomatic,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# hospitalAdmissionsPlot = ggplot(summaryPredictions,aes(x=date,y=newHospitalised,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# ituAdmissionsPlot = ggplot(summaryPredictions,aes(x=date,y=newItuAdmission,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# hospitalInpatientsPlot = ggplot(summaryPredictions,aes(x=date,y=inpatient,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# ituInpatientsPlot = ggplot(summaryPredictions,aes(x=date,y=ituInpatient,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
-# 
-# ((infectionsPlot | symptomaticPlot) / (hospitalAdmissionsPlot | ituAdmissionsPlot) / (hospitalInpatientsPlot | ituInpatientsPlot) / patchwork::guide_area() + patchwork::plot_layout(guides="collect")) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/ventilator-demand/Scenario2")
-
-```
 
 ```{r}
 #TODO: create one function here - save result in a Rdata file
+#TODO: need to extend this with demographics for hospital admissions and demographics for ITU admissions
 demographics = scenarioResult[[1]]$modelResult %>% extractDemographics(trustList)
 
 scenarioResult = lapply(scenarioResult, function(s) {
@@ -697,3 +464,185 @@ for (trust in trustList) {
 #  #scale_y_continuous(labels = unit_format(unit = "M"))+
 #     xlab('Week')+
 #     ylab('Weekly Hospitalisations')
+```
+
+```{r eval = FALSE, echo = FALSE}
+# print(config$scenarios$uncontrolled$modelFile)
+# #### metawards model output ----
+# sim = readSpatialFile(config$scenarios$uncontrolled$modelFile, ignoreErrors=TRUE)
+# 
+# # glimpse(UKCovidMaps$ward)
+# # unique(sim$time)
+# tmpSim = UKCovidMaps$ward %>% left_join(sim %>% filter(time==100), by=c("wd11cd" = "WD11CD"))
+# 
+# ggplot(tmpSim)+geom_sf(aes(fill=value),lwd = 0)+scale_fill_gradient(low="white",high="red",trans="sqrt",na.value = "grey90")+standardPrintOutput::mapTheme()
+# 
+# # check various parameters correct:
+# # TODO: use ensurer for this
+# # length(unique(sim$ward))
+# # length(unique(sim$time))
+# # sim %>% group_by(time) %>% summarise(ukwideDaily = sum(value,na.rm=TRUE)) %>% pull(ukwideDaily) %>% max()
+# # sim %>% group_by(time) %>% summarise(ukwideDaily = sum(value,na.rm=TRUE)) %>% pull(ukwideDaily) %>% max()
+# # sim %>% ungroup() %>% summarise(ukwide = sum(value,na.rm=TRUE)) %>% pull(ukwide)
+# # File is unique for ward and time point
+# sim %>% group_by(time,ward) %>% count() %>% filter(n > 1) %>% ensure(nrow(.) == 0) %>% invisible()
+# 
+# ggplot(sim %>% group_by(time) %>% summarise(ukwide = sum(value,na.rm=TRUE)), aes(x=time,y=ukwide))+geom_line()
+
+
+```
+# Aggregate model to LAD level
+
+```{r eval = FALSE, echo = FALSE}
+# dateOrigin = as.Date(config$dateOrigin)
+# simByLAD = sim %>% group_by(time,LAD19CD,LAD19NM) %>% summarise(value = sum(value)) %>% mutate(date = dateOrigin+time) %>% ungroup() %>% select(-time)
+
+```
+# Combine Sim and demographics
+
+```{r eval = FALSE, echo = FALSE}
+# 
+# # simByLAD %>% anti_join(aggDemographics, by=c("LAD19CD"="code")) %>% select(LAD11CD) %>% distinct()
+# 
+# simByLADandDemography = 
+#   simByLAD %>% 
+#   left_join(aggDemographics, by=c("LAD19CD"="code")) %>% 
+#   ensure_that(!all(is.na(.$ageGroup)))
+# 
+# simByLADandDemography = simByLADandDemography %>% mutate(predictedInfected = value*count/total)
+# # TODO: at this point we are breaking prediction down by proportion of the population in that age category
+# # however we never check if the integral of the prediction is smaller than the population for each category.
+# # If may be that the prediction is made on 2011 census numbers and actually we should scale this for up 2019 population estimates on a region by region basis
+
+```
+
+# Aggregate to hospital catchment areas
+
+```{r eval = FALSE, echo = FALSE}
+# #### get data about beds etc ----
+# 
+# # glimpse(NHSCapacity2019$hospitals)
+# # glimpse(NHSCapacity2019$trusts) 
+# # glimpse(NHSCatchmentAreas$icuBeds)
+# 
+# # OK data missing for some local authority districts. Probably in the calculation for ICU beds. Need to cvalidate / visualise these are working
+# # sidestepped this using inner_join but problem remains #TODO: fix
+# # LAD_unmatched = simByLADandDemography %>% anti_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) #%>% pull(LAD19CD) %>% unique()
+# # Lets push on regardless
+# simByTrustAndDemography = simByLADandDemography %>% inner_join(NHSCatchmentAreas$icuBeds, by=c("LAD19CD"="ladcd")) %>% ensure_that(!any(is.na(.$trustId)))
+# 
+# # aggregate to trust level with fractionOfLADpopulation multiplier
+# simByTrustAndDemography = simByTrustAndDemography %>% group_by(trustId, ageGroup, date) %>% summarise(
+#   predictedInfected = sum(predictedInfected*fractionOfLADPopulation),
+#   ageSpecificPopulation = sum(count*fractionOfLADPopulation)
+# ) %>% left_join(NHSCapacity2019$trusts, by="trustId")
+# 
+# # set of curves of same shape with height reflecting deographics of area
+# ggplot(simByTrustAndDemography %>% filter(trustId=="R0A"), aes(x=date, y=predictedInfected, colour=ageGroup)) +geom_line()
+# 
+# # check population size is static and appropriate over the model run
+# # simByTrustAndDemography %>% group_by(date) %>% summarise(total = sum(ageSpecificPopulation)) %>% pull(total)
+# # this is  very close to ENGLAND AND WALES 59115809
+# # which is reassuring. Mismatch could be due to some patients being assigned to more than one trust...?
+# # NHSCatchmentAreas$icuBeds %>% left_join(NHSCapacity2019$trusts, by="trustId")
+
+```
+
+# Assumptions
+
+```{r eval = FALSE, echo = FALSE}
+# 
+# infected = simByTrustAndDemography %>% rename(infectedDate = date) %>% ungroup() %>% mutate(ageGroup = as.character(ageGroup))
+# 
+# simEnd = max(infected$infectedDate)
+```
+# Demographics by LAD
+
+```{r eval = FALSE, echo = FALSE}
+# 
+# # glimpse(UK2019Demographics)
+# aggDemographics = UK2019Demographics %>% mutate(ageGroup = cut(age,
+#       breaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,44,60,65,70,75,80,Inf),
+#       labels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
+#       include.lowest = TRUE, ordered_result = TRUE
+# )) %>% group_by(ageGroup,code,name) %>% summarise(
+#   count = sum(count),
+#   total = first(total)
+# )
+# 
+# 
+# aggDemographics %>% group_by(code) %>% summarise(total2 = sum(count), total=first(total)) %>% 
+#   ensure(all.equal(.$total,.$total2)) %>% invisible()
+
+```{r}
+
+# demographics = scenarioResult[[1]]$modelResult %>% extractDemographics(trustList)
+# ggplot(demographics,aes(x=ageGroup,y=population))+geom_bar(stat="identity")+facet_wrap(vars(trustName))+narrowAndTall()
+```
+
+```{r}
+# predictions = modelResult %>% processModelResult(trustList)
+# summaryPredictions = predictions %>% group_by(trustName, trustId, date) %>%
+#   summarise(
+#     newInfections = sum(newInfections),
+#     newSymptomatic = sum(newSymptomatic),
+#     newHospitalised = sum(newHospitalised),
+#     newItuAdmission = sum(newItuAdmission),
+#     inpatient = sum(inpatient),
+#     ituInpatient = sum(ituInpatient)
+#   ) %>% filter(date < as.Date("2020-09-01"))
+# 
+# infectionsPlot = ggplot(summaryPredictions,aes(x=date,y=newInfections,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# symptomaticPlot = ggplot(summaryPredictions,aes(x=date,y=newSymptomatic,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# hospitalAdmissionsPlot = ggplot(summaryPredictions,aes(x=date,y=newHospitalised,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# ituAdmissionsPlot = ggplot(summaryPredictions,aes(x=date,y=newItuAdmission,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# hospitalInpatientsPlot = ggplot(summaryPredictions,aes(x=date,y=inpatient,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# ituInpatientsPlot = ggplot(summaryPredictions,aes(x=date,y=ituInpatient,colour=trustName))+geom_line()+scale_x_date(date_breaks = "1 month")
+# 
+# ((infectionsPlot | symptomaticPlot) / (hospitalAdmissionsPlot | ituAdmissionsPlot) / (hospitalInpatientsPlot | ituInpatientsPlot) / patchwork::guide_area() + patchwork::plot_layout(guides="collect")) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/ventilator-demand/Scenario2")
+
+```
+
+
+```{r eval = FALSE, echo = FALSE}
+# infected2SymptomaticUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=2044085188&single=true&output=csv"
+# 
+# #loadAgeTimeMatrix(infected2SymptomaticUrl)
+# 
+# symptomatic = infected %>% applyAgeTimeMatrix(
+#   loadAgeTimeMatrix(infected2SymptomaticUrl), 
+#   predictedInfected, predictedSymptomatic,
+#   infectedDate, symptomaticDate
+# )
+# 
+# ggplot(symptomatic %>% filter(trustId=="R0A"), aes(x=symptomaticDate, y=predictedSymptomatic, colour=ageGroup))+geom_line()
+
+```
+
+```{r eval = FALSE, echo = FALSE}
+# symptomaticToHospitalisationUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1708683854&single=true&output=csv"
+# 
+# hospitalised = symptomatic %>% applyAgeTimeMatrix(
+#   loadAgeTimeMatrix(symptomaticToHospitalisationUrl), 
+#   predictedSymptomatic, predictedHospitalised,
+#   symptomaticDate, hospitalisedDate
+# )
+# 
+# ggplot(hospitalised %>% filter(trustId=="R0A"), 
+#        aes(x=hospitalisedDate, y=predictedHospitalised, colour=ageGroup))+geom_line()
+```
+
+```{r eval = FALSE, echo = FALSE}
+# symptomaticToItuUrl =
+# "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=895816136&single=true&output=csv"
+# 
+# itu = symptomatic %>% applyAgeTimeMatrix(
+#   loadAgeTimeMatrix(symptomaticToItuUrl), 
+#   predictedSymptomatic, predictedAdmitItu,
+#   symptomaticDate, admitItuDate
+# )
+# 
+# ggplot(itu %>% mutate(ageGroup = ageCatToFactor(ageGroup)) %>% filter(trustId=="RBZ"), 
+#   aes(x=admitItuDate, y=ageGroup, fill=predictedAdmitItu))+geom_tile()+
+#   scale_fill_gradient(low="white",high="red",trans="sqrt")
+```

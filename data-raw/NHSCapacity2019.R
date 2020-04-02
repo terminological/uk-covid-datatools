@@ -126,6 +126,9 @@ NHSCapacity2019 = list(
   trusts = bedsByTrust
 )
 
+write.csv(NHSCapacity2019$hospitals, "~/Git/uk-covid-datatools/data-raw/hospitalCapacity.csv")
+write.csv(NHSCapacity2019$trusts, "~/Git/uk-covid-datatools/data-raw/trustCapacity.csv")
+
 usethis::use_data(NHSCapacity2019, overwrite=TRUE)
 
 # TODO:

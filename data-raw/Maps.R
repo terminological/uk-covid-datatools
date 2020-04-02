@@ -22,6 +22,8 @@ getShapefile = function(mapname,url) {
   return(wardsShapefile)
 }
 
+# https://www.istat.it/it/archivio/222527
+# http://www.istat.it/storage/cartografia/confini_amministrativi/generalizzati/Limiti01012020_g.zip
 
 
 # https://geoportal.statistics.gov.uk/datasets/counties-and-unitary-authorities-april-2019-boundaries-ew-buc-1

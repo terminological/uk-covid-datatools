@@ -18,5 +18,96 @@ readSpatialFile = function(fname, ignoreErrors=FALSE) {        # read and proces
   return(tmp2)
 }
 
+#' loads an age time matrix from a csv
+#' 
+#' @param url - a url or filename for a csv file
+#' @import dplyr
+#' @return a data frame containing the filter
+#' @export
+loadAgeTimeMatrix = function(url) {
+  tmp = read.csv(url) %>% 
+    pivot_longer(cols=starts_with("X"), names_to = "days", values_to = "probability") %>%
+    mutate(days = as.integer(str_remove(days,"X"))) 
+  tmp = tmp %>% 
+    rename(ageGroup = age)
+  return(tmp)
+}
 
 
+#' applies a age time matrix to a dataframe containing an incidence, an age category column, and a date column
+#' 
+#' Make sure your age categories are the saem as the matrix you are applying
+#' 
+#' The age time matrix can implement a delay, aggregate over time and or filter by age
+#' 
+#' @param inputDf - an input df containing an incidence col, a date col and a ageCategory col this must be grouped 
+#' @param matrixDf - a dataframe containing a sparse matrix of probabilities where age is labelled 
+#' @param oldIncidenceVar - the name of the input incidence col
+#' @param newIncidenceVar - the name of the output incidence col
+#' @param oldDateVar - the name of the input date column
+#' @param newDateVar - the name of the output date column
+#' @param ageCatVar - the age category variable
+#' @import dplyr
+#' @return a data frame containing the simulation results
+#' @export
+applyAgeTimeMatrix = function(inputDf, matrixDf, 
+                              oldIncidenceVar = "incidence", newIncidenceVar = "incidence",
+                              oldDateVar = "date", newDateVar = "date",
+                              ageCatVar = "ageGroup") {
+  
+  oldIncidenceVar = ensym(oldIncidenceVar)
+  newIncidenceVar = ensym(newIncidenceVar)
+  oldDateVar = ensym(oldDateVar)
+  newDateVar = ensym(newDateVar)
+  ageCatGrp = ensym(ageCatVar)
+  grps = inputDf %>% groups()
+  
+  if (length(grps)==0) stop("inputDf must be grouped to represent the geographical unit we are testing for")
+  
+  simEnd = max(inputDf %>% pull(!!oldDateVar))
+  
+  outputDf = inputDf %>% left_join(matrixDf %>% rename(!!ageCatVar := ageGroup), by=ageCatVar) %>% 
+    mutate(
+      !!newDateVar := !!oldDateVar+days,
+      !!newIncidenceVar := !!oldIncidenceVar*probability
+    ) %>%
+    group_by(
+      !!!grps, !!newDateVar, !!ageCatGrp
+    ) %>%
+    summarise (
+      !!newIncidenceVar := sum(!!newIncidenceVar)
+    ) %>% filter(
+      simEnd >= !!newDateVar
+    ) 
+  outputDf %>% ensure(
+    all(!is.na(.[as_label(newIncidenceVar)]))
+  ) %>% ensure(
+    nrow(.) == nrow(inputDf)
+  ) %>% invisible()
+  
+  return(outputDf %>% group_by(!!!grps))
+}
+
+#' loads a ventilator demand matrices
+#' 
+#' @import dplyr
+#' @return a list of matrices
+#' @export
+loadDefaultAgeTimeMatrices = function() {
+  
+  infected2SymptomaticUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=2044085188&single=true&output=csv"
+  symptomaticToHospitalisationUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1708683854&single=true&output=csv"
+  hospitalisedToInpatientUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=1784137714&single=true&output=csv"
+  symptomaticToItuUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=895816136&single=true&output=csv"
+  ituAdmitToItuInpatientUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSl_h_Vjag3N1bkfBlqCotUmB_Mg5BPfugGzhsmK-ByycxKGvODIGBD-IRtEwjOclu4UUchiZ3j45xU/pub?gid=68691773&single=true&output=csv"
+  
+  matrix = list(
+    infected2Symptomatic = loadAgeTimeMatrix(infected2SymptomaticUrl),
+    symptomaticToHospitalisation = loadAgeTimeMatrix(symptomaticToHospitalisationUrl),
+    hospitalisedToInpatient=loadAgeTimeMatrix(hospitalisedToInpatientUrl),
+    symptomaticToItu = loadAgeTimeMatrix(symptomaticToItuUrl),
+    ituAdmitToItuInpatient = loadAgeTimeMatrix(ituAdmitToItuInpatientUrl)
+  )
+  
+  return(matrix)
+}
