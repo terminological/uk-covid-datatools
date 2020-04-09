@@ -10,6 +10,11 @@ library(ukcovidtools)
 library(ggplot2)
 library(EpiEstim)
 ```
+## Vignettes:
+
+https://terminological.github.io/uk-covid-datatools/vignettes/basic-usage.html
+
+https://terminological.github.io/uk-covid-datatools/vignettes/lockdown-impact.html
 
 ## Get data and cleanse:
 
