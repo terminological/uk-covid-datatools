@@ -52,7 +52,8 @@ included in the package are a number of supporting data sets:
 ```{r}
 
 # Demographic breakdown of UK in single year age bands in a tidy format
-glimpse(UK2019Demographics)
+glimpse(UKDemographics2019)
+glimpse(UKDemographics2019Detailed)
 
 # UK ILI data in a tidy format going back to 2014
 glimpse(UKILIdata)

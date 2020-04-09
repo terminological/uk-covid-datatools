@@ -141,9 +141,20 @@ R0regionaltimeseries = ts$tidyUKRegional %>% group_by(uk_region) %>% normaliseAn
 R0regionaltimeseries = R0regionaltimeseries %>% filter(!is.na(`Median(R)`))
 
 keyDates = tibble(
-  date = c(as.Date(c("2020-03-13","2020-03-16","2020-03-19","2020-03-23")), max(R0regionaltimeseries$date, na.rm=TRUE)),
-  impactDate = c(as.Date(c("2020-03-14","2020-03-21","2020-03-24","2020-03-28")), max(R0regionaltimeseries$date, na.rm=TRUE)),
-  event = c("Inpatient only testing","Social isolation of vulnerable","Travel ban / school closure","Stay at home","Latest")
+  date = c(as.Date(c(
+    #"2020-03-13",
+    "2020-03-16",
+    #"2020-03-19",
+    "2020-03-23")), max(R0regionaltimeseries$date, na.rm=TRUE)),
+  impactDate = c(as.Date(c(#"2020-03-14",
+    "2020-03-21",
+    #"2020-03-24",
+    "2020-03-28")), max(R0regionaltimeseries$date, na.rm=TRUE)),
+  event = c(#"Inpatient only testing",
+    "Social isolation of vulnerable",
+    #"Travel ban / school closure",
+    "Social distancing",
+    "Latest")
 ) %>% mutate(label = paste0(date,": \n",event))
 ```
 
@@ -186,7 +197,7 @@ Initial focus is on localised Rt at Unitary Authority level timeseries in Englan
 
 ```{r}
 
-R0timeseries = ts$tidyEnglandUnitAuth %>% normaliseAndCleanse() %>% group_by(GSS_CD, GSS_NM) %>% tidyEstimateRt(cfg, window=5)
+R0timeseries = ts$tidyCombinedUK %>% normaliseAndCleanse() %>% group_by(code, name) %>% tidyEstimateRt(cfg, window=5)
 
 write_csv(R0timeseries, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Unitary_Authority.csv")
 
@@ -200,14 +211,15 @@ data("UKCovidMaps")
 # https://github.com/tidyverse/ggplot2/issues/3391
 # some issues joining tibble onto sf - which 
 
-r0shapes = UKCovidMaps$unitaryAuthority %>% 
-  left_join(R0timeseries, by=c("ctyua19cd"="GSS_CD")) %>% 
-  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
-  filter(!is.na(date))
+r0shapes = UKCovidMaps$reportingRegions %>% 
+  crossing(tibble(date=unique(R0timeseries$date))) %>%
+  left_join(R0timeseries, by=c("code","date")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) #%>% 
+  #filter(!is.na(date))
 
-r0shapes = r0shapes %>% mutate(`Median(R)` = ifelse(`Median(R)`>5, 4.999,`Median(R)`))
+r0shapes = r0shapes %>% mutate(`Median(R)` = ifelse(`Median(R)`>5, 4.999,`Median(R)`)) %>% sf::st_as_sf()
 
-r0shapes_key = r0shapes %>% inner_join(keyDates, by="date")
+r0shapes_key = r0shapes %>% inner_join(keyDates, by="date") %>% sf::st_as_sf() %>% nngeo::st_remove_holes()
 
 ukwide = ggplot(r0shapes_key)+
   geom_sf(aes(fill=`Median(R)`),data=r0shapes_key)+
@@ -261,13 +273,15 @@ ukwide = ggplot(r0shapes)+
 london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
 
 anim = ukwide+gganimate::transition_time(date)
-gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer())
+gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
 gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/Rt_by_unitary_authority_over_time.gif",gif)
 
 anim2 = london+gganimate::transition_time(date)
-gif2 = gganimate::animate(anim2, renderer=gganimate::gifski_renderer())
+gif2 = gganimate::animate(anim2, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
 gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/London_Rt_by_unitary_authority_over_time.gif",gif2)
 
+
+# ggplot(r0shapes, aes(x=date,y=`Median(R)`,colour=code))+geom_line(alpha=0.2,show.legend = FALSE)
 
 ```
 
@@ -281,8 +295,8 @@ gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/London_Rt_by_unitary_au
 # UA level
 lastDate = max(R0timeseries$date)-10
 
-toFit = R0timeseries %>% filter(date >= lastDate) %>% select(GSS_CD, GSS_NM, date, r=`Median(R)`)
-rateOfChange = toFit %>% group_by(GSS_CD,GSS_NM) %>% group_modify(function(d,g,...) {
+toFit = R0timeseries %>% filter(date >= lastDate) %>% select(code, name, date, r=`Median(R)`) %>% filter(!is.na(r))
+rateOfChange = toFit %>% group_by(code,name) %>% group_modify(function(d,g,...) {
   lmResult = lm(r~date, d)
   slope = coef(lmResult)["date"]
   return(tibble(
@@ -294,8 +308,8 @@ rateOfChange = toFit %>% group_by(GSS_CD,GSS_NM) %>% group_modify(function(d,g,.
   ))
 })
 
-r0rateOfChange = UKCovidMaps$unitaryAuthority %>% 
-  inner_join(rateOfChange, by=c("ctyua19cd"="GSS_CD")) %>% mutate(slope = ifelse(slope < -1, -1, ifelse( slope > 1, 1, slope)))
+r0rateOfChange = UKCovidMaps$reportingRegions %>% 
+  inner_join(rateOfChange, by=c("code")) %>% mutate(slope = ifelse(slope < -1, -1, ifelse( slope > 1, 1, slope)))
 
 # National level
 toFit = R0regionaltimeseries %>% filter(date >= lastDate) %>% select(uk_region, date, r=`Median(R)`)
@@ -351,9 +365,103 @@ ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope
 ```
 
 ```{r}
-rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=GSS_NM,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Top5UnitaryAuthoritiesByDeltaR_t")
+rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Top5UnitaryAuthoritiesByDeltaR_t")
 ```
 
 ```{r}
-rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=GSS_NM,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Bottom5UnitaryAuthoritiesByDeltaR_t")
+rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Bottom5UnitaryAuthoritiesByDeltaR_t")
+```
+
+# Rate of change as a time series
+
+```{r}
+# UA level
+
+toFit = R0timeseries %>% select(code, name, date, r=`Median(R)`) %>% filter(!is.na(r))
+deltaR0timeseries = toFit %>% group_by(code,name) %>% group_modify(function(d,g,...) {
+  if ((min(d$date)+10)>max(d$date)) return(tibble(date=as.Date(NA),slope=as.double(NA),slopeLowerCi=as.double(NA),slopeUpperCi=as.double(NA),r_squared=as.double(NA)))
+  endDate = seq((min(d$date)+10),max(d$date),1)
+  r0s = sapply(endDate, function(x) d$r[d$date > x-10 & d$date <=x]) # hopefully a vector of vectors
+  dates = sapply(endDate, function(x) d$date[d$date > x-10 & d$date <=x])
+  out = NULL
+  
+  for (i in 1:ncol(r0s)) {
+    # cant be arsed trying to vectorise this.
+    date=as.Date(dates[,i],origin=as.Date("1970-01-01"))
+    r=r0s[,i]
+    lmResult = lm(r~date,data=tibble(r=r,date=date))
+    out = out %>% bind_rows(tibble(
+      date = max(date),
+      slope = summary(lmResult)$coefficients[[2]],
+      slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
+      slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
+      r_squared = summary(lmResult)$r.squared
+    ))
+  }
+  return(out)
+})
+
+
+toFit = R0regionaltimeseries %>% select(uk_region, date, r=`Median(R)`)
+deltaR0Regionaltimeseries = toFit %>% group_by(uk_region) %>% group_modify(function(d,g,...) {
+  if ((min(d$date)+10)>max(d$date)) return(tibble(date=as.Date(NA),slope=as.double(NA),slopeLowerCi=as.double(NA),slopeUpperCi=as.double(NA),r_squared=as.double(NA)))
+  endDate = seq((min(d$date)+10),max(d$date),1)
+  r0s = sapply(endDate, function(x) d$r[d$date > x-10 & d$date <=x]) # hopefully a vector of vectors
+  dates = sapply(endDate, function(x) d$date[d$date > x-10 & d$date <=x])
+  out = NULL
+  
+  for (i in 1:ncol(r0s)) {
+    # cant be arsed trying to vectorise this.
+    date=as.Date(dates[,i],origin=as.Date("1970-01-01"))
+    r=r0s[,i]
+    lmResult = lm(r~date,data=tibble(r=r,date=date))
+    out = out %>% bind_rows(tibble(
+      date = max(date),
+      slope = summary(lmResult)$coefficients[[2]],
+      slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
+      slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
+      r_squared = summary(lmResult)$r.squared
+    ))
+  }
+  return(out)
+})
+```
+
+```{r}
+
+ukRateOfChange = ggplot(deltaR0Regionaltimeseries, aes(x=uk_region,y=slope,fill=slope))+
+  scale_fill_gradient2(
+    low="cyan",
+    mid="white",
+    high="magenta",
+    midpoint=0,
+    #trans="log",
+    na.value = "grey80",
+    limits=c(-0.5,0.5), 
+    breaks=c(-0.5,-0.25,0,0.25,0.5), 
+    labels=c("<-0.5","-0.25","0","0.25",">0.5")
+    ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)+coord_cartesian(ylim=c(-0.25,0.25))
+
+anim = ukRateOfChange+gganimate::transition_time(date)
+gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
+gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_by_uk_region_over_time.gif",gif)
+
+rateOfChangeDist = ggplot(deltaR0timeseries %>% filter(!is.na(slope)), aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))
+anim = rateOfChangeDist+gganimate::transition_time(date)
+gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
+gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_distribution_over_time.gif",gif)
+```
+
+
+```{r}
+tmp = tempfile("google",fileext = ".pdf")
+pdf = "https://www.gstatic.com/covid19/mobility/2020-03-29_GB_Mobility_Report_en.pdf"
+download.file(pdf,tmp)
+```
+
+```{r}
+pdfExtract = pdftools::pdf_text(tmp)
+pdfExtract = pdfExtract[4:length(pdfExtract)-1]
+pdfExtract[[1]] %>% stringr::str_split("\n")
+
 ```

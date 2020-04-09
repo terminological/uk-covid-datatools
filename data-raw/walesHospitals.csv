@@ -1,0 +1,88 @@
+hospitalId,sector,name,pcds,lat,long,trustId,trustName,hasIcu,hasAccidentAndEmergency,hasSurgicalDepartment
+7A4CH,NHS Sector,The Barry Hospital,CF62 8YH,51.413855,-3.285147,7A4CH,The Barry Hospital,FALSE,TRUE,TRUE
+7A4C1,NHS Sector,University Hospital Llandough,CF64 2XX,51.4492923,-3.2027997,7A4C1,University Hospital Llandough,TRUE,TRUE,TRUE
+7A3GT,NHS Sector,Ely Houses,CF5,51.4721104,-3.2713722,7A3GT,Ely Houses,FALSE,TRUE,TRUE
+7A4FE,NHS Sector,St Davids Community Hospital,CF11 9XB,51.482027,-3.1935849,7A4FE,St Davids Community Hospital,FALSE,TRUE,TRUE
+7A4BX,NHS Sector,Rookwood Hospital,CF5 2YN,51.4944191,-3.2251092,7A4BX,Rookwood Hospital,FALSE,TRUE,TRUE
+7A3G8,NHS Sector,Hafod y Wennol (Hensol Hospital),CF72,51.5040887,-3.3693703,7A3G8,Hafod y Wennol (Hensol Hospital),FALSE,TRUE,TRUE
+7A4BV,NHS Sector,University Hospital Of Wales,CF14 4XW,51.5071142,-3.1902633,7A4BV,University Hospital Of Wales,TRUE,TRUE,TRUE
+7A3B7,NHS Sector,Princess Of Wales Hospital,CF31 1RQ,51.51741,-3.5723825,7A3B7,Princess Of Wales Hospital,TRUE,TRUE,TRUE
+7A55E,NHS Sector,Ty Llidiard,CF31 1RQ,51.51741,-3.5723825,7A55E,Ty Llidiard,FALSE,TRUE,TRUE
+7A4FF,NHS Sector,Whitchurch Hospital,CF14 7BF,51.5174191,-3.2357472,7A4FF,Whitchurch Hospital,FALSE,TRUE,TRUE
+7A3LA,NHS Sector,Coity Clinic,CF31 1RQ,51.5178661,-3.571553,7A3LA,Coity Clinic,FALSE,TRUE,TRUE
+7A6GV,NHS Sector,Mitchell Close,CF3,51.5179141,-3.0946284,7A6GV,Mitchell Close,FALSE,TRUE,TRUE
+7A3FA,NHS Sector,Glanrhyd Hospital,CF31 4LN,51.5276822,-3.5864639,7A3FA,Glanrhyd Hospital,FALSE,TRUE,TRUE
+7A3FV,NHS Sector,"Caswell Clinic , South Wales Forensic&psychiatric",CF31 4LN,51.5276822,-3.5864639,7A3FV,"Caswell Clinic , South Wales Forensic&psychiatric",FALSE,TRUE,TRUE
+7A5B1,NHS Sector,The Royal Glamorgan Hospital,CF72 8XR,51.5476275,-3.3909207,7A5B1,The Royal Glamorgan Hospital,TRUE,TRUE,TRUE
+7A6AR,NHS Sector,Royal Gwent Hospital,NP20 2UB,51.5798532,-2.9975203,7A6AR,Royal Gwent Hospital,TRUE,TRUE,TRUE
+7A6AT,NHS Sector,St Woolos Community,NP20 4SZ,51.582303,-3.0034078,7A6AT,St Woolos Community,FALSE,TRUE,TRUE
+7A6ML,NHS Sector,St Woolos other,NP20 4SZ,51.582303,-3.0034078,7A6ML,St Woolos other,FALSE,TRUE,TRUE
+7A3CJ,NHS Sector,Neath Port Talbot Hospital,SA12 7BX,51.599213,-3.80035,7A3CJ,Neath Port Talbot Hospital,FALSE,TRUE,TRUE
+7A5BK,NHS Sector,Pontypridd & District Hospital,NA,51.600774,-3.342314,7A5BK,Pontypridd & District Hospital,FALSE,TRUE,TRUE
+7A3C4,NHS Sector,Singleton Hospital,SA2 8QA,51.6093656,-3.9851733,7A3C4,Singleton Hospital,TRUE,TRUE,TRUE
+7A3B9,NHS Sector,Maesteg General Hospital,CF34 9PW,51.610862,-3.6696489,7A3B9,Maesteg General Hospital,FALSE,TRUE,TRUE
+7A6F7,NHS Sector,St Cadoc's Hospital,NP18 3XQ,51.6137009,-2.9641847,7A6F7,St Cadoc's Hospital,FALSE,TRUE,TRUE
+7A3FJ,NHS Sector,Cefn Coed Hospital,SA2 0GH,51.628742,-3.989675,7A3FJ,Cefn Coed Hospital,FALSE,TRUE,TRUE
+7A6AV,NHS Sector,Ysbyty Ystrad Fawr,CF82 7GP,51.6340724,-3.234783,7A6AV,Ysbyty Ystrad Fawr,FALSE,TRUE,TRUE
+7A5CA,NHS Sector,Ysbyty Cwm Rhondda,CF40 2LX,51.6366286,-3.449992,7A5CA,Ysbyty Cwm Rhondda,FALSE,TRUE,TRUE
+7A6BJ,NHS Sector,Chepstow Community Hospital,NP16 5YX,51.639267,-2.6866614,7A6BJ,Chepstow Community Hospital,FALSE,TRUE,TRUE
+7A6G5,NHS Sector,Llanfrechfa Grange Hospital,NP44 8YN,51.6466239,-2.9980008,7A6G5,Llanfrechfa Grange Hospital,FALSE,TRUE,TRUE
+7A5DV,NHS Sector,Ysbyty George Thomas,CF42 6YG,51.6554951,-3.5039514,7A5DV,Ysbyty George Thomas,FALSE,TRUE,TRUE
+7A5F1,NHS Sector,Pinewood House,CF42 6AE,51.6601484,-3.5063928,7A5F1,Pinewood House,FALSE,TRUE,TRUE
+7A3GD,NHS Sector,Llwyneryr Hospital,SA6 6AH,51.6703184,-3.9332595,7A3GD,Llwyneryr Hospital,FALSE,TRUE,TRUE
+7A3EM,NHS Sector,Gorseinon Hospital,SA4 4UU,51.6723139,-4.0480169,7A3EM,Gorseinon Hospital,FALSE,TRUE,TRUE
+7A3FL,NHS Sector,Tonna Hospital,SA11 3LX,51.6798411,-3.7653118,7A3FL,Tonna Hospital,FALSE,TRUE,TRUE
+7A3C7,NHS Sector,Morriston Hospital,SA6 6NL,51.6840876,-3.9340388,7A3C7,Morriston Hospital,TRUE,TRUE,TRUE
+7A5HA,NHS Sector,Ysbyty Cwm Cynon,CF45 4BZ,51.6868525,-3.3931149,7A5HA,Ysbyty Cwm Cynon,FALSE,TRUE,TRUE
+7A6AS,NHS Sector,County Hospital,NP4 5YA,51.6917376,-3.026283,7A6AS,County Hospital,FALSE,TRUE,TRUE
+7A2AL,NHS Sector,Prince Philip Hospital,SA14 8QF,51.6917576,-4.136119,7A2AL,Prince Philip Hospital,TRUE,TRUE,TRUE
+7A2LB,NHS Sector,Ty Bryngwyn Mawr,SA14 8QF,51.6917576,-4.136119,7A2LB,Ty Bryngwyn Mawr,FALSE,TRUE,TRUE
+7A2EF,NHS Sector,S. Pembs Hosp. Health & Social Care Res Centre,SA72 6SX,51.692872,-4.9564563,7A2EF,S. Pembs Hosp. Health & Social Care Res Centre,FALSE,TRUE,TRUE
+7A6TG,NHS Sector,Rhymney Integrated Health and Social Care Centre,NP22 5PW,51.7580165,-3.2848288,7A6TG,Rhymney Integrated Health and Social Care Centre,FALSE,TRUE,TRUE
+7A5B3,NHS Sector,Prince Charles Hospital,CF47 9DT,51.7641073,-3.3861069,7A5B3,Prince Charles Hospital,TRUE,TRUE,TRUE
+7A7EJ,NHS Sector,Ystradgynlais Community Hospital,SA9 1AU,51.7671888,-3.7644539,7A7EJ,Ystradgynlais Community Hospital,FALSE,TRUE,TRUE
+7A6G6,NHS Sector,Lamb House (L.D.),NP13 3DB,51.7685393,-3.1652096,7A6G6,Lamb House (L.D.),FALSE,TRUE,TRUE
+7A6FR,NHS Sector,Ysbyty Tri Chwm,NP23 6GT,51.7919111,-3.2167117,7A6FR,Ysbyty Tri Chwm,FALSE,TRUE,TRUE
+7A1FC,NHS Sector,Tan-y-Castell,SA67 7ES,51.8042388,-4.7416714,7A1FC,Tan-y-Castell,FALSE,TRUE,TRUE
+7A2E1,NHS Sector,Amman Valley Hospital,SA18 2BQ,51.8082918,-3.9233419,7A2E1,Amman Valley Hospital,FALSE,TRUE,TRUE
+7A2BL,NHS Sector,Withybush General Hospital,SA61 2PZ,51.8126978,-4.9652405,7A2BL,Withybush General Hospital,TRUE,TRUE,TRUE
+7A6AM,NHS Sector,Nevill Hall Hospital,NP7 7EG,51.8250941,-3.034448,7A6AM,Nevill Hall Hospital,TRUE,TRUE,TRUE
+7A6FN,NHS Sector,Maindiff Court Hospital,NP7 8NF,51.8328909,-2.9949258,7A6FN,Maindiff Court Hospital,FALSE,TRUE,TRUE
+7A2F4,NHS Sector,Hafen Derwen (St Davids Hospital),SA31 3BB,51.8560442,-4.3371206,7A2F4,Hafen Derwen (St Davids Hospital),FALSE,TRUE,TRUE
+7A2AG,NHS Sector,Glangwili General Hospital,SA31 2AF,51.8680989,-4.2839238,7A2AG,Glangwili General Hospital,TRUE,TRUE,TRUE
+7A7BT,NHS Sector,Breconshire War Memorial Hospital,LD3 7NS,51.9488717,-3.3848275,7A7BT,Breconshire War Memorial Hospital,FALSE,TRUE,TRUE
+7A2AH,NHS Sector,Llandovery Hospital,SA20 0LA,51.998763,-3.7967648,7A2AH,Llandovery Hospital,FALSE,TRUE,TRUE
+7A7EH,NHS Sector,Bronllys Hospital,LD3 0LU,52.0082229,-3.2594395,7A7EH,Bronllys Hospital,FALSE,TRUE,TRUE
+7A2D8,NHS Sector,Tregaron Hospital,SY25 6JP,52.2156126,-3.9367543,7A2D8,Tregaron Hospital,FALSE,TRUE,TRUE
+7A7BN,NHS Sector,Llandrindod Wells Hospital,LD1 5HF,52.2434913,-3.3768815,7A7BN,Llandrindod Wells Hospital,FALSE,TRUE,TRUE
+7A7EG,NHS Sector,Knighton Hospital,LD7 1DF,52.3421288,-3.0499681,7A7EG,Knighton Hospital,FALSE,TRUE,TRUE
+7A2AJ,NHS Sector,Bronglais General Hospital,SY23 1ER,52.4166404,-4.0714208,7A2AJ,Bronglais General Hospital,TRUE,TRUE,TRUE
+7A7BP,NHS Sector,Llanidloes And District War Memorial Hospital,SY18 6HF,52.4525093,-3.539532,7A7BP,Llanidloes And District War Memorial Hospital,FALSE,TRUE,TRUE
+7A7BR,NHS Sector,Montgomeryshire County Infirmary,SY16 2DW,52.5208584,-3.3142307,7A7BR,Montgomeryshire County Infirmary,FALSE,TRUE,TRUE
+7A1B2,NHS Sector,Tywyn & District War Memorial Hospital,NA,52.587006,-4.087249,7A1B2,Tywyn & District War Memorial Hospital,FALSE,TRUE,TRUE
+7A7BQ,NHS Sector,Bro Ddyfi Community Hospital,SY20 8AD,52.5916553,-3.8455821,7A7BQ,Bro Ddyfi Community Hospital,FALSE,TRUE,TRUE
+7A7BS,NHS Sector,Victoria Memorial Hospital,SY21 7DU,52.6623683,-3.1435423,7A7BS,Victoria Memorial Hospital,FALSE,TRUE,TRUE
+7A1AY,NHS Sector,Dolgellau And Barmouth District Hospital,LL40 1NT,52.7408057,-3.8819211,7A1AY,Dolgellau And Barmouth District Hospital,FALSE,TRUE,TRUE
+7A1AX,NHS Sector,Bryn Beryl Hospital,LL53 6TT,52.9121386,-4.3948377,7A1AX,Bryn Beryl Hospital,FALSE,TRUE,TRUE
+7A1CA,NHS Sector,Ysbyty Alltwen,LL49,52.9412661,-4.1515449,7A1CA,Ysbyty Alltwen,FALSE,TRUE,TRUE
+7A1A7,NHS Sector,Chirk Community Hospital,LL14 5LN,52.9435853,-3.052386,7A1A7,Chirk Community Hospital,FALSE,TRUE,TRUE
+7A1D4,NHS Sector,Penley Hospital,LL13 0LH,52.9540531,-2.8701326,7A1D4,Penley Hospital,FALSE,TRUE,TRUE
+7A3FD,NHS Sector,Cefn Yr Afon,NA,52.9819219,-3.0794866,7A3FD,Cefn Yr Afon,FALSE,TRUE,TRUE
+7A1A4,NHS Sector,Wrexham Maelor Hospital,LL13 7TD,53.0470664,-3.0090968,7A1A4,Wrexham Maelor Hospital,TRUE,TRUE,TRUE
+7A6G2,NHS Sector,Bridge View House LD House,LL24 0AL,53.0912787,-3.799669,7A6G2,Bridge View House LD House,FALSE,TRUE,TRUE
+7A1AF,NHS Sector,Ruthin Community Hospital,LL15 1PS,53.1130688,-3.3035817,7A1AF,Ruthin Community Hospital,FALSE,TRUE,TRUE
+7A1DG,NHS Sector,Eryri Hospital,LL55 2YE,53.1301171,-4.2628401,7A1DG,Eryri Hospital,FALSE,TRUE,TRUE
+7A1AD,NHS Sector,Mold Community Hospital,CH7 1XG,53.1696439,-3.1478763,7A1AD,Mold Community Hospital,FALSE,TRUE,TRUE
+7A1A9,NHS Sector,Denbigh Community Hospital,LL16 3ES,53.1861968,-3.4099053,7A1A9,Denbigh Community Hospital,FALSE,TRUE,TRUE
+7A1CC,NHS Sector,Deeside Community Hospital,CH5 1XS,53.2023975,-3.0412596,7A1CC,Deeside Community Hospital,FALSE,TRUE,TRUE
+7A1AU,NHS Sector,Ysbyty Gwynedd,LL57 2PW,53.209036,-4.159831,7A1AU,Ysbyty Gwynedd,TRUE,TRUE,TRUE
+7A1FT,NHS Sector,Ysbyty Gwynedd (psychiatric),LL57 2PW,53.2090362,-4.1598311,7A1FT,Ysbyty Gwynedd (psychiatric),FALSE,TRUE,TRUE
+7A1GE,NHS Sector,Bryn-y-Neuadd Hospital,LL33 0HH,53.251929,-3.9851499,7A1GE,Bryn-y-Neuadd Hospital,FALSE,TRUE,TRUE
+7A1DD,NHS Sector,Cefni Hospital,LL77 7PP,53.2566098,-4.304214,7A1DD,Cefni Hospital,FALSE,TRUE,TRUE
+7A1A2,NHS Sector,Abergele Hospital,LL22 8DP,53.2662156,-3.5804798,7A1A2,Abergele Hospital,FALSE,TRUE,TRUE
+7A1AB,NHS Sector,Holywell Community Hospital,CH8 7TZ,53.2692844,-3.2164299,7A1AB,Holywell Community Hospital,FALSE,TRUE,TRUE
+7A1F9,NHS Sector,Ablett Unit,LL18 5UJ,53.2700609,-3.4973514,7A1F9,Ablett Unit,FALSE,TRUE,TRUE
+7A1A1,NHS Sector,Ysbyty Glan Clwyd,LL18 5UJ,53.2721048,-3.4958656,7A1A1,Ysbyty Glan Clwyd,TRUE,TRUE,TRUE
+7A1A8,NHS Sector,Colwyn Bay Community Hospital,LL29 8AY,53.2882999,-3.7102514,7A1A8,Colwyn Bay Community Hospital,FALSE,TRUE,TRUE
+7A1DC,NHS Sector,Ysbyty Penrhos Stanley,LL65 2QA,53.3041631,-4.6160436,7A1DC,Ysbyty Penrhos Stanley,FALSE,TRUE,TRUE
+7A1AV,NHS Sector,Llandudno General Hospital,LL30 1LB,53.3114437,-3.8277029,7A1AV,Llandudno General Hospital,FALSE,TRUE,TRUE

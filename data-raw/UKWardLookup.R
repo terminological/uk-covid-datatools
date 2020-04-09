@@ -1,4 +1,8 @@
-## code to prepare `UKWardLookup` dataset goes here
+## code to prepare `UKWardLookup2011` dataset goes here
+
+# Helpful resource to get your head around all this nonsense:
+# http://infuse.mimas.ac.uk/help/definitions/2011geographies/
+# also has shapefiles at the diferent resolutions
 
 # Ward to LAD mapping file (at point of 2011 census)
 # https://opendata.arcgis.com/datasets/d8070e25d9084aec8823170ff6e2da26_0.csv
@@ -7,7 +11,7 @@
 # should be 8607 long
 
 library(readr)
-UKWardLookup <- read_csv("https://opendata.arcgis.com/datasets/d8070e25d9084aec8823170ff6e2da26_0.csv", 
+UKWardLookup2011 <- read_csv("https://opendata.arcgis.com/datasets/d8070e25d9084aec8823170ff6e2da26_0.csv", 
     col_name=TRUE,cols(
       WD11CD = col_character(),
       WD11NM = col_character(),
@@ -32,7 +36,7 @@ UKWardLookup2019 <- read_csv(
     FID = col_integer()
   ))
 
-usethis::use_data(UKWardLookup, overwrite = TRUE)
+usethis::use_data(UKWardLookup2011, overwrite = TRUE)
 usethis::use_data(UKWardLookup2019, overwrite = TRUE)
 
 
@@ -55,7 +59,7 @@ getZipfile = function(filename,url) {
 # https://www.arcgis.com/sharing/rest/content/items/ef72efd6adf64b11a2228f7b3e95deea/data
 # PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2
 getZipfile("PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2","https://www.arcgis.com/sharing/rest/content/items/ef72efd6adf64b11a2228f7b3e95deea/data")
-postcodes_to_LSOA11 <- read_csv("Postcodes/PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2/PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2.csv", 
+postcodes_to_LSOA11 <- read_csv("~/Git/uk-covid-datatools/data-raw/Postcodes/PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2/PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_aligned_v2.csv", 
   col_types = cols(
     LAD11NMW = col_character(), 
     PCDOASPLT = col_integer()
@@ -67,7 +71,7 @@ postcodes_to_LSOA11 <- read_csv("Postcodes/PCD11_OA11_LSOA11_MSOA11_LAD11_EW_LU_
 # https://www.arcgis.com/sharing/rest/content/items/c4aeb11ff5b045018b7340e807d645cb/data
 # pcd11_par11_wd11_lad11_ew_lu
 getZipfile("pcd11_par11_wd11_lad11_ew_lu", "https://www.arcgis.com/sharing/rest/content/items/c4aeb11ff5b045018b7340e807d645cb/data")
-postcodes_to_WD11 <- read_csv("Postcodes/pcd11_par11_wd11_lad11_ew_lu/pcd11_par11_wd11_lad11_ew_lu.csv", 
+postcodes_to_WD11 <- read_csv("~/Git/uk-covid-datatools/data-raw/Postcodes/pcd11_par11_wd11_lad11_ew_lu/pcd11_par11_wd11_lad11_ew_lu.csv", 
   col_types = cols(
     lad11nmw = col_character(), 
     par11cd = col_character(), 
@@ -98,21 +102,36 @@ WD11_to_LSOA11 = postcodes_to_WD11 %>% select(PCD7 = pcd7, PCD8 = pcd8, WD11CD =
 # ?missing WD11s? - should be none
 postcodes_to_WD11 %>% select(WD11CD = wd11cd) %>% anti_join(WD11_to_LSOA11,by="WD11CD") %>% ensure_that(nrow(.)==0)
 
-# 
-WD11_to_LAD19 = WD11_to_LSOA11 %>% inner_join(LSOA11_to_LAD19, by="LSOA11CD") %>% select(WD11CD, WD11NM, LAD19CD, LAD19NM) %>% distinct()
+# There are some missing areas that are in the city of london and the ilses of scilly - they are areas with very low resident demographics.
+WD11_to_LAD19 = WD11_to_LSOA11 %>% inner_join(LSOA11_to_LAD19, by=c("LSOA11CD")) %>% select(WD11CD, WD11NM, LAD19CD, LAD19NM) %>% distinct()
 
-missing = UKWardLookup %>% anti_join(WD11_to_LAD19,by="WD11CD") %>% select(WD11CD, WD11NM,LAD11CD) %>% left_join(UKWardLookup2019, by=c("WD11NM"="WD19NM", "LAD11CD"="LAD19CD")) %>% select(WD11CD, WD11NM, LAD19CD=LAD11CD, LAD19NM)
+missing = UKWardLookup2011 %>% anti_join(WD11_to_LAD19,by="WD11CD") %>% select(WD11CD, WD11NM,LAD11CD) %>% left_join(UKWardLookup2019, by=c("WD11NM"="WD19NM", "LAD11CD"="LAD19CD")) %>% 
+  select(WD11CD, WD11NM, LAD19CD=LAD11CD, LAD19NM)
+
 WD11_to_LAD19 = WD11_to_LAD19 %>% bind_rows(missing)
 
-# ?missing WD11s? - should be none
-UKWardLookup %>% anti_join(WD11_to_LAD19,by="WD11CD") %>% ensure_that(nrow(.)==0)
+# ?missing WD11s? - should be none but there are some small population areas in cetral london and isels of scilly that are missed.
+UKWardLookup2011 %>% anti_join(WD11_to_LAD19,by="WD11CD") %>% ensure_that(nrow(.)==0)
 WD11_to_LAD19 %>% filter(is.na(LAD19CD)) %>%  ensure_that(nrow(.)==0)
 
 # missing LADs in mapping - yes there are but they are all scotland and N ireland
 UKWardLookup2019 %>% select(LAD19CD, LAD19NM) %>% distinct() %>% anti_join(WD11_to_LAD19,by="LAD19CD") %>% filter(!str_starts(LAD19CD,"S|N")) %>% ensure_that(nrow(.)==0) %>% invisible()
 # View(UKWardLookup2019 %>% select(LAD19CD, LAD19NM) %>% distinct() %>% anti_join(WD11_to_LAD19,by="LAD19CD"))
 # is it one to one?
-WD11_to_LAD19 %>% group_by(WD11CD) %>% count() %>% filter(n > 1) %>% ensure_that(nrow(.)==0) %>% invisible()
-write.csv(WD11_to_LAD19, "~/Git/uk-covid-datatools/data-raw/WD11_to_LAD19.csv")
 
+WD11_to_LAD19 %>% group_by(WD11CD,LAD19CD) %>% count() %>% filter(n > 1) %>% ensure_that(nrow(.)==0) %>% invisible()
+
+write.csv(WD11_to_LAD19, "~/Git/uk-covid-datatools/data-raw/WD11_to_LAD19.csv")
 usethis::use_data(WD11_to_LAD19, overwrite = TRUE)
+
+WD11_to_LSOA11 = WD11_to_LSOA11 %>% select(WD11CD,WD11NM,LSOA11CD,LSOA11NM) %>% distinct()
+WD11_to_LSOA11 %>% group_by(WD11CD) %>% count() %>% filter(n > 1) %>% ensure_that(nrow(.)==0) %>% invisible()
+
+write.csv(WD11_to_LSOA11, "~/Git/uk-covid-datatools/data-raw/WD11_to_LSOA11.csv")
+usethis::use_data(WD11_to_LSOA11, overwrite = TRUE)
+
+LSOA11_to_LAD19 = LSOA11_to_LAD19 %>% select(LSOA11CD,LSOA11NM,LAD19CD,LAD19NM) %>% distinct()
+LSOA11_to_LAD19 %>% group_by(LSOA11CD) %>% count() %>% filter(n > 1) %>% ensure_that(nrow(.)==0) %>% invisible()
+write.csv(WD11_to_LSOA11, "~/Git/uk-covid-datatools/data-raw/LSOA11_to_LAD19.csv")
+usethis::use_data(LSOA11_to_LAD19, overwrite = TRUE)
+

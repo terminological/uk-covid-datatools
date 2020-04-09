@@ -11,8 +11,8 @@ readSpatialFile = function(fname, ignoreErrors=FALSE) {        # read and proces
     pivot_longer(-time) %>%
     mutate(ward=as.integer(str_remove(name,'V'))) %>%
     select(-name)
-  #tmp = tmp %>% left_join(UKWardLookup %>% select(ward = FID,WD11CD,LAD11CD), by="ward")
-  tmp2 = tmp %>% left_join(UKWardLookup %>% select(ward = FID,WD11CD), by="ward") %>% left_join(WD11_to_LAD19, by="WD11CD")
+  #tmp = tmp %>% left_join(UKWardLookup2011 %>% select(ward = FID,WD11CD,LAD11CD), by="ward")
+  tmp2 = tmp %>% left_join(UKWardLookup2011 %>% select(ward = FID,WD11CD), by="ward") %>% left_join(WD11_to_LAD19, by="WD11CD")
   if(!ignoreErrors)
     tmp2 %>% ensurer::ensure(!any(is.na(.$LAD19CD)))
   return(tmp2)
