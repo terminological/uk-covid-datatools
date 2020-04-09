@@ -30,6 +30,8 @@ wards2011 = wards2011 %>% inner_join(demogByWard2011, by="WD11CD")
 # nodes = centroids %>% mutate(long = sapply(geometry,"[",1), lat=sapply(geometry,"[",2)) %>% rename(id = objectid) # %>% as_tibble() %>% select(-geometry)
 
 # TODO: make a function out of this so I never need to do it again:
+# TODO: Nightingale hospitals
+
 # locate hospitals on the map
 hospSf = sf::st_as_sf(NHSCapacity2019$hospitals, coords=c("long","lat"), crs=4326) %>% mutate(tmp_hosp_id=row_number())
 wards2011 = wards2011 %>% mutate(tmp_ward_id = row_number())
@@ -177,7 +179,7 @@ createResourceMap = function(
   }
   out = list(
     suppliedArea = suppliedArea %>% select(-accumulatedGrowth) %>% sf::st_as_sf(),
-    notSuppliedAred = unSuppliedArea %>% sf::st_as_sf()
+    notSuppliedArea = unSuppliedArea %>% sf::st_as_sf()
   )
   return(out)
   
@@ -188,10 +190,18 @@ icuCatchmentMap = createResourceMap(
   wards2011, 
   ward2IcuTrust)
 
+lookupWD11toICU = icuCatchmentMap$suppliedArea %>% as_tibble() %>% select(WD11CD = areaId, WD11NM, trustId=supplierId) %>% inner_join(NHSCapacity2019$trusts %>% select(trustId, trustName), by="trustId")
+
 icuCatchment = icuCatchmentMap$suppliedArea %>% group_by(supplierId) %>% summarise(
-  demog=sum(areaDemand),
+  population=sum(areaDemand),
   beds=first(supplyCapacity),
   bedsPer100K = 100000*first(supplyCapacity)/sum(areaDemand)
+)
+
+icu = list(
+  lookupWD11CD = lookupWD11toICU,
+  map = icuCatchment %>% sf::st_simplify(dTolerance=0.001),
+  hospitals = icuNHSHospSf
 )
 
 # icuCatchment = icuCatchmentMap %>% group_by(areaId) %>% unionByGroup(
@@ -200,10 +210,10 @@ icuCatchment = icuCatchmentMap$suppliedArea %>% group_by(supplierId) %>% summari
 #   bedsPer100K = 100000*first(supplyCapacity)/sum(areaDemand)
 # )
 
-leaflet::leaflet(icuCatchment) %>% 
+leaflet::leaflet(icu$map) %>% 
   leaflet::addTiles() %>% 
-  leaflet::addPolygons(popup=as.character(icuCatchment$bedsPer100K)) %>% 
-  leaflet::addCircleMarkers(data=icuNHSHospSf, color="#FF0000", popup = as.character(icuNHSHospSf$icuBeds))
+  leaflet::addPolygons(popup=as.character(icu$map$bedsPer100K)) %>% 
+  leaflet::addCircleMarkers(data=icu$hospitals, color="#FF0000", popup = as.character(icu$hospitals$icuBeds))
 
 # TODO: convert icuCatchmentMap into 
 # A - ward to icuTrust mapping and 
@@ -213,6 +223,35 @@ leaflet::leaflet(icuCatchment) %>%
 acuteCatchmentMap = createResourceMap(
   wards2011, 
   ward2AcuteTrust)
+
+lookupWD11toAcute = acuteCatchmentMap$suppliedArea %>% as_tibble() %>% select(WD11CD = areaId, WD11NM, trustId=supplierId) %>% inner_join(NHSCapacity2019$trusts %>% select(trustId, trustName), by="trustId")
+
+acuteCatchment = acuteCatchmentMap$suppliedArea %>% group_by(supplierId) %>% summarise(
+  population=sum(areaDemand),
+  beds=first(supplyCapacity),
+  bedsPer100K = 100000*first(supplyCapacity)/sum(areaDemand)
+)
+
+acute = list(
+  lookupWD11CD = lookupWD11toAcute,
+  map = acuteCatchment %>% sf::st_simplify(dTolerance=0.001),
+  hospitals = NHSHospSf
+)
+
+object.size(acute)
+
+leaflet::leaflet(acute$map) %>% 
+  leaflet::addTiles() %>% 
+  leaflet::addPolygons(popup=as.character(acute$map$bedsPer100K)) %>% 
+  leaflet::addCircleMarkers(data=acute$hospitals, color="#FF0000", popup = as.character(acute$hospitals$acuteBeds))
+
+
+NHSCatchment2019 = list(
+  icu = icu,
+  acute = acute
+)
+
+usethis::use_data(NHSCatchment2019,overwrite = TRUE)
 
 # View(suppliedArea)
 # 

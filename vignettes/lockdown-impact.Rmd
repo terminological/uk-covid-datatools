@@ -1,10 +1,10 @@
 ---
-title: "Impact of the social distancing on regional infectivity of COVID-19"
+title: "Regional infectivity of COVID-19"
 output: html_document
 fig_width: 7
 fig_height: 5
 vignette: >
-  %\VignetteIndexEntry{Impact of the social distancing on regional infectivity of COVID-19}
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -73,7 +73,7 @@ table = serialIntervals %>% mutate(
   `Population`=population
 )
 
-table %>% group_by(`Reference`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,2,0.5,1))
+table %>% group_by(`Reference`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,2,0.5,1))
 ```
 
 ```{r}
@@ -161,14 +161,14 @@ keyDates = tibble(
 ```{r}
 ukregionalplot = ggplot(R0regionaltimeseries, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+ #, colour=uk_region, fill=uk_region))+
   geom_ribbon(alpha=0.2)+geom_line()+geom_hline(yintercept = 1, colour="grey50", linetype="dashed")+facet_wrap(vars(uk_region)) + 
-  coord_cartesian(ylim=c(0, 5))+
+  coord_cartesian(ylim=c(0, 3))+
   geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
   #geom_vline(aes(xintercept=impactDate,colour=event,linetype="dashed"),data=keyDates, show.legend = FALSE)+
   ggrepel::geom_text_repel(
           aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
           size=(10/ggplot2:::.pt/(96/72)))+
   scale_x_date(date_breaks="2 day", date_labels = "%d-%b")+theme(axis.text.x=element_text(angle = 90, vjust =0.5))
-ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/ukRegionRt")
+ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig1_ukRegionRt")
 ```
 
 ### NHS regions
@@ -181,14 +181,14 @@ englandnhsplot = ggplot(R0nhstimeseries, aes(x=date, y=`Median(R)`, ymin=`Quanti
   geom_ribbon(alpha=0.2)+geom_line()+
   geom_hline(yintercept = 1, colour="grey50", linetype="dashed")+facet_wrap(vars(england_nhs_region)) + 
   standardPrintOutput::narrowAndTall()+
-  coord_cartesian(ylim=c(0, 5))+
+  coord_cartesian(ylim=c(0, 3))+
   geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
   #geom_vline(aes(xintercept=impactDate,colour=event,linetype="dashed"),data=keyDates, show.legend = FALSE) #, show.legend = FALSE) #+
   # ggrepel::geom_text_repel(
   #         aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
   #         size=(10/ggplot2:::.pt/(96/72)))
   scale_x_date(date_breaks="2 day", date_labels = "%d-%b")+theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
-englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/englandNHSRt")
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig2-englandNHSRt")
 ```
 
 ## Unitary Authoriy Timeseries
@@ -245,13 +245,38 @@ london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75
   # )
   # combined = ukwide / london + plot_layout(guides="collect")
 
-ukwide %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/englandMap")
-london %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/londonMap")
+ukwide %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap")
+london %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/lockdown-impact/Fig4_londonMap")
 
 ```
 
 
-create and save animated map
+## Create and save animated map
+
+Animated maps are viewable:
+
+* https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/UK_Rt_over_time.gif
+
+```{r}
+dates = tibble(date1=as.Date(min(r0shapes$date):max(r0shapes$date),origin=as.Date("1970-01-01")))
+barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
+  geom_rect(ymin=0,ymax=1) + 
+  ylim(c(0,1))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates,size=4,show.legend = FALSE)+
+  # ggrepel::geom_text_repel(
+  #   aes(x=date, y=1.25, colour=event, label=event),data=keyDates, hjust=0.5,vjust=0, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+  #         size=(10/ggplot2:::.pt/(96/72)))+
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    panel.grid.minor.y = element_blank(), 
+    axis.title.x = element_blank()
+  )+
+  coord_cartesian(ylim = c(0, 1), clip = 'off')+
+  gganimate::transition_time(date1)
+
+```
 
 ```{r eval = FALSE}
 
@@ -272,15 +297,27 @@ ukwide = ggplot(r0shapes)+
 
 london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
 
-anim = ukwide+gganimate::transition_time(date)
-gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
-gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/Rt_by_unitary_authority_over_time.gif",gif)
+timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=400, height=60)
+
+anim = ukwide+guides(fill="none")+#labs(title = 'Date: {frame_time}')+
+  gganimate::transition_time(date)
+gif = gganimate::animate(anim, renderer=gganimate::magick_renderer(), duration = 10, fps=10, width=400, height=800)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/Rt_by_unitary_authority_over_time.gif",gif)
 
 anim2 = london+gganimate::transition_time(date)
-gif2 = gganimate::animate(anim2, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
-gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/London_Rt_by_unitary_authority_over_time.gif",gif2)
+gif2 = gganimate::animate(anim2, renderer=gganimate::magick_renderer(), duration = 10, fps=10, width=400,height=300)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/London_Rt_by_unitary_authority_over_time.gif",gif2)
 
+#a_mgif <- magick::image_read(gif)
+#b_mgif <- magick::image_read(gif2)
+new_gif <- magick::image_append(c(gif[1], gif2[1], timeGif[1]), stack=TRUE)
+for(i in 2:100){
+  combined <- magick::image_append(c(gif[i], gif2[i], timeGif[i]), stack=TRUE)
+  new_gif <- c(new_gif, combined)
+}
 
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif",new_gif)
+magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif")
 # ggplot(r0shapes, aes(x=date,y=`Median(R)`,colour=code))+geom_line(alpha=0.2,show.legend = FALSE)
 
 ```
@@ -359,20 +396,22 @@ ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope
     labels=c("<-1","-0.5","0","0.5",">1")
     ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)
 
-(ukwideRateOfChange + londonRateofChange  + ukRateOfChange + rateOfChangeDist + plot_annotation(tag_levels = 'A')  + plot_layout(nrow = 2, , guides="collect")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/RateOfChangeMap")
+(ukwideRateOfChange + londonRateofChange  + ukRateOfChange + rateOfChangeDist + plot_annotation(tag_levels = 'A')  + plot_layout(nrow = 2, guides="collect")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig4_RateOfChangeMap")
 
 
 ```
 
 ```{r}
-rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Top5UnitaryAuthoritiesByDeltaR_t")
+rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Table2_Top5UnitaryAuthoritiesByDeltaR_t")
 ```
 
 ```{r}
-rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Bottom5UnitaryAuthoritiesByDeltaR_t")
+rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Table3_Bottom5UnitaryAuthoritiesByDeltaR_t")
 ```
 
 # Rate of change as a time series
+
+
 
 ```{r}
 # UA level
@@ -427,7 +466,11 @@ deltaR0Regionaltimeseries = toFit %>% group_by(uk_region) %>% group_modify(funct
 })
 ```
 
-```{r}
+Animated maps are viewable:
+
+* https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/delta_Rt_over_time.gif
+
+```{r eval=FALSE}
 
 ukRateOfChange = ggplot(deltaR0Regionaltimeseries, aes(x=uk_region,y=slope,fill=slope))+
   scale_fill_gradient2(
@@ -440,28 +483,41 @@ ukRateOfChange = ggplot(deltaR0Regionaltimeseries, aes(x=uk_region,y=slope,fill=
     limits=c(-0.5,0.5), 
     breaks=c(-0.5,-0.25,0,0.25,0.5), 
     labels=c("<-0.5","-0.25","0","0.25",">0.5")
-    ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)+coord_cartesian(ylim=c(-0.25,0.25))
+    ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)+
+  coord_cartesian(ylim=c(-0.25,0.25))#+
+  #labs(title = 'Date: {frame_time}')
 
-anim = ukRateOfChange+gganimate::transition_time(date)
-gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
-gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_by_uk_region_over_time.gif",gif)
+timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60)
 
-rateOfChangeDist = ggplot(deltaR0timeseries %>% filter(!is.na(slope)), aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))
-anim = rateOfChangeDist+gganimate::transition_time(date)
-gif = gganimate::animate(anim, renderer=gganimate::gifski_renderer(), duration = 10, fps=10)
-gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_distribution_over_time.gif",gif)
+anim3 = ukRateOfChange+gganimate::transition_time(date)
+gif3 = gganimate::animate(anim3, renderer=gganimate::magick_renderer(), width=300, height = 300)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_by_uk_region_over_time.gif",gif)
+
+rateOfChangeDist = ggplot(deltaR0timeseries %>% filter(!is.na(slope)), aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))+labs(title = " ")
+anim4 = rateOfChangeDist+gganimate::transition_time(date)
+gif4 = gganimate::animate(anim4, renderer=gganimate::magick_renderer(), width=500, height = 300)
+
+new_gif <- magick::image_append(c(magick::image_append(c(gif3[1], gif4[1])),timeGif[1]),stack=TRUE) 
+for(i in 2:100){
+  combined <- magick::image_append(c(magick::image_append(c(gif3[i], gif4[i])),timeGif[i]),stack=TRUE) 
+  new_gif <- c(new_gif, combined)
+}
+
+magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif")
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif",new_gif)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_distribution_over_time.gif",gif)
 ```
 
 
 ```{r}
-tmp = tempfile("google",fileext = ".pdf")
-pdf = "https://www.gstatic.com/covid19/mobility/2020-03-29_GB_Mobility_Report_en.pdf"
-download.file(pdf,tmp)
+# tmp = tempfile("google",fileext = ".pdf")
+# pdf = "https://www.gstatic.com/covid19/mobility/2020-03-29_GB_Mobility_Report_en.pdf"
+# download.file(pdf,tmp)
 ```
 
 ```{r}
-pdfExtract = pdftools::pdf_text(tmp)
-pdfExtract = pdfExtract[4:length(pdfExtract)-1]
-pdfExtract[[1]] %>% stringr::str_split("\n")
+# pdfExtract = pdftools::pdf_text(tmp)
+# pdfExtract = pdfExtract[4:length(pdfExtract)-1]
+# pdfExtract[[1]] %>% stringr::str_split("\n")
 
 ```
