@@ -129,7 +129,8 @@ createResourceMap = function(
   # loop?
   repeat {
     suppliedArea = suppliedArea %>% group_by(supplierId) %>% mutate(
-      capacityPerDemand = supplyCapacity/sum(areaDemand)
+      totalDemand = sum(areaDemand),
+      capacityPerDemand = supplyCapacity/totalDemand
     ) %>% ungroup() 
     
     unSuppliedArea = entireArea %>% anti_join(suppliedArea, by="areaId")
@@ -144,14 +145,19 @@ createResourceMap = function(
     
     # growing areas are - A) adjoin unsupplied areas B) have accumulated enough to grow
     unSuppliedNeighbourAreas = areaNetwork %>% inner_join(unSuppliedArea, by=c("toAreaId"="areaId")) %>% rename(areaId = toAreaId)
+    intoUnsupplied = unSuppliedNeighbourAreas %>% group_by(fromAreaId) %>% summarise(newAreas = n(), newAreaDemand = sum(areaDemand))
     
     # TODO: this definintion only allows growth into areas that are not already supplied
     growingArea = suppliedArea %>% rename(fromAreaId = areaId) %>% 
-      semi_join(unSuppliedNeighbourAreas, by=c("fromAreaId")) %>% 
+      inner_join(intoUnsupplied, by=c("fromAreaId"), suffix=c(".old","")) %>% 
+      mutate( 
+        newTotalDemand = totalDemand+newAreaDemand,
+        newCapacityPerDemand = supplyCapacity/newTotalDemand
+        ) %>%
       mutate(
-        accumulatedGrowth = accumulatedGrowth + growthRates(capacityPerDemand) #*distanceModifier(distanceToSupply) #TODO: make this work
+        accumulatedGrowth = accumulatedGrowth + growthRates(newCapacityPerDemand) #*distanceModifier(distanceToSupply) #TODO: make this work
       )
-    
+    # browser()
     suppliedArea = suppliedArea %>% left_join(
       growingArea %>% select(areaId = fromAreaId, newAccumulated = accumulatedGrowth), by="areaId") %>% 
       mutate(accumulatedGrowth = ifelse(!is.na(newAccumulated), newAccumulated, accumulatedGrowth)) %>%

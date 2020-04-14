@@ -91,6 +91,13 @@ r0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=`Median(R)`, ymin=`Quan
 r0ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig1_ukRegionRt")
 ```
 
+```{r}
+ts$r0EnglandNHS %>% filter(event == "Latest") %>% mutate(
+  `Median(R)` = sprintf("%1.2f", `Median(R)`),
+  `95% confidence interval`=sprintf("(%1.2f; %1.2f)",`Quantile.0.025(R)`,`Quantile.0.975(R)`)
+) %>% select(`NHS region`= england_nhs_region,`Median(R)`,`95% confidence interval`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Table2_Rt_by_NHSregion", defaultFontSize = 8)
+```
+
 The rate of change of R(t) in the different countries of the UK. This shows the viral reproduction has been decelerating since 2020-03-31 in all regions.
 
 ```{r}
@@ -135,6 +142,8 @@ englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lo
 ```
 Significance tests:
 
+* consider using a time series specific meausure:
+* e.g. https://cran.r-project.org/web/packages/TSdist/TSdist.pdf
 
 ```{r}
 englandnhsFromBaselineSignificance = englandnhsFromBaseline %>% 
@@ -310,11 +319,13 @@ londonGif = gganimate::animate(londonAnim, renderer=gganimate::magick_renderer()
 ukWideDeltaGif = gganimate::animate(ukwideDeltaAnim, renderer=gganimate::magick_renderer(), width=400, height=800)
 londonDeltaGif = gganimate::animate(londonDeltaAnim, renderer=gganimate::magick_renderer(), width=400,height=300)
 
+captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+
 layoutGifs = function(i) {
   magick::image_append(c(
   magick::image_append(c(ukWideGif[i], ukWideDeltaGif[i])),
   magick::image_append(c(londonGif[i], londonDeltaGif[i])),
-  timeGif[i]), stack=TRUE)
+  timeGif[i], captionTif[1]), stack=TRUE)
 }
 
 new_gif <- layoutGifs(1)

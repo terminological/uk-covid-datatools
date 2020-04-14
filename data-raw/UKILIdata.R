@@ -92,6 +92,8 @@ UKILIdata_toAdd = tibble(missingfilenames) %>%
   #mutate(Year = years) %>%
   #mutate(Week = weeks) %>%
   # select(-filename) %>%
+  mutate(filename=stringr::str_extract(missingfilenames,"([^/]+$)")) %>%
+  select(-missingfilenames) %>%
   unnest(cols=contents)
 
 if (nrow(UKILIdata_toAdd) > 0) {
