@@ -340,7 +340,12 @@ magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_o
 
 ```
 
+```{r}
 
+UKCovidNeghbours = UKCovidMaps$reportingRegions %>% createNeighbourNetwork(code)
+write.csv(UKCovidNeghbours,"~/Git/uk-covid-datatools/vignettes/Rt_Timeseries_Neighbours.csv")
+
+```
 
 ```{r}
 

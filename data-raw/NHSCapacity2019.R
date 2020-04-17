@@ -240,6 +240,8 @@ NHSCapacity2019 = list(
 
 usethis::use_data(NHSCapacity2019, overwrite=TRUE)
 
+#### TODO: eyeball tests ----
+
 tmp = NHSCapacity2019$hospitals %>% filter(hasIcu) %>% sf::st_as_sf(coords = c("long","lat"), crs=4326)
 
 ggplot(UKCovidMaps$reportingRegions)+geom_sf()+geom_sf(data=tmp)
@@ -257,3 +259,83 @@ missing = tmp2 %>% anti_join(tmp1) %>% union_all(tmp1 %>% anti_join(tmp2))
 hospitalList %>% semi_join(missing, by="trustId")
 
 rm(bedsByTrust,hospitalList,missing,tmp1,tmp2)
+
+
+#### Sitrep data ----
+
+paths=list(
+  chess="~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
+  lineList="~/S3/encrypted/5Apr/NHS/Anonymised Line List 20200405.xlsx",
+  ff100="~/S3/encrypted/5Apr/NHS/FF100 Case Extract External 20200405.csv",
+  chessSummary="~/S3/encrypted/5Apr/NHS/CHESS Aggregate Report 20200405.csv",
+  sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx"
+)
+
+covidSitrep <- read_excel(path.expand(paths$sitrep), sheet = "Site Level Raw Data") 
+covidSitrep = covidSitrep %>% filter(!is.na(`Org code`))
+covidSitrep = covidSitrep %>% pivot_longer(cols = starts_with("SIT0"), names_to = "variable", values_to = "value") 
+covidSitrep = covidSitrep %>% select(-starts_with("...")) %>% select(-`ADDITIONAL ISP QUESTIONS`)
+covidSitrep = covidSitrep %>% mutate(
+  subgroup = str_replace(variable,"^.*_([^_]+)$","\\1"),
+  variable = str_replace(variable,"^(.*)_[^_]+$","\\1")
+)
+
+bedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% 
+  summarise(subtotal = sum(as.numeric(value))) %>% 
+  filter(variable %in% c("SIT032","SIT033","SIT034","SIT037")) %>% 
+  pivot_wider(names_from = variable, values_from = subtotal) %>% mutate(
+  ventilated = as.integer(SIT032),
+  cpap = as.integer(SIT033),
+  acute = as.integer(SIT034+SIT037)
+) %>% select(-starts_with("SIT0"))
+
+bedsExtract = read_excel(path.expand(paths$sitrep), sheet = "Beds Extract")
+
+# View(bedsBySite %>% anti_join(NHSCapacity2019$hospitals, by=c("Site/Org Code"="hospitalId")) %>% anti_join(NHSCapacity2019$trusts, by=c("Site/Org Code"="trustId")))
+# View(bedsBySite %>% anti_join(NHSCapacity2019$trusts, by=c("Org code"="trustId")))
+
+tmp1 = bedsBySite %>% full_join(
+  NHSCapacity2019$trusts %>% inner_join(NHSCapacity2019$hospitals %>% select(-trustName),by=c("trustId")) %>% mutate(trustId = ifelse(sector=="Independent Sector", hospitalId, trustId)), 
+  by=c("Org code"="trustId")) 
+
+tmp2 = tmp1 %>%
+  mutate(distance = stringdist::stringdist(str_to_lower(`Site/Org Name`),str_to_lower(name), "osa")) %>% 
+  mutate(distance = ifelse(is.na(distance),1000,distance)) %>% 
+  group_by(`Site/Org Name`) %>% arrange(desc(distance)) %>% 
+  filter(is.na(`Site/Org Name`) | row_number()<=2) %>% 
+  select(-distance) %>% ungroup()
+
+tmp3 = tmp2 %>%
+  full_join(bedsExtract %>% select(!contains("Occupied")), by=c("Org code"="OrgCode")) %>%
+  mutate(distance = stringdist::stringdist(str_to_lower(`Site/Org Name`),str_to_lower(`Site Name`), "osa")) %>%
+  group_by(`Site/Org Name`) %>% 
+  mutate(distance = ifelse(is.na(distance),1000,distance)) %>% 
+  arrange(desc(distance)) %>% 
+  filter(is.na(`Site/Org Name`) | row_number()==1)
+
+write_csv(tmp, "~/Dropbox/covid19/load-sharing/NHSsitesCleanse.csv")
+
+a = NHSCapacity2019$hospitals$name %>% stringr::str_to_upper()
+b = bedsBySite$`Site/Org Name` %>% stringr::str_to_upper()
+c = bedsExtract$`Site Name` %>% stringr::str_to_upper()
+
+c(a,c)[!duplicated(c(a,c))]
+c(a,b)[!duplicated(c(a,b))]
+
+sort(c(b,c)[!duplicated(c(b,c))])
+
+
+
+write_csv(icuBedsBySite, "~/Dropbox/covid19/load-sharing/ICUsites.csv")
+
+occupiedIcuBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% filter(variable=="SIT032" & subgroup != "Unoccupied") %>% summarise(occupied = sum(as.numeric(value))) %>% ungroup() %>% select(`Site/Org Code`,occupied)
+icuBedsBySite = icuBedsBySite %>% left_join(occupiedIcuBedsBySite, by="Site/Org Code") %>% filter(`Org Type` == "Site" & subtotal > 0)
+
+
+
+# cpapBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% summarise(subtotal = sum(as.numeric(value))) %>% filter(variable=="SIT033")
+# acuteBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% summarise(subtotal = sum(as.numeric(value))) %>% filter(variable=="SIT034")
+# mentalHealthBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% summarise(subtotal = sum(as.numeric(value))) %>% filter(variable=="SIT035")
+# lowDependencyBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% summarise(subtotal = sum(as.numeric(value))) %>% filter(variable=="SIT036")
+# otherBedsBySite = covidSitrep %>% group_by_at(vars(-value,-subgroup)) %>% summarise(subtotal = sum(as.numeric(value))) %>% filter(variable=="SIT037")
+```
