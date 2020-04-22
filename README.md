@@ -16,6 +16,8 @@ https://terminological.github.io/uk-covid-datatools/vignettes/basic-usage.html
 
 https://terminological.github.io/uk-covid-datatools/vignettes/lockdown-impact.html
 
+https://terminological.github.io/uk-covid-datatools/vignettes/ventilator-survival-models.html
+
 ## Get data and cleanse:
 
 ```{r}
