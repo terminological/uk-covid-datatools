@@ -97,6 +97,13 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
 #' @return a data frame with several timeseries in it
 #' @export
 getUKCovidTimeseries = function() {
+  
+  #TODO: convert to use:
+  # https://github.com/tomwhite/covid-19-uk-data/raw/master/data/covid-19-cases-uk.csv
+  # https://github.com/tomwhite/covid-19-uk-data/raw/master/data/covid-19-indicators-uk.csv
+  # cases by region:
+  # https://coronavirus.data.gov.uk/#
+  
   UKregional=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=163112336&single=true&output=csv", 
                     col_types = readr::cols(date = readr::col_date(format = "%Y-%m-%d")))
   

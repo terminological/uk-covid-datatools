@@ -349,6 +349,18 @@ write.csv(UKCovidNeghbours,"~/Git/uk-covid-datatools/vignettes/Rt_Timeseries_Nei
 
 ```{r}
 
+# captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+# manGif = magick::image_read(path = "~/Dropbox/covid19/lockdown-impact/eurosurveillanceSubmission/UK_Rt_over_time_no_label.gif")
+# 
+# new_gif <- magick::image_append(c(manGif[1], captionTif[1]), stack=TRUE)
+# for(i in 2:100){
+#   combined <- magick::image_append(c(manGif[i], captionTif[1]), stack=TRUE)
+#   new_gif <- c(new_gif, combined)
+# }
+# 
+# magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time_2.gif")
+
+
 # rateOfChangeDist = ggplot(rateOfChange, aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))
 # 
 # ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope))+

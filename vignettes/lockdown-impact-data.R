@@ -64,9 +64,9 @@ cfg = EpiEstim::make_config(list(
   min_std_si = wtSIs$min_std_si, 
   max_std_si = wtSIs$max_std_si), method="uncertain_si")
 
-ts$r0UKRegional = ts$tidyUKRegional %>% group_by(uk_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
-ts$r0EnglandNHS = ts$tidyEnglandNHS %>% group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
-ts$r0CombinedUK = ts$tidyCombinedUK %>% group_by(code, name) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window=5)
+ts$r0UKRegional = ts$tidyUKRegional %>% filter(date < as.Date("2020-04-11")) %>% group_by(uk_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
+ts$r0EnglandNHS = ts$tidyEnglandNHS %>% filter(date < as.Date("2020-04-11")) %>% group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
+ts$r0CombinedUK = ts$tidyCombinedUK %>% filter(date < as.Date("2020-04-11")) %>% group_by(code, name) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window=5)
 
 #### Add in rate of change R(t) estimates
 
