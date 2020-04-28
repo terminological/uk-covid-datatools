@@ -31,11 +31,13 @@ generateSurvivalData = function(df,
       id = !!idVar,
       status = !!statusExpr
     ) %>% mutate(
-      endDate = if_else(status==0, !!censoredDateExpr, endDate),
+      endDate = if_else(status==0, as.Date(!!censoredDateExpr+0.001), endDate+0.001),
       time = as.numeric(endDate - startDate), # zero times causes issues
       ageCat = cut(!!ageVar,breaks = ageBreaks, labels = ageLabels, ordered_result = TRUE, include.lowest = TRUE),
       status = factor(status, labels=statusLabels)
-    ) 
+    ) #%>% mutate(
+      #time = time+0.1 # if_else(time==0,0.5,time)
+    #)
   
   if (!is.na(ageReferenceCat)) {
     out = out %>% mutate(
@@ -95,6 +97,7 @@ generateMultistateSurvivalData = function(df,
               startDateCol=names(allowableTransitions)[1],
               ageBreaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
               ageLabels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
+              ageReferenceCat = NA,
               ...) {
   
   ageVar = ensym(ageVar)
@@ -114,6 +117,12 @@ generateMultistateSurvivalData = function(df,
   df = df %>% mutate(
     ageCat = cut(!!ageVar,breaks = ageBreaks, labels = ageLabels, ordered_result = TRUE, include.lowest = TRUE)
   )
+  if (!is.na(ageReferenceCat)) {
+    out = out %>% mutate(
+      ageCat = relevel(factor(as.character(ageCat),ordered=FALSE), ref = ageReferenceCat)
+    )
+  }
+  
   addData = df %>% select(c("id",keep,"ageCat"))
   
   df = df %>% select(c("id",dateCols,startDateCol,"censorDate"))
@@ -122,6 +131,10 @@ generateMultistateSurvivalData = function(df,
   
   df[statusCols] = if_else(is.na(df[dateCols]),0,1)
   df[dateCols] = if_else(is.na(df[dateCols]), rep(as.numeric(df$censorDate),length(dateCols)), unlist(df[dateCols]))
+  
+  # add noise to outcomes to prevent zero values
+  df[dateCols] = df[dateCols] + matrix(rep(seq(0,0.001,length.out = length(dateCols)),nrow(df)),ncol = 3,byrow = TRUE)
+  
   df[timeCols] = unlist(df[dateCols]) - rep(as.numeric(unlist(df[startDateCol])),length(dateCols))
   df = df %>% select(c("id",timeCols,statusCols)) %>% as.data.frame()
   
@@ -133,11 +146,24 @@ generateMultistateSurvivalData = function(df,
   id=df %>% pull(id)
   
   out = mstate::msprep(time=time,status=status,trans=trans,start=start,id=id)
-  out = out %>% left_join(addData, by="id") %>% mutate(time = if_else(time ==0, 0.5,time))
+  out = out %>% left_join(addData, by="id") #%>% mutate(
+    #time = time+0.5,#if_else(time ==0, 0.5,time),
+    #Tstop = Tstop+0.5#if_else(time ==0, Tstop+0.5,Tstop)
+  #)
   class(out) = c(class(out),"msdata")
   return(out)
 }
 
+standardModels = function(items = c("weibull","gamma","lognorm")) {
+  tmp = list(
+    weibull = list(name = "weibull", start = list(shape =1 , scale=10)),
+    gamma = list(name = "gamma", start = list(shape =1 , rate=0.1)),
+    lognorm = list(name = "lnorm", start = list(meanlog =2 , sdlog=1)),
+    exp = list(name = "exp", start = list(rate=0.5)),
+    norm = list(name = "norm", start = list(mean = 1, sd = 1))
+  )
+  return(tmp[names(tmp) %in% items])
+}
 
 #' for each ageCat fit a set of models and return a data fram with the parameters.
 #' 
@@ -146,79 +172,89 @@ generateMultistateSurvivalData = function(df,
 #' @import dplyr
 #' @return an datafram of ageCat, model, param(eterName), value, low_ci, high_ci
 #' @export
-fitModelsByAge = function(survivalDf, ageVar = "ageCat", models = c("weibull","gamma","lnorm"),...) {
+fitModelsByAge = function(survivalDf, ageVar = "ageCat", models = standardModels(),...) {
+  
   
   ageVar = ensym(ageVar)
+  isCensored = length(levels(survivalDf$status)) > 1
   censoredFac = min(as.integer(survivalDf$status))
+  
+  #browser()
   censoredDf = survivalDf %>% mutate(
-    time = if_else(time==0, 0.5, time)
-  ) %>% mutate(
+    #time = if_else(time==0, 0.5, time)
+  #) %>% mutate(
     left=time,
-    right=ifelse(as.integer(status)==censoredFac, NA, time)
+    right=ifelse(isCensored & as.integer(status)==censoredFac, NA, time)
   )
+  
+  modelNames = unlist(sapply(models, "[", "name"))
   
   out = censoredDf %>% ungroup() %>% group_by(!!ageVar) %>% group_modify( function(d,g,...) {
     
-    dists = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdistcens(d %>% as.data.frame(), m, ...)))
-    names(dists) = models
-    
-    params = tibble(
-      model = as.vector(t(matrix(c(models,models),nrow=length(models)))), 
-      param = as.vector(sapply(sapply(dists, "[", "estimate"), "names")), 
-      value = as.vector(unlist(sapply(dists, "[", "estimate"))),
-      low_ci = as.vector(sapply(lapply(dists,confint), "[", , 1)),
-      high_ci = as.vector(sapply(lapply(dists,confint), "[", , 2))
-    )
-    
-    return(
-      tibble(
-        model = models,
-        n = unlist(sapply(dists, "[", "n")),
-        aic = unlist(sapply(dists, "[", "aic")),
-        bic = unlist(sapply(dists, "[", "bic")),
-        loglik = unlist(sapply(dists, "[", "loglik"))
-      ) %>% left_join(params, by="model")
-    )
-    
+    tmp = data.frame()
+    for (m in models) {
+      dist = suppressWarnings({
+        tryCatch(fitdistrplus::fitdistcens(d %>% as.data.frame(), m$name, start = m$start, ...), error = function(e) NULL)
+      })
+      #browser()
+      if (!is.null(dist)) {
+        #browser()
+        dist2 = suppressWarnings(fitdistrplus::bootdistcens(dist,silent = TRUE,niter = 100,ncpus = 3))
+        
+        tmp = tmp %>% bind_rows(tibble(
+          n=dist$n,
+          aic=dist$aic,
+          bic=dist$bic,
+          loglik=dist$loglik,
+          model = m$name,
+          param = names(dist$estimate),
+          value = dist$estimate,
+          low_ci = matrix(dist2$CI,ncol=3)[,2],
+          high_ci = matrix(dist2$CI,ncol=3)[,3],
+        ))
+      }
+    }
+    return(tmp)
+
   })
   
   return(out)
 }
 
-doPdf = function(model, paramNames, params, days=30, ...) {
+doPdf = function(model, paramNames, params, timepoints, ...) {
   names(params) = paramNames
-  params$x=0:days
+  params$x=timepoints
   pred = do.call(paste0("d",model),params)
   return(pred)
 }
 
-doCdf = function(model, paramNames, params, days=30, ...) {
+doCdf = function(model, paramNames, params, timepoints, ...) {
   names(params) = paramNames
-  params$q=0:days
+  params$q=timepoints
   # browser()
   pred = do.call(paste0("p",model),params)
   return(pred)
 }
 
-doMedian = function(model, paramNames, params, days=30, ...) {
+doMedian = function(model, paramNames, params, ...) {
   suppressWarnings({names(params) = paramNames})
   params$p=0.5 #c(0.025,0.05,0.25,0.5,0.75,0.95,0.975)
   pred = do.call(paste0("q",model),params)
   return(pred)
 }
 
-doEstimate = function(d, model1, days1 = 30, ...) {
+doEstimate = function(d, model1, timepoints , ...) {
   out = tibble(
-    days = 0:days1,
-    pdf = doPdf(model1, d$param, d$value, days=days1, ...),
-    pdf_lo = doPdf(model1, d$param, d$low_ci, days=days1, ...),
-    pdf_hi = doPdf(model1, d$param, d$high_ci, days=days1, ...),
-    cdf = doCdf(model1, d$param, d$value, days=days1, ...),
-    cdf_lo = doCdf(model1, d$param, d$low_ci, days=days1, ...),
-    cdf_hi = doCdf(model1, d$param, d$high_ci, days=days1, ...),
-    median = doMedian(model1, d$param, d$value, days=days1, ...),
-    median_lo = doMedian(model1, d$param, d$low_ci, days=days1, ...),
-    median_hi = doMedian(model1, d$param, d$high_ci, days=days1, ...)
+    days = timepoints,
+    pdf = doPdf(model1, d$param, d$value, timepoints, ...),
+    pdf_lo = doPdf(model1, d$param, d$low_ci, timepoints, ...),
+    pdf_hi = doPdf(model1, d$param, d$high_ci, timepoints, ...),
+    cdf = doCdf(model1, d$param, d$value, timepoints, ...),
+    cdf_lo = doCdf(model1, d$param, d$low_ci, timepoints, ...),
+    cdf_hi = doCdf(model1, d$param, d$high_ci, timepoints, ...),
+    median = doMedian(model1, d$param, d$value, timepoints, ...),
+    median_lo = doMedian(model1, d$param, d$low_ci, timepoints, ...),
+    median_hi = doMedian(model1, d$param, d$high_ci, timepoints, ...)
   )
   return(out)
   
@@ -231,7 +267,7 @@ doEstimate = function(d, model1, days1 = 30, ...) {
 #' @import dplyr
 #' @return an dataframe of ageCat and time varying surfaces, including pdfs, cdfs and medians, with high and low estimates 
 #' @export
-createSurvivalSurfaces = function(modelParameterDf, days=30, ...) {
+createSurvivalSurfaces = function(modelParameterDf, days=30, timepoints = seq(0.1,days,length.out = 100)) {
   # smooth model parameters over age groups
   out_sm = modelParameterDf %>% ungroup() %>% group_by(model,param) %>% group_modify(function(d,g,...) {
     return(tibble(
@@ -243,11 +279,18 @@ createSurvivalSurfaces = function(modelParameterDf, days=30, ...) {
     ))
   })
   
+  
+  
   # calculatate surfaces using doEstimate
   tmp2 = out_sm %>% ungroup() %>% group_by(ageCat, n, model) %>% group_modify(function (d,g,...) {
-    est = suppressWarnings(doEstimate(d, model = g$model[1], days1=days, ...))
-    
+    est = suppressWarnings(doEstimate(d, model = g$model[1], timepoints = timepoints, ...))
   })
+  
+  tmp2 = tmp2 %>% group_by(ageCat,model) %>% arrange(days) %>% mutate(
+    p = cdf-lag(cdf,default=0),
+    p_lo = cdf_lo-lag(cdf_lo,default=0),
+    p_hi = cdf_hi-lag(cdf_hi,default=0)
+  ) %>% ungroup()
   
   return(tmp2)
 }
@@ -259,18 +302,7 @@ createSurvivalSurfaces = function(modelParameterDf, days=30, ...) {
 #' @import dplyr
 #' @return a plot of the survival surface (1-cdf)
 #' @export
-plotSurvivalSurface = function(surfacesDf, distr="lnorm") {
-  
-  # Nplot = ggplot(surfacesDf %>% filter(model==distr),
-  #                aes(y=as.integer(ageCat),label=n))+
-  #   geom_text(size=3,x="N")+scale_x_discrete()+
-  #   scale_y_continuous(
-  #      breaks = 4:17,
-  #      labels = c('15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'))+
-  #   theme(axis.title=element_blank(),
-  #         panel.grid=element_blank(),
-  #         axis.text.x=element_blank(),
-  #         axis.ticks.x=element_blank())
+plotSurvivalSurface = function(surfacesDf, distr) {
   
   surf1 = ggplot(surfacesDf %>% filter(model==distr),
                  aes(x=days,y=as.integer(ageCat),z=1-cdf, fill=1-cdf))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+ylab("age")+
@@ -283,7 +315,7 @@ plotSurvivalSurface = function(surfacesDf, distr="lnorm") {
     #       axis.text.y=element_blank())+guides(fill="none")
   
   
-  surf_lo = ggplot(surfacesDf %>% filter(model=="lnorm"),
+  surf_lo = ggplot(surfacesDf %>% filter(model==distr),
                    aes(x=days,y=as.integer(ageCat),z=1-cdf_hi, fill=1-cdf_hi))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+
     metR::geom_contour2(colour="black", breaks=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+scale_y_continuous(
       breaks = 4:17,
@@ -293,7 +325,7 @@ plotSurvivalSurface = function(surfacesDf, distr="lnorm") {
           axis.text.y=element_blank(),
           axis.text.x=element_blank())+guides(fill="none")
   
-  surf_hi = ggplot(surfacesDf %>% filter(model=="lnorm"),
+  surf_hi = ggplot(surfacesDf %>% filter(model==distr),
                    aes(x=days,y=as.integer(ageCat),z=1-cdf_lo, fill=1-cdf_lo))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+
     metR::geom_contour2(colour="black", breaks=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+scale_y_continuous(
       breaks = 4:17,
@@ -317,7 +349,7 @@ plotSurvivalSurface = function(surfacesDf, distr="lnorm") {
 #' @import dplyr
 #' @return a plot of the survival surface as pdf
 #' @export
-plotIncidenceSurface = function(surfacesDf, distr="lnorm") {
+plotIncidenceSurface = function(surfacesDf, distr) {
   surf1 = ggplot(surfacesDf %>% filter(model==distr),
                  aes(x=days,y=as.integer(ageCat),z=pdf, fill=pdf))+geom_tile()+scale_fill_gradient(high="black",low="white", guide = "none")+xlab("days")+ylab("age")+
     metR::geom_contour2(colour="blue")+
@@ -327,7 +359,7 @@ plotIncidenceSurface = function(surfacesDf, distr="lnorm") {
     metR::geom_text_contour(stroke=0.2)+
     guides(fill="none")
   
-  surf_lo = ggplot(surfacesDf %>% filter(model=="lnorm"),
+  surf_lo = ggplot(surfacesDf %>% filter(model==distr),
                    aes(x=days,y=as.integer(ageCat),z=pdf_hi, fill=pdf_hi))+geom_tile()+scale_fill_gradient(high="black",low="white", guide = "none")+
     metR::geom_contour2(colour="blue")+
     scale_y_continuous(
@@ -338,7 +370,7 @@ plotIncidenceSurface = function(surfacesDf, distr="lnorm") {
           axis.text.x=element_blank())+
     guides(fill="none")
   
-  surf_hi = ggplot(surfacesDf %>% filter(model=="lnorm"),
+  surf_hi = ggplot(surfacesDf %>% filter(model==distr),
                    aes(x=days,y=as.integer(ageCat),z=pdf_lo, fill=pdf_lo))+geom_tile()+scale_fill_gradient(high="black",low="white", guide = "none")+
     metR::geom_contour2(colour="blue")+
     scale_y_continuous(
@@ -352,4 +384,19 @@ plotIncidenceSurface = function(surfacesDf, distr="lnorm") {
   
   surf = surf1 + (surf_lo / surf_hi) + patchwork::plot_annotation(tag_levels = 'A') + patchwork::plot_layout(ncol=2,widths = c(2,1))
   return(surf)
+}
+
+
+plotProbabilityMatrix = function(surfacesDf, distr, pVar = "p" ) {
+  pVar = ensym(pVar)
+  ggplot(surfacesDf %>% filter(model==distr) %>% mutate(tmp_p = !!pVar),
+      aes(x=days,y=as.integer(ageCat),z=tmp_p, fill=tmp_p, label=sprintf("%1.2f",tmp_p),colour=tmp_p))+
+      geom_tile(colour="white")+
+      geom_text(angle=90, size=2, colour="black")+
+      scale_fill_gradientn(colours=c("white","green","yellow","orange","red"), breaks=c(0,0.005,0.025,0.075,0.125,1))+xlab("days")+ylab("age")+
+      scale_y_continuous(
+        breaks = 4:17,
+        labels = c('15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'))+
+      guides(fill="none", colour="none")
+  
 }

@@ -52,7 +52,8 @@ wtSIs = serialIntervals %>% summarise(
 
 #### Construct a R_t timeseries for Regional breakdowns ----
 
-ts = ukcovidtools::getUKCovidTimeseries()
+#ts = ukcovidtools::getUKCovidTimeseries()
+ts = getUKCovidTimeseries()
 
 cfg = EpiEstim::make_config(list(
   mean_si = wtSIs$mean_si, 
@@ -64,9 +65,14 @@ cfg = EpiEstim::make_config(list(
   min_std_si = wtSIs$min_std_si, 
   max_std_si = wtSIs$max_std_si), method="uncertain_si")
 
-ts$r0UKRegional = ts$tidyUKRegional %>% filter(date < as.Date("2020-04-11")) %>% group_by(uk_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
-ts$r0EnglandNHS = ts$tidyEnglandNHS %>% filter(date < as.Date("2020-04-11")) %>% group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 5) %>% filter(!is.na(`Median(R)`))
-ts$r0CombinedUK = ts$tidyCombinedUK %>% filter(date < as.Date("2020-04-11")) %>% group_by(code, name) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window=5)
+ts$r0UKRegional = ts$tidyUKRegional %>% #filter(date < as.Date("2020-04-11")) %>% 
+  group_by(uk_region) %>% mutate(daily_unknown=0) %>% normaliseAndCleanse(totalVar=daily_cases) %>% tidyEstimateRt(cfg, window = 7) %>% filter(!is.na(`Median(R)`))
+ts$r0EnglandNHS = ts$tidyEnglandNHS %>% #filter(date < as.Date("2020-04-11")) %>% 
+  group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 7) %>% filter(!is.na(`Median(R)`))
+ts$r0CombinedUK = ts$tidyCombinedUK %>% #filter(date < as.Date("2020-04-11")) %>% 
+  #filter(!stringr::str_starts(code,"N")) %>% 
+  group_by(code, name) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window=7)
+# TODO: Dates missing
 
 #### Add in rate of change R(t) estimates
 
@@ -82,14 +88,16 @@ deltaR0timeseriesFn = function(toFit) {
       # cant be arsed trying to vectorise this.
       date=as.Date(dates[,i],origin=as.Date("1970-01-01"))
       r=r0s[,i]
-      lmResult = lm(r~date,data=tibble(r=r,date=date))
-      out = out %>% bind_rows(tibble(
-        date = max(date),
-        slope = summary(lmResult)$coefficients[[2]],
-        slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
-        slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
-        r_squared = summary(lmResult)$r.squared
-      ))
+      suppressWarnings({
+        lmResult = lm(r~date,data=tibble(r=r,date=date))
+        out = out %>% bind_rows(tibble(
+          date = max(date),
+          slope = summary(lmResult)$coefficients[[2]],
+          slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
+          slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
+          r_squared = summary(lmResult)$r.squared
+        ))
+      })
     }
     return(out)
   })
@@ -116,27 +124,10 @@ ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(deltaR0timeseriesFn(toFit) , by=
 toFit = ts$r0UKRegional %>% select(uk_region, date, r=`Median(R)`) %>% filter(!is.na(r)) %>% group_by(uk_region)
 ts$r0UKRegional = ts$r0UKRegional %>% left_join(deltaR0timeseriesFn(toFit) , by=c("uk_region","date"))
 
-ts$UKregional = ts$UKregional %>% ungroup()
+ts$r0CombinedUK = ts$r0CombinedUK %>% ungroup()
 ts$r0EnglandNHS = ts$r0EnglandNHS %>% ungroup()
 ts$r0UKRegional = ts$r0UKRegional %>% ungroup()
 
-keyDates = tibble(
-  date = c(as.Date(c(
-    #"2020-03-13",
-    "2020-03-16",
-    #"2020-03-19",
-    "2020-03-23","2020-03-27")), max(ts$r0UKRegional$date, na.rm=TRUE)),
-  event = c(#"Inpatient only testing",
-    "Social isolation of vulnerable",
-    #"Travel ban / school closure",
-    "Social distancing","One SI post lockdown",
-    "Latest")
-) %>% mutate(label = paste0(date,": \n",event))
 
-# markup the timeseries data with key dates:
-
-ts$r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date")
-ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date")
-ts$r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date")
 
 rm(toFit)

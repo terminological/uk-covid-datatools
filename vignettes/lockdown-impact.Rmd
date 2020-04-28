@@ -36,6 +36,36 @@ ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 source("./lockdown-impact-data.R")
 ```
 
+```{r}
+
+keyDates = tibble(
+  date = c(as.Date(c(
+    #"2020-03-16",
+    "2020-03-16",
+    "2020-03-23",
+    "2020-04-06",
+    "2020-04-20"
+  ))),
+    #)), max(ts$r0UKRegional$date, na.rm=TRUE)),
+  event = c(
+    #"Social isolation of vulnerable",
+    "1 wk pre-lockdown",
+    "Lockdown",
+    "2 wks post-lockdown",
+    "4 wks post-lockdown"#,
+  )
+  #  "Latest")
+) %>% mutate(label = paste0(date,": \n",event))
+
+# markup the timeseries data with key dates:
+
+ts$r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14")) %>% filter(!stringr::str_starts(code,"N"))
+ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09"))
+ts$r0UK = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region == "UK")
+ts$r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+
+```
+
 ## Serial interval estimation from the literature:
 
 ```{r}
@@ -84,7 +114,7 @@ r0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=`Median(R)`, ymin=`Quan
   ggrepel::geom_text_repel(
           aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
           size=(10/ggplot2:::.pt/(96/72)))+
-  scale_x_date(date_breaks="2 day", date_labels = "%d-%b")+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
   theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
   facet_wrap(vars(uk_region))
 
@@ -92,7 +122,7 @@ r0ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/
 ```
 
 ```{r}
-ts$r0EnglandNHS %>% filter(event == "Latest") %>% mutate(
+ts$r0EnglandNHS %>% filter(date == max(date)) %>% mutate(
   `Median(R)` = sprintf("%1.2f", `Median(R)`),
   `95% confidence interval`=sprintf("(%1.2f; %1.2f)",`Quantile.0.025(R)`,`Quantile.0.975(R)`)
 ) %>% select(`NHS region`= england_nhs_region,`Median(R)`,`95% confidence interval`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/lockdown-impact/Table2_Rt_by_NHSregion", defaultFontSize = 8)
@@ -109,7 +139,7 @@ deltaR0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=slope, ymin=slopeL
   ggrepel::geom_text_repel(
           aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
           size=(10/ggplot2:::.pt/(96/72)))+
-  scale_x_date(date_breaks="2 day", date_labels = "%d-%b")+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
   theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
   facet_wrap(vars(uk_region))
 
@@ -122,7 +152,7 @@ The same analysis as above but looking at NHS regions. there is some evidence th
 
 ```{r}
 
-tmp = ts$r0UKRegional %>% filter(uk_region == "england") %>% select(date,baseline=`Median(R)`)
+tmp = ts$r0UKRegional %>% filter(uk_region == "England") %>% select(date,baseline=`Median(R)`)
 englandnhsFromBaseline = ts$r0EnglandNHS %>% left_join(tmp, by="date") %>% mutate(
   `R(t) from baseline`=`Median(R)`-baseline, ymin=`Quantile.0.025(R)`-baseline, ymax=`Quantile.0.975(R)`-baseline
 )
@@ -135,7 +165,7 @@ englandnhsplot = ggplot(englandnhsFromBaseline, aes(x=date, y=`R(t) from baselin
   standardPrintOutput::narrowAndTall()+
   coord_cartesian(ylim=c(-1,1))+
   geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
-  scale_x_date(date_breaks="2 day", date_labels = "%d-%b")+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
   theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
 
 englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig2-englandNHSRt")
@@ -289,7 +319,7 @@ barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
   coord_cartesian(ylim = c(0, 1), clip = 'off')+
   gganimate::transition_time(date1)
 
-timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60)
+timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60, nframes=200)
 
 
 ukwideAnim = 
@@ -314,10 +344,10 @@ londonDeltaAnim =
   standardPrintOutput::mapTheme()+labs(subtitle="D")+
   gganimate::transition_time(date)
 
-ukWideGif = gganimate::animate(ukwideAnim, renderer=gganimate::magick_renderer(), width=400, height=800)
-londonGif = gganimate::animate(londonAnim, renderer=gganimate::magick_renderer(), width=400,height=300)
-ukWideDeltaGif = gganimate::animate(ukwideDeltaAnim, renderer=gganimate::magick_renderer(), width=400, height=800)
-londonDeltaGif = gganimate::animate(londonDeltaAnim, renderer=gganimate::magick_renderer(), width=400,height=300)
+ukWideGif = gganimate::animate(ukwideAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonGif = gganimate::animate(londonAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
+ukWideDeltaGif = gganimate::animate(ukwideDeltaAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonDeltaGif = gganimate::animate(londonDeltaAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
 
 captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
 
@@ -329,7 +359,7 @@ layoutGifs = function(i) {
 }
 
 new_gif <- layoutGifs(1)
-for(i in 2:100){
+for(i in 2:200){
   combined <- layoutGifs(i)
   new_gif <- c(new_gif, combined)
 }

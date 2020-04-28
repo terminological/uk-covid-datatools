@@ -1,0 +1,158 @@
+---
+title: "Regional weather and infectivity of COVID-19"
+output: html_document
+fig_width: 7
+fig_height: 5
+vignette: >
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+source("./lockdown-impact-data.R")
+```
+
+```{r}
+
+ukMeteodata <- read_csv("https://metdatasa.blob.core.windows.net/covid19-response/regional_subset_data/uk_daily_meteodata_2020jan-mar_v03.csv", 
+    col_types = cols(date = col_date(format = "%Y-%m-%d")))
+
+```
+
+```{r}
+weatherRt = ukMeteodata %>% left_join(ts$r0CombinedUK, by=c("output_code"="code","date"="date"))
+
+```
+
+
+```{r}
+leads=c(1:20)
+weatherRt2 = weatherRt %>% crossing(leads) %>% group_by(output_code, leads) %>% arrange(date) %>% group_modify(function(d,g,...) {
+  d %>% mutate(
+    leadRt = lead(`Median(R)`,g$leads),
+    leadDeltaRt = lead(`slope`,g$leads)
+    )
+})
+rm(leads)
+ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`precipitation_flux_mean (kg m-2 s-1)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+scale_x_log10()+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`air_temperature_mean (K)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`specific_humidity_mean (1)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`short_wave_radiation_mean (W/m2)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
+
+
+ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`precipitation_flux_mean (kg m-2 s-1)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+scale_x_log10()+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`air_temperature_mean (K)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`specific_humidity_mean (1)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.51))+geom_smooth(method = "lm")
+ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`short_wave_radiation_mean (W/m2)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
+
+```
+
+```{r}
+# RTransferEntropy::calc_ete(
+#   x = weatherRt %>% filter(output_code == "E06000001") %>% pull(`precipitation_flux_mean (kg m-2 s-1)`), 
+#   y = weatherRt %>% filter(output_code == "E06000001") %>% pull(`Mean(R)`)
+# )
+# 
+# tmp = RTransferEntropy::transfer_entropy(
+#   x = weatherRt %>% filter(output_code == "E06000001") %>% pull(`precipitation_flux_mean (kg m-2 s-1)`), 
+#   y = weatherRt %>% filter(output_code == "E06000001") %>% pull(`Mean(R)`), 
+#   lx = 1, ly = 1, q = 0.1, 
+#   entropy = 'Shannon', shuffles = 10, quantiles = c(25,75),
+#   nboot = 100, burn = 50, quiet = FALSE, seed = NULL)
+# 
+# tmp
+
+transEntTemp = weatherRt2 %>% group_by(output_code, region_name, leads) %>% group_modify(function(d,g,...) {
+  tmp = tryCatch(
+    RTransferEntropy::transfer_entropy(
+      x = d %>% pull(`air_temperature_mean (K)`), 
+      y = d %>% pull(leadRt), 
+      lx = 1, ly = 1, q = 0.1, 
+      entropy = 'Shannon', shuffles = 10, quantiles = c(25,75),
+      nboot = 100, burn = 50, quiet = TRUE, seed = NULL),
+    error = function(e) list(coef=matrix(rep(NA,8),nrow=2,dimnames=list(c("X->Y","Y->X"),c("te","ete","se","p.value"))))
+      
+    )
+    out = data.frame(tmp$coef) %>% mutate(direction = rownames(tmp$coef))
+    
+  return(out)
+})
+
+
+# x: a vector of numeric values, ordered by time.
+# y: a vector of numeric values, ordered by time.
+# lx: Markov order of x, i.e. the number of lagged values affecting the current value of x. Default is lx = 1.
+# ly: Markov order of y, i.e. the number of lagged values affecting the current value of y. Default is ly = 1.
+# q: a weighting parameter used to estimate Renyi transfer entropy, parameter is between 0 and 1. For q = 1, Renyi transfer entropy converges to Shannon transfer entropy. Default is q = 0.1.
+# entropy: specifies the transfer entropy measure that is estimated, either 'Shannon' or 'Renyi'. The first character can be used to specify the type of transfer entropy as well. Default is entropy = 'Shannon'.
+# shuffles: the number of shuffles used to calculate the effective transfer entropy. Default is shuffles = 100.
+# type: specifies the type of discretization applied to the observed time series:'quantiles', 'bins' or 'limits'. Default is type = 'quantiles'.
+# quantiles: specifies the quantiles of the empirical distribution of the respective time series used for discretization. Default is quantiles = c(5,95).
+# bins: specifies the number of bins with equal width used for discretization. Default is bins = NULL.
+# limits: specifies the limits on values used for discretization. Default is limits = NULL.
+# nboot: the number of bootstrap replications for each direction of the estimated transfer entropy. Default is nboot = 300.
+# burn: the number of observations that are dropped from the beginning of the bootstrapped Markov chain. Default is burn = 50.
+# quiet: if FALSE (default), the function gives feedback.
+# seed a seed that seeds the PRNG (will internally just call set.seed), default is seed = NULL.
+```
+
+```{r}
+
+ggplot(transEntTemp,aes(x=direction,y=te))+geom_violin()
+
+```
+
+
+
+```{r}
+
+us_counties <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv", 
+    col_types = cols(date = col_date(format = "%Y-%m-%d")))
+
+r0us_counties = us_counties %>% group_by(date) %>% mutate(daily_total = sum(cases)) %>% ungroup() %>% group_by(state,county,fips) %>% normaliseAndCleanse(cumulativeCasesVar = cases,adjustUnknowns = FALSE) 
+r0us_counties = r0us_counties %>% tidyEstimateRt(cfg, window = 7)
+
+
+```
+
+```{r}
+data("UKCovidMaps")
+
+# https://github.com/tidyverse/ggplot2/issues/3391
+# some issues joining tibble onto sf - which 
+
+r0shapes = UKCovidMaps$reportingRegions %>% 
+  # fill in missing dates to prevent the map having disappearing / reappearing regions
+  crossing(tibble(date=unique(ts$r0CombinedUK$date))) %>% 
+  left_join(keyDates, by="date") %>%
+  left_join(
+    ts$r0CombinedUK,
+    by=c("code","date"), suffix=c("",".dup")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+  sf::st_as_sf()
+```

@@ -1112,6 +1112,94 @@ bristolSurvivalSubset = function(bristolDf) {
       days_of_symptoms_before_ad)
 }
 
+#' Chess data metrics on a hospital by hospital basis
+#' 
+#' the chess data has some issues as
+#' different hospitals have different reporting strategies
+#' 
+#' @return a data frame of stats by trust representing reporting quality.
+#' @export
+chessQuality = function(CHESSdf) {
+  tmp2 = CHESSdf %>% select(trustcode, contains("date"))
+  tmp3 = tmp2 %>% pivot_longer(cols = contains("date"), names_to = "type", values_to = "date")
+  tmp4 = tmp3 %>% group_by(trustcode) %>% summarise(recentDate = max(date,na.rm = TRUE))
+  
+  hospAcc = CHESSdf %>% group_by(trustcode, trustname) %>% summarise(
+    records = n(),
+    patients = n_distinct(caseid),
+    updatedRecords = sum(if_else(is.na(dateupdated),0,1)),
+    knownOutcomes = sum(if_else(is.na(finaloutcomedate),0,1)),
+    outcomeWithoutDates = sum(if_else(!is.na(finaloutcome) & is.na(finaloutcomedate),1,0)),
+    knownAdmittedItu = sum(if_else(is.na(dateadmittedicu),0,1)),
+    knownAdmittedItuPercent = knownAdmittedItu/records,
+    knownOutcomePercent = knownOutcomes/records
+  ) %>% inner_join(tmp4, by="trustcode")
+  return(hospAcc)
+}
+
+
+
+chessItuSubset = function(CHESSdf, date) {
+  CHESS_date = as.Date(date)
+  # hospitals must have updated their data in last 3 days
+  # and have fewer than 5 outcomes recorded with unknown dates
+  incHosp = chessQuality(CHESSdf) %>%
+    filter(
+      recentDate >= CHESS_date-3 & 
+        outcomeWithoutDates < 5
+      )
+  
+  return(
+    CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
+      inner_join(incHosp %>% select(-trustname), by="trustcode") %>% 
+      filter(!is.na(dateadmittedicu)) %>% 
+      mutate(censorDate = as.Date(recentDate))
+  )
+}
+
+chessAdmissionSubset = function(CHESSdf, date) {
+  CHESS_date = as.Date(date)
+  # hospitals must have updated their data in last 3 days
+  # and have fewer than 5 outcomes recorded with unknown dates
+  # and have fewer than half of their patients admitted to ITU (remove hospitals that only submit ITU data)
+  # and have non zero outcomes
+  # excludes in hospital cases
+  incHosp = chessQuality(CHESSdf) %>% select(-trustname) %>%
+    filter(
+      recentDate >= CHESS_date-3 & 
+        outcomeWithoutDates < 5 &
+        knownAdmittedItuPercent < 0.5 &
+        knownOutcomePercent > 0.1
+    )
+      
+  
+  return(
+    CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
+      inner_join(incHosp, by="trustcode") %>% 
+      mutate(censorDate = as.Date(recentDate))
+  )
+}
+
+chessDefaultFilter = function(CHESSdf, ...) {
+  # remove records with finaloutcome but no finaloutcomedate
+  
+  # remove records with outcome date earlier than admission date
+  # remove unknown gender
+  # create factors
+  # create a decimal age
+  CHESSdf %>% 
+    filter(!(is.na(finaloutcomedate) & !is.na(finaloutcome) )) %>% 
+    filter(is.na(finaloutcomedate) | hospitaladmissiondate <= finaloutcomedate) %>%
+    filter(sex != "Unknown") %>% 
+    filter(...) %>%
+    mutate(
+      sex = as.factor(sex),
+      finaloutcome = as.factor(finaloutcome),
+    ) %>% mutate(
+      sex = relevel(sex, ref="Male"),
+      age = ageyear+agemonth/12
+    )
+}
 
 ## Chess data
 
@@ -1131,21 +1219,10 @@ bristolSurvivalSubset = function(bristolDf) {
 #' @return cleansed CHESS data set
 #' @export
 cleanseCHESSData = function(CHESSdf, date, removeOutliers = TRUE) {
-  CHESS_date = as.Date(date)
-
-  tmp2 = CHESSdf %>% select(trustcode, contains("date"))
-  tmp3 = tmp2 %>% pivot_longer(cols = contains("date"), names_to = "type", values_to = "date")
-  tmp4 = tmp3 %>% group_by(trustcode) %>% summarise(recentDate = max(date,na.rm = TRUE))
-
-  hospAcc = CHESSdf %>% group_by(trustcode, trustname) %>% summarise(
-    records = n(),
-    updated = sum(if_else(is.na(dateupdated),0,1)),
-    outcome = sum(if_else(is.na(finaloutcomedate),0,1)),
-    outcomeWithoutDates = sum(if_else(!is.na(finaloutcome) & is.na(finaloutcomedate),1,0)),
-    knownOutcome = outcome/records
-  ) %>% inner_join(tmp4, by="trustcode")
   
+  hospAcc = chessQuality(CHESSdf)
   
+  write.csv(hospAcc, "~/Dropbox/covid19/ventilator-demand/parameterisation/qualityCheck.csv")
   
   incHosp = hospAcc %>% filter(
     recentDate >= CHESS_date-3 & outcomeWithoutDates < 5

@@ -27,7 +27,15 @@ paths=list(
 )
 
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
-CHESSClean = getCHESS(paths$chess) %>% cleanseCHESSData("2020-04-15")
+CHESS = getCHESS(paths$chess)
+cq = CHESS %>% chessQuality()
+# ggplot(cq, aes(x=trustcode, y=records))+geom_bar(stat="identity")+standardPrintOutput::narrowAndTall()
+p = ggplot(cq, aes(x=knownOutcomePercent, y=knownAdmittedItuPercent, label=trustcode, colour=updatedRecords/records))+geom_point()+geom_vline(xintercept=0.1)+geom_hline(yintercept=0.5)+scale_color_gradient(low="red",high="green")+
+  standardPrintOutput::narrowAndTall()
+p2 = ggExtra::ggMarginal(p, type="histogram")
+p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/chessDataQuality")
+
+CHESSClean = CHESS %>% chessAdmissionSubset("2020-04-15")
 ```
 
 ## Survival model - Admission to outcome
@@ -47,9 +55,9 @@ admissionToDischargeOrDeath = CHESSClean %>% filter(age>10) %>% generateSurvival
   endDateExpr = finaloutcomedate, 
   statusExpr = if_else(is.na(finaloutcome),0,1),
   censoredDateExpr = censorDate,
-  ageBreaks = c(-Inf,30,60,80,Inf),
-  ageLabels = c("10-30","30-60","60-80","80+"),
-  ageReferenceCat = "30-60",
+  ageBreaks = c(-Inf,30,50,70,Inf),
+  ageLabels = c("10-30","30-50","50-70","70+"),
+  ageReferenceCat = "30-50",
   statusLabels = c("censored","discharged/died")
 ) %>% select(
   caseid, status, trustcode, finaloutcome, time, ageCat, sex
@@ -115,15 +123,17 @@ censoredAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% generate
 Look at 40-45 year old men for checking distribution fit visually
 
 ```{r}
-models = c("weibull","gamma","lnorm")
+models = standardModels()
   
 subGroup = censoredAdmissionToDischargeOrDeath %>% filter(ageCat=="40-44") %>% mutate(
-    time = if_else(time==0,0.5,time)
-  ) %>% mutate(
     left=time,
     right=if_else(status=="censored", as.double(NA), time)
   ) %>% select(left,right) %>% as.data.frame()
-dists = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdistcens(subGroup, m))) 
+
+fitdistrplus::plotdist(censoredAdmissionToDischargeOrDeath$time, histo=TRUE, demp=TRUE)
+fitdistrplus::descdist(censoredAdmissionToDischargeOrDeath$time, discrete=FALSE, boot=500)
+
+dists = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdistcens(subGroup, m$name, lower = c(0, 0), start = m$start))) 
 p1 = fitdistrplus::qqcompcens(dists, plotstyle = "ggplot") +standardPrintOutput::narrowAndTall()
 p2 = fitdistrplus::ppcompcens(dists, plotstyle = "ggplot") +standardPrintOutput::narrowAndTall()
 (p1 + p2 + patchwork::plot_layout(ncol=2)) %>% standardPrintOutput::saveQuarterPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig3_fitDistributions")
@@ -136,17 +146,17 @@ Log norms seem to fit best for all age groups
 ```{r}
 out = censoredAdmissionToDischargeOrDeath %>% fitModelsByAge()
 
-out %>% mutate(value = sprintf("%1.4f [%1.4f; %1.4f]", value, low_ci, high_ci)) %>% select(ageCat,n,model,aic,bic,loglik,param, value) %>% 
+out %>% mutate(value = sprintf("%1.4f [%1.4f; %1.4f]", value, low_ci, ifelse(high_ci>100,Inf,high_ci))) %>% select(ageCat,n,model,aic,bic,loglik,param, value) %>% 
   group_by(ageCat,n,model,aic,bic,loglik) %>% standardPrintOutput::saveTableLandscape("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/SuppTable1_fullBreakdownFittedModels")
 ```
 
-# select log normal models
+# select gamma models
 
 ```{r}
-out %>% filter(model=="lnorm") %>% ungroup() %>% mutate(value = sprintf("%1.4f [%1.4f; %1.4f]", value, low_ci, high_ci)) %>%
+out %>% filter(model=="gamma") %>% ungroup() %>% mutate(value = sprintf("%1.4f [%1.4f; %1.4f]", value, low_ci, ifelse(high_ci>100,Inf,high_ci))) %>%
   select(-low_ci,-high_ci) %>% 
   pivot_wider(names_from = param, values_from = value) %>% select(
-  -model,-bic,-aic,age=ageCat, N = n, `log(likelihood)`=loglik, `log(mean) [95% CrI]` = meanlog, `log(sd) [95% CrI]` = sdlog
+  -model,-bic,-aic,age=ageCat, N = n, `log(likelihood)`=loglik, `shape [95% CrI]` = shape, `rate [95% CrI]` = rate
   ) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Table2_logNormalParameterisation")
 ```
 
@@ -158,21 +168,37 @@ out %>% filter(model=="lnorm") %>% ungroup() %>% mutate(value = sprintf("%1.4f [
 
 ```{r}
 survSurf = out %>% createSurvivalSurfaces()
-surf = plotSurvivalSurface(survSurf)
+surf = plotSurvivalSurface(survSurf, "gamma")
 surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig4_losDensity")
-write.csv(
-  survSurf %>% ungroup() %>% mutate(surv = 1-cdf) %>% select(ageCat,days,surv),
-  file="~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/admission-to-discharge.csv")        
+
 ```
+# median distribution
+
+```{r}
+
+(ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=median_lo,ymax=median_hi, group=1))+geom_line(stat="summary")+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median length of stay")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig5_losMedianByAge")
+
+```
+
 
 # incidence surfaces 
 
 more important for other transitions where we are looking at 
 
 ```{r}
-surf2 = plotIncidenceSurface(survSurf)
+surf2 = plotIncidenceSurface(survSurf, "gamma")
 surf2
 ```
+
+```{r}
+survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 1:30)
+write.csv(
+  survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf),
+  file="~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/admission-to-discharge.csv")        
+plotProbabilityMatrix(survSurfcsv,"gamma") %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/daily_probability_by_age")
+
+```
+
 
 # validate against Bristol data
 
@@ -218,9 +244,19 @@ numbers = gofBri %>% select(ageCat,estimate,test=testN,fit=referenceN) %>% pivot
 top = ggplot(gofBri, aes(x=ageCat,y=pValue,fill=estimate))+geom_bar(stat="identity", position="dodge", width=0.7, colour="black")+standardPrintOutput::narrowAndTall()+theme(axis.text.x = element_blank(), axis.title.x = element_blank())+ylab("P value")
 bottom = ggplot(numbers, aes(x=ageCat,y=source,label=N, colour = source))+geom_text()+guides(colour="none")+theme(panel.grid = element_blank(),axis.title.x = element_blank())+ylab("N")
 
-(top+bottom+patchwork::guide_area()+patchwork::plot_layout(ncol=1, heights = c(9,2,1), guides = "collect")) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig5_validateBristol")
+(top+bottom+patchwork::guide_area()+patchwork::plot_layout(ncol=1, heights = c(9,2,1), guides = "collect")) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig6_validateBristol")
 ```
 
 Suggests the fitted distributions to the UK wide data reasonably describes the Bristol data from 30-70 year olds. The high credible estimates are closer to the bristol data in the older age group. 
 
 Possible that my exclusion of hospitals with high numbers of censoring was too enthusiastic, and this would tend to drive down the LOS. Alternatively Bristol OAPs stay longer in hospital as they don't die as quickly as the rest of the country.
+
+# unsing surv
+
+```{r}
+
+
+crlnorm <- flexsurv::flexsurvreg(Surv(time, status != "censored") ~ ageCat, data = admissionToDischargeOrDeath, dist = "gamma")
+crlnorm
+
+```
