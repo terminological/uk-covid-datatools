@@ -298,51 +298,63 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
     mutate(cumulative_cases = cumsum(ifelse(is.na(incidence),0,incidence))-incidence+min(cumulative_cases)) %>% select(-adj_cumulative_cases) %>% 
     rename(!!dateVar := date) %>% filter(!is.na(cumulative_cases)) # make sure date is same as input.
   # browser()
-  tmpDates = tibble(date = as.Date(min(tmp5$date):max(tmp5$date),"1970-01-01"))
-  tmpDates = tmpDates %>% crossing(tmp3 %>% select(!!!grps) %>% distinct())
+  tmpDates = tmp5 %>% group_by(!!!grps) %>% group_modify(function(d,f,...) {
+    tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
+  })
   
   tmp6 = tmpDates %>% left_join(tmp5,by=c(sapply(grps,as_label),"date"))
+  #tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases) & lead(cumulative_cases)==1, 0, cumulative_cases))
   tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases), lag(cumulative_cases,default=NA)+lag(incidence,default=NA), cumulative_cases))
   tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases), lead(cumulative_cases,default=NA)-incidence, cumulative_cases))
   #tmp6 = tmp6 %>% fill(cumulative_cases)
   
-  tmp6 = tmp6 %>% mutate(incidence = if_else(is.na(incidence), lead(cumulative_cases, default=NA)-cumulative_cases, incidence))
+  # tmp6 = tmp6 %>% mutate(incidence = if_else(is.na(incidence), as.integer(lead(cumulative_cases, default=NA)-cumulative_cases), incidence))
   
   # to do impute missing values
-  tmp7 = tmp6 %>% mutate(log_cumulative_cases = log(cumulative_cases))
+  # tmp7 = tmp6 %>% mutate(log_cumulative_cases = log(cumulative_cases))
   
   
   # browser()
-  tmp7 = tmp7 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
-      imputed = is.na(log_cumulative_cases),
-      log_cumulative_cases = tryCatch(imputeTS::na_interpolation(log_cumulative_cases), error=function(e) NA)
+  tmp8 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
+      imputed = is.na(cumulative_cases),
+      cumulative_cases = tryCatch(imputeTS::na_interpolation(cumulative_cases), error=function(e) NA)
+      #log_cumulative_cases = tryCatch(imputeTS::na_interpolation(log_cumulative_cases), error=function(e) NA)
     ) %>%
-    mutate(cumulative_cases = exp(log_cumulative_cases)) %>% 
-    mutate(incidence = lead(cumulative_cases)-cumulative_cases) %>% 
+    mutate(log_cumulative_cases = log(cumulative_cases)) %>% 
+    mutate(incidence = lead(cumulative_cases)-cumulative_cases) 
+  
+  #browser()
+  
+  tmp9 = tmp8 %>% 
     group_modify(function(d,g,...) {
-      if (nrow(d) < 11) {
+      if (nrow(d) < 11 | any(is.na(head(d$incidence,-1)))) {
         d = d %>% mutate(
           estimated_exponent = NA,
           community_transmission_date = NA
         )
       } else {
-        # browser()
-        d = d %>% mutate(estimated_exponent = signal::sgolayfilt(
-          d %>% mutate(log_cumulative_cases = if_else(log_cumulative_cases < 0, 0, log_cumulative_cases)) %>% pull(log_cumulative_cases),
-          2,11,1))
+        #browser()
+        d = d %>% mutate(
+            estimated_exponent = signal::sgolayfilt(d %>% mutate(log_cumulative_cases = if_else(log_cumulative_cases < 0, -log(2), log_cumulative_cases)) %>% pull(log_cumulative_cases),p = 1,n = 11,m = 1)
+          ) %>% mutate(
+            estimated_exponent = if_else(log_cumulative_cases < 0, as.double(NA), estimated_exponent)
+          ) %>% mutate(
+            intercept_date = as.Date(as.numeric(date) - log_cumulative_cases/ifelse(estimated_exponent>0,estimated_exponent,NA),"1970-01-01")
+          ) %>% mutate(
+            community_transmission_date = suppressWarnings(as.Date(max(intercept_date, na.rm = TRUE),"1970-01-01"))
+          ) %>% select(-intercept_date)
         
-        peak_date = (d$date[!is.na(d$incidence) & d$incidence == max(d$incidence, na.rm=TRUE)])[[1]]
-        cases_at_peak = (d$cumulative_cases[!is.na(d$incidence) & d$incidence == max(d$incidence, na.rm=TRUE)])[[1]]
+        #peak_date = (d$date[!is.na(d$incidence) & d$incidence == max(d$incidence, na.rm=TRUE)])[[1]]
+        #cases_at_peak = (d$cumulative_cases[!is.na(d$incidence) & d$incidence == max(d$incidence, na.rm=TRUE)])[[1]]
         
-        tmpD = d %>% filter(cumulative_cases > 0.2*cases_at_peak & cumulative_cases < 0.5*cases_at_peak & date<peak_date)
-        
-        tmpD = d %>% filter(cumulative_cases > 10) %>% top_n(wt = estimated_exponent,n = 10)
-        
-        tmpD = tmpD %>% mutate(intercept_date = as.Date(as.numeric(date) - log_cumulative_cases/estimated_exponent,"1970-01-01"))
-        intercept_date = mean(tmpD$intercept_date)
-        
-        d$community_transmission_date = rep(intercept_date,nrow(d))
-        
+        # tmpD = d %>% filter(cumulative_cases > 10 & estimated_exponent_rising) %>% # & cumulative_cases < 0.5*cases_at_peak & date<peak_date) %>% 
+        #   top_n(wt = estimated_exponent,n = 5)
+        # 
+        # tmpD = tmpD %>% mutate(intercept_date = as.Date(as.numeric(date) - log_cumulative_cases/estimated_exponent,"1970-01-01"))
+        # intercept_date = median(tmpD$intercept_date)
+        # 
+        # d$community_transmission_date = rep(intercept_date,nrow(d))
+        #d = d %>% select(-estimated_exponent_delta)
       }
       # tmpD = d %>% filter(cumulative_cases > 0.2*cases_at_peak & cumulative_cases < 0.5*cases_at_peak & date<peak_date)
       # browser()
@@ -367,11 +379,43 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
       return(d)
     })
   
-  # browser()
   
-  return(tmp7)
+  
+  return(tmp9)
 }
 
+#' Calculate an estimate of rate of change of Rt
+#' 
+#' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
+#' @import dplyr
+#' @export
+deltaR0timeseries = function(R0timeseries) {
+  tmp = R0timeseries %>% group_modify(function(d,g,...) {
+    if ((min(d$date)+10)>max(d$date)) return(tibble(date=as.Date(NA),slope=as.double(NA),slopeLowerCi=as.double(NA),slopeUpperCi=as.double(NA),r_squared=as.double(NA)))
+    endDate = seq((min(d$date)+10),max(d$date),1)
+    r0s = sapply(endDate, function(x) d$`Median(R)`[d$date > x-10 & d$date <=x]) # hopefully a vector of vectors
+    dates = sapply(endDate, function(x) d$date[d$date > x-10 & d$date <=x])
+    out = NULL
+    
+    for (i in 1:ncol(r0s)) {
+      # cant be arsed trying to vectorise this.
+      date=as.Date(dates[,i],origin=as.Date("1970-01-01"))
+      r=r0s[,i]
+      suppressWarnings({
+        lmResult = lm(r~date,data=tibble(r=r,date=date))
+        out = out %>% bind_rows(tibble(
+          date = max(date),
+          slope = summary(lmResult)$coefficients[[2]],
+          slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
+          slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
+          r_squared = summary(lmResult)$r.squared
+        ))
+      })
+    }
+    return(d %>% left_join(out,by="date"))
+  })
+  return(tmp)
+}
 
 getDemographics = function() {
   library(readxl)

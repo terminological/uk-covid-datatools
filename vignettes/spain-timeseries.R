@@ -3,6 +3,9 @@ spainTimeseries <- read_csv(
   col_types = cols(date = col_date(format = "%Y-%m-%d")))
 
 
+
+
+
 spainTimeseries = spainTimeseries %>% mutate(
   P_hospital_admission_given_confirmed = hospitalised/confirmed,
   P_ITU_admission_given_confirmed = ITU/confirmed,

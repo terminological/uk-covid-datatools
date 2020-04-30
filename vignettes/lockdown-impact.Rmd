@@ -63,6 +63,7 @@ ts$r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(
 ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09"))
 ts$r0UK = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region == "UK")
 ts$r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+ts$r0UKRegionalDeaths = ts$r0UKRegionalDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
 
 ```
 
@@ -120,6 +121,23 @@ r0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=`Median(R)`, ymin=`Quan
 
 r0ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig1_ukRegionRt")
 ```
+```{r}
+r0ukregionalplotdeaths = ggplot(ts$r0UKRegionalDeaths, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey75")+
+  
+  coord_cartesian(ylim=c(0, 3))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  ggrepel::geom_text_repel(
+          aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
+  facet_wrap(vars(uk_region))
+
+r0ukregionalplotdeaths %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig1_ukRegionRtDeaths")
+```
+
 
 ```{r}
 ts$r0EnglandNHS %>% filter(date == max(date)) %>% mutate(

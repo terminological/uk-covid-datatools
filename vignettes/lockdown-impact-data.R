@@ -66,43 +66,19 @@ cfg = EpiEstim::make_config(list(
   max_std_si = wtSIs$max_std_si), method="uncertain_si")
 
 ts$r0UKRegional = ts$tidyUKRegional %>% #filter(date < as.Date("2020-04-11")) %>% 
-  group_by(uk_region) %>% mutate(daily_unknown=0) %>% normaliseAndCleanse(totalVar=daily_cases) %>% tidyEstimateRt(cfg, window = 7) %>% filter(!is.na(`Median(R)`))
+  group_by(uk_region) %>% normaliseAndCleanse(adjustUnknowns = FALSE) %>% tidyEstimateRt(cfg, window = 7)# %>% filter(!is.na(`Median(R)`))
 ts$r0EnglandNHS = ts$tidyEnglandNHS %>% #filter(date < as.Date("2020-04-11")) %>% 
-  group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 7) %>% filter(!is.na(`Median(R)`))
+  group_by(england_nhs_region) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window = 7)# %>% filter(!is.na(`Median(R)`))
 ts$r0CombinedUK = ts$tidyCombinedUK %>% #filter(date < as.Date("2020-04-11")) %>% 
   #filter(!stringr::str_starts(code,"N")) %>% 
   group_by(code, name) %>% normaliseAndCleanse() %>% tidyEstimateRt(cfg, window=7)
 # TODO: Dates missing
 
+ts$r0UKRegionalDeaths = ts$tidyUKRegional %>% #filter(date < as.Date("2020-04-11")) %>% 
+  group_by(uk_region) %>% normaliseAndCleanse(cumulativeCasesVar = cumulative_deaths, adjustUnknowns = FALSE) %>% tidyEstimateRt(cfg, window = 7) 
+
 #### Add in rate of change R(t) estimates
 
-deltaR0timeseriesFn = function(toFit) {
-  tmp = toFit %>% group_modify(function(d,g,...) {
-    if ((min(d$date)+10)>max(d$date)) return(tibble(date=as.Date(NA),slope=as.double(NA),slopeLowerCi=as.double(NA),slopeUpperCi=as.double(NA),r_squared=as.double(NA)))
-    endDate = seq((min(d$date)+10),max(d$date),1)
-    r0s = sapply(endDate, function(x) d$r[d$date > x-10 & d$date <=x]) # hopefully a vector of vectors
-    dates = sapply(endDate, function(x) d$date[d$date > x-10 & d$date <=x])
-    out = NULL
-    
-    for (i in 1:ncol(r0s)) {
-      # cant be arsed trying to vectorise this.
-      date=as.Date(dates[,i],origin=as.Date("1970-01-01"))
-      r=r0s[,i]
-      suppressWarnings({
-        lmResult = lm(r~date,data=tibble(r=r,date=date))
-        out = out %>% bind_rows(tibble(
-          date = max(date),
-          slope = summary(lmResult)$coefficients[[2]],
-          slopeLowerCi = as.double(confint(lmResult, "date", level=0.95)[[1]]),
-          slopeUpperCi = as.double(confint(lmResult, "date", level=0.95)[[2]]),
-          r_squared = summary(lmResult)$r.squared
-        ))
-      })
-    }
-    return(out)
-  })
-  return(tmp)
-}
 
 ## Unitary authority trajectories
 
@@ -111,14 +87,12 @@ deltaR0timeseriesFn = function(toFit) {
 # * get the gradient
 
 # all UK unitary authorities and health boards
-toFit = ts$r0CombinedUK %>% select(code, name, date, r=`Median(R)`) %>% filter(!is.na(r)) %>% group_by(code,name)
-ts$r0CombinedUK = ts$r0CombinedUK %>% left_join(deltaR0timeseriesFn(toFit) , by=c("code","name","date"))
+ts$r0CombinedUK = ts$r0CombinedUK %>% deltaR0timeseries()
 
 write_csv(ts$r0CombinedUK, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Unitary_Authority.csv")
 
 # england NHS regions only
-toFit = ts$r0EnglandNHS%>% select(england_nhs_region, date, r=`Median(R)`) %>% filter(!is.na(r)) %>% group_by(england_nhs_region)
-ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(deltaR0timeseriesFn(toFit) , by=c("england_nhs_region","date"))
+ts$r0EnglandNHS = ts$r0EnglandNHS %>% deltaR0timeseries()
 
 # all UK regions
 toFit = ts$r0UKRegional %>% select(uk_region, date, r=`Median(R)`) %>% filter(!is.na(r)) %>% group_by(uk_region)

@@ -1,0 +1,112 @@
+dates = as.Date("2020-03-23"):(Sys.Date()-1)
+fileUrls = paste0("https://www.mscbs.gob.es/profesionales/saludPublica/ccayes/alertasActual/nCov-China/documentos/Actualizacion_",(dates - as.numeric(as.Date("2020-03-22")))+52,"_COVID-19.pdf")
+filenames = fileUrls %>% stringr::str_extract("/([^/]+)$") %>% stringr::str_remove("/")
+filenames = paste0("~/Git/uk-covid-datatools/data-raw/Spain/",filenames)
+
+missingfileUrls = fileUrls[!file.exists(filenames)]
+missingfilenames = filenames[!file.exists(filenames)]
+missingdates = dates[!file.exists(filenames)]
+
+for(i in seq_along(missingfilenames)) {
+  download.file(missingfileUrls[i],missingfilenames[i])
+}
+
+extractSpainAgeTable = function(file) {
+  tmp2 = tabulizer::extract_tables(file, output="data.frame")
+  ageTable = tmp2[sapply(tmp2, function(d) any(d %>% pull(1) %>% stringr::str_detect("edad"), na.rm=TRUE))][[1]]
+  
+  cleanAgeTable = ageTable %>%
+    unite(joined, everything(), sep=" ") %>% 
+    mutate(joined = stringr::str_remove_all(joined," y \\+")) %>%
+    mutate(joined = stringr::str_remove_all(joined,"\\.")) %>%
+    mutate(joined = stringr::str_remove_all(joined,"[0-9]+,[0-9]+")) %>%
+    mutate(joined = stringr::str_remove_all(joined,"NA")) %>%
+    mutate(gender = ifelse(stringr::str_detect(joined,"Muj"), "Female", NA)) %>%
+    mutate(gender = ifelse(stringr::str_detect(joined,"Hom"), "Male", gender)) %>%
+    fill(gender) %>% mutate(gender = ifelse(is.na(gender),"Both",gender)) %>%
+    separate(joined, into=c("age","cases","admitted","admittedIcu","died"),sep = "\\s+") %>%
+    filter(stringr::str_starts(age,"[0-9]")) %>%
+    mutate(
+      admitted = as.numeric(admitted), 
+      cases = as.numeric(cases),
+      admittedIcu = as.numeric(admittedIcu),
+      died = as.numeric(died)
+    ) %>% 
+    mutate(left = as.numeric(stringr::str_extract(age,"^[0-9]+"))) %>%
+    filter(!is.na(left)) %>%
+    group_by(gender) %>% arrange(age) %>%
+    mutate(right = lead(left,default=120))
+  return(cleanAgeTable)
+}
+
+if(file.exists("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")) {
+  covidAgeData = read_csv("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")
+} else {
+  covidAgeData = tibble(filename=character())
+}
+processed = paste0("~/Git/uk-covid-datatools/data-raw/Spain/",unique(covidAgeData$filename))
+unprocessed = !(filenames %in% processed)
+unprocessedFilenames = filenames[unprocessed]
+unprocessedDates = dates[unprocessed]
+
+
+covidAgeData_toAdd = NULL
+for (i  in seq_along(unprocessedFilenames)) {
+  tmp = extractSpainAgeTable(unprocessedFilenames[i]) 
+  tmp = tmp %>% mutate(
+    filename=stringr::str_extract(unprocessedFilenames[i],"([^/]+$)"),
+    date=as.Date(unprocessedDates[i],"1970-01-01"),
+    country = "Spain"
+  )
+  covidAgeData_toAdd = covidAgeData_toAdd %>% bind_rows(tmp)
+}
+  #mutate(Year = years) %>%
+  #mutate(Week = weeks) %>%
+  # select(-filename) %>%
+# covidAgeData_toAdd = covidAgeData_toAdd %>% mutate(
+#     
+#   ) %>%
+#   select(-unprocessedFilenames) %>%
+#   unnest(cols=contents)
+
+if (length(unprocessedFilenames) > 0) {
+  covidAgeData = bind_rows(covidAgeData,covidAgeData_toAdd)
+  covidAgeData %>% write_csv("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")
+  usethis::use_data(covidAgeData, overwrite=TRUE)
+} else {
+  message("Nothing to update")
+}
+
+#### ----
+
+ONSurls = c(
+  "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fbirthsdeathsandmarriages%2fdeaths%2fdatasets%2fweeklyprovisionalfiguresondeathsregisteredinenglandandwales%2f2020/publishedweek1620201.xlsx"
+)
+
+filenames = ONSurls %>% stringr::str_extract("/([^/]+)$") %>% stringr::str_remove("/")
+filenames = paste0("~/Git/uk-covid-datatools/data-raw/ONS/",filenames)
+
+missingfileUrls = ONSurls[!file.exists(filenames)]
+missingfilenames = filenames[!file.exists(filenames)]
+
+for(i in seq_along(missingfilenames)) {
+  download.file(missingfileUrls[i],missingfilenames[i])
+}
+
+loadONS = function(file) {
+  ONS <- read_excel(file,
+    sheet = "Covid-19 - Weekly occurrences",
+    range = "B6:BC75")
+  ONS2 = ONS %>% rename(age=1) %>% mutate(gender = case_when(
+    stringr::str_detect(age,"Female") ~ "Female",
+    stringr::str_detect(age,"Male") ~ "Male",
+    TRUE ~ as.character(NA)
+  )) %>% fill(gender) %>% mutate(gender = ifelse(is.na(gender),"Both",gender)) %>%
+  pivot_longer(cols = c(-age,-gender),names_to = "date",values_to = "died") %>%
+  mutate(age = ifelse(age=="<1","0-1",age)) %>% filter(stringr::str_starts(age,"[0-9]") & stringr::str_starts(date,"[0-9]") & !is.na(died)) %>% mutate(date = as.Date(as.numeric(date),"1970-01-01"))
+  ONS2 = ONS2 %>% group_by(gender,date) %>% mutate(left = as.numeric(stringr::str_extract(age,"^[0-9]+"))) %>% arrange(left) %>% mutate(right=lead(left,default=120))
+  ONS3 = ONS2 %>% ungroup() %>% group_by(age,gender) %>% arrange(date) %>% mutate(died = cumsum(died)) %>% mutate(cases=NA,admitted=NA,admittedIcu=NA, country="E&W",filename=file %>% stringr::str_extract("/([^/]+)$") %>% stringr::str_remove("/"))
+  return(ONS2)
+}
+
+loadONS(filenames[length(filenames)])

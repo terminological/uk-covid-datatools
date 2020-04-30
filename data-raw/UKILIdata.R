@@ -87,17 +87,21 @@ readILI <- function(fname) {
 #years = filename %>% stringr::str_remove_all("_") %>% stringr::str_extract("([0-9]{4})") %>% as.integer()
 #years = ifelse(is.na(years),2017,years)
 
-UKILIdata_toAdd = tibble(missingfilenames) %>%
-  mutate(contents = map(missingfilenames,~readILI(.))) %>%
+UKILIdata = read_csv("~/Git/uk-covid-datatools/data-raw/ilidata.csv")
+processed = paste0("~/Git/uk-covid-datatools/data-raw/ILI/",unique(UKILIdata$filename))
+unprocessed = !(filenames %in% processed)
+unprocessedFilenames = filenames[unprocessed]
+
+UKILIdata_toAdd = tibble(unprocessedFilenames) %>%
+  mutate(contents = map(unprocessedFilenames,~readILI(.))) %>%
   #mutate(Year = years) %>%
   #mutate(Week = weeks) %>%
   # select(-filename) %>%
-  mutate(filename=stringr::str_extract(missingfilenames,"([^/]+$)")) %>%
-  select(-missingfilenames) %>%
+  mutate(filename=stringr::str_extract(unprocessedFilenames,"([^/]+$)")) %>%
+  select(-unprocessedFilenames) %>%
   unnest(cols=contents)
 
-if (nrow(UKILIdata_toAdd) > 0) {
-  UKILIdata = read_csv("~/Git/uk-covid-datatools/data-raw/ilidata.csv")
+if (length(unprocessedFilenames) > 0) {
   UKILIdata = bind_rows(UKILIdata,UKILIdata_toAdd)
   UKILIdata %>% write_csv("~/Git/uk-covid-datatools/data-raw/ilidata.csv")
   usethis::use_data(UKILIdata, overwrite=TRUE)

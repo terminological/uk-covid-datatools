@@ -39,36 +39,37 @@ source("./lockdown-impact-data.R")
 
 ```{r}
 
-ukMeteodata <- read_csv("https://metdatasa.blob.core.windows.net/covid19-response/regional_subset_data/uk_daily_meteodata_2020jan-mar_v03.csv", 
+ukMeteodata <- read_csv("https://metdatasa.blob.core.windows.net/covid19-response/regional_subset_data/UKcovidreportingregions_metoffice_global_daily_20200101-20200419.csv", 
     col_types = cols(date = col_date(format = "%Y-%m-%d")))
 
 ```
 
 ```{r}
-weatherRt = ukMeteodata %>% left_join(ts$r0CombinedUK, by=c("output_code"="code","date"="date"))
-
-```
-
-
-```{r}
-leads=c(1:20)
-weatherRt2 = weatherRt %>% crossing(leads) %>% group_by(output_code, leads) %>% arrange(date) %>% group_modify(function(d,g,...) {
+weatherRt_UK = ukMeteodata %>% left_join(ts$r0CombinedUK, by=c("code"="code","date"="date"))
+leads=c(0,5,10,12,14,16,18,20)
+weatherRt2_UK = weatherRt_UK %>% crossing(leads) %>% group_by(code, leads) %>% arrange(date) %>% group_modify(function(d,g,...) {
   d %>% mutate(
     leadRt = lead(`Median(R)`,g$leads),
     leadDeltaRt = lead(`slope`,g$leads)
     )
 })
 rm(leads)
-ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`precipitation_flux_mean (kg m-2 s-1)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+scale_x_log10()+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`air_temperature_mean (K)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`specific_humidity_mean (1)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadRt)), aes(x=`short_wave_radiation_mean (W/m2)`,y=leadRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm")
+a = ggplot(weatherRt2_UK %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`precipitation_flux_mean_mean (kg m-2 s-1)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+scale_x_log10()+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+b = ggplot(weatherRt2_UK %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`air_temperature_mean_mean (K)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+c = ggplot(weatherRt2_UK %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`specific_humidity_mean_mean (1)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+d = ggplot(weatherRt2_UK %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`short_wave_radiation_mean_mean (W m-2)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
 
+(a + b + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/UK_RT_by_weather")
+(c + d + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/UK_RT_by_weather_2")
 
-ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`precipitation_flux_mean (kg m-2 s-1)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+scale_x_log10()+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`air_temperature_mean (K)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`specific_humidity_mean (1)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.51))+geom_smooth(method = "lm")
-ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`short_wave_radiation_mean (W/m2)`,y=leadDeltaRt))+geom_point(size=1,alpha=0.2)+facet_wrap(vars(leads))+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm")
+tmp = weatherRt2_UK %>% filter(!is.na(leadDeltaRt) & leadDeltaRt < 0.5 & leadDeltaRt > -0.5)
+e = ggplot(tmp, aes(x=`precipitation_flux_mean_mean (kg m-2 s-1)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+scale_x_log10()+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+f = ggplot(tmp, aes(x=`air_temperature_mean_mean (K)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+g = ggplot(tmp, aes(x=`specific_humidity_mean_mean (1)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+h = ggplot(tmp, aes(x=`short_wave_radiation_mean_mean (W m-2)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+
+(e + f + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/UK_delta_RT_by_weather")
+(g + h + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/UK_delta_RT_by_weather_2")
 
 ```
 
@@ -87,10 +88,10 @@ ggplot(weatherRt2 %>% filter(!is.na(leadDeltaRt)), aes(x=`short_wave_radiation_m
 # 
 # tmp
 
-transEntTemp = weatherRt2 %>% group_by(output_code, region_name, leads) %>% group_modify(function(d,g,...) {
+transEntTemp = weatherRt2 %>% group_by(code, leads) %>% group_modify(function(d,g,...) {
   tmp = tryCatch(
     RTransferEntropy::transfer_entropy(
-      x = d %>% pull(`air_temperature_mean (K)`), 
+      x = d %>% pull(`air_temperature_mean_mean (K)`), 
       y = d %>% pull(leadRt), 
       lx = 1, ly = 1, q = 0.1, 
       entropy = 'Shannon', shuffles = 10, quantiles = c(25,75),
@@ -103,6 +104,10 @@ transEntTemp = weatherRt2 %>% group_by(output_code, region_name, leads) %>% grou
   return(out)
 })
 
+(ggplot(transEntTemp %>% mutate(direction = case_when(
+  direction=="X->Y" ~ "temp->Rt",
+  direction=="Y->X" ~ "Rt->temp"
+)),aes(x=direction,y=te))+geom_violin()+ylab("transfer entropy")+facet_wrap(vars(leads),ncol=4)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/weather-effects/transferEntropy_airTemp")
 
 # x: a vector of numeric values, ordered by time.
 # y: a vector of numeric values, ordered by time.
@@ -121,13 +126,6 @@ transEntTemp = weatherRt2 %>% group_by(output_code, region_name, leads) %>% grou
 # seed a seed that seeds the PRNG (will internally just call set.seed), default is seed = NULL.
 ```
 
-```{r}
-
-ggplot(transEntTemp,aes(x=direction,y=te))+geom_violin()
-
-```
-
-
 
 ```{r}
 
@@ -135,24 +133,63 @@ us_counties <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data
     col_types = cols(date = col_date(format = "%Y-%m-%d")))
 
 r0us_counties = us_counties %>% group_by(date) %>% mutate(daily_total = sum(cases)) %>% ungroup() %>% group_by(state,county,fips) %>% normaliseAndCleanse(cumulativeCasesVar = cases,adjustUnknowns = FALSE) 
-r0us_counties = r0us_counties %>% tidyEstimateRt(cfg, window = 7)
+r0us_counties = r0us_counties %>% tidyEstimateRt(cfg, window = 7) %>% deltaR0timeseries()
 
+write.csv(r0us_counties, "~/Git/uk-covid-datatools/vignettes/US_Rt_Timeseries_by_county.csv")
 
 ```
 
 ```{r}
-data("UKCovidMaps")
-
-# https://github.com/tidyverse/ggplot2/issues/3391
-# some issues joining tibble onto sf - which 
-
-r0shapes = UKCovidMaps$reportingRegions %>% 
-  # fill in missing dates to prevent the map having disappearing / reappearing regions
-  crossing(tibble(date=unique(ts$r0CombinedUK$date))) %>% 
-  left_join(keyDates, by="date") %>%
-  left_join(
-    ts$r0CombinedUK,
-    by=c("code","date"), suffix=c("",".dup")) %>% 
-  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
-  sf::st_as_sf()
+us_weather = read_csv("https://metdatasa.blob.core.windows.net/covid19-response/regional_subset_data/USCOUNTYPOP_metoffice_global_daily_20200101-20200419.csv",
+                      col_types = cols(date = col_date(format = "%Y-%m-%d")))#, FIPS=col_character()))
 ```
+
+```{r}
+weatherRt = us_weather %>% left_join(r0us_counties %>% ungroup() %>% mutate(fips = as.integer(fips)), by=c("FIPS"="fips","date"="date"))
+
+```
+
+
+```{r}
+leads=c(0,5,10,12,14,16,18,20)
+weatherRt2 = weatherRt %>% crossing(leads) %>% group_by(FIPS, leads) %>% arrange(date) %>% group_modify(function(d,g,...) {
+  d %>% mutate(
+    leadRt = lead(`Median(R)`,g$leads),
+    leadDeltaRt = lead(`slope`,g$leads)
+    )
+})
+rm(leads)
+a = ggplot(weatherRt2 %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`precipitation_flux_mean_mean (kg m-2 s-1)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+scale_x_log10()+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+b = ggplot(weatherRt2 %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`air_temperature_mean_mean (K)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+c = ggplot(weatherRt2 %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`specific_humidity_mean_mean (1)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+d = ggplot(weatherRt2 %>% filter(!is.na(leadRt) & leadRt<5), aes(x=`short_wave_radiation_mean_mean (W m-2)`,y=leadRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(0,5))+geom_smooth(method = "lm", colour="red")+ylab("R(t)")
+
+(a + b + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/US_RT_by_weather")
+(c + d + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/US_RT_by_weather_2")
+
+tmp = weatherRt2 %>% filter(!is.na(leadDeltaRt) & leadDeltaRt < 0.5 & leadDeltaRt > -0.5)
+e = ggplot(tmp, aes(x=`precipitation_flux_mean_mean (kg m-2 s-1)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+scale_x_log10()+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+f = ggplot(tmp, aes(x=`air_temperature_mean_mean (K)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+g = ggplot(tmp, aes(x=`specific_humidity_mean_mean (1)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+h = ggplot(tmp, aes(x=`short_wave_radiation_mean_mean (W m-2)`,y=leadDeltaRt))+geom_bin2d()+facet_wrap(vars(leads),ncol=4)+coord_cartesian(ylim=c(-0.5,0.5))+geom_smooth(method = "lm", colour="red")+ylab("\u0394R(t)")
+
+(e + f + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/US_delta_RT_by_weather")
+(g + h + patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/weather-effects/US_delta_RT_by_weather_2")
+```
+
+# ```{r}
+# data("UKCovidMaps")
+# 
+# # https://github.com/tidyverse/ggplot2/issues/3391
+# # some issues joining tibble onto sf - which 
+# 
+# r0shapes = UKCovidMaps$reportingRegions %>% 
+#   # fill in missing dates to prevent the map having disappearing / reappearing regions
+#   crossing(tibble(date=unique(ts$r0CombinedUK$date))) %>% 
+#   left_join(keyDates, by="date") %>%
+#   left_join(
+#     ts$r0CombinedUK,
+#     by=c("code","date"), suffix=c("",".dup")) %>% 
+#   mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+#   sf::st_as_sf()
+# ```
