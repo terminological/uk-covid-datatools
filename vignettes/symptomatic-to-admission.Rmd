@@ -186,7 +186,7 @@ out %>% filter(model=="weibull") %>% ungroup() %>% mutate(value = sprintf("%1.4f
 ```{r}
 survSurf = out %>% createSurvivalSurfaces(days=10)
 surf = plotSurvivalSurface(survSurf, "weibull")
-surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Fig4_losDensity")
+surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Fig4_durationSymptomsToAdmissionDensity")
         
 ```
 
@@ -200,11 +200,18 @@ surf2
 
 ```{r}
 
-(ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=median_lo,ymax=median_hi, group=1))+geom_line(stat="smooth")+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median duration symptoms before admission")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Fig5_losMedianByAge")
+(ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=median_lo,ymax=median_hi, group=1))+geom_line(stat="smooth")+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median duration symptoms before admission")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Fig5_durationSymptomsToAdmissionMedianByAge")
 
 ```
 
+# positive cases (i.e. symptomatic) to admission probability
 
+To estimate this we need to know how likely it is that someone who is symptomatic is admitted.
+There is no good definition of symptomatic.
+We can use a ragne of proxy measures for symptomatic or infected
+
+* People testing positive in South Korea => we assume that south korea is catching the majority of patients who are infected who are known positive versus hospital admissions
+* People testing positive in Spain => we assume that Spain (like the UK) is testing only those with high probability of disease with severe symptoms
 
 # adjust for probability of ITU admission
 
@@ -212,7 +219,7 @@ surf2
 survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 1:10)
 write.csv(
   survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf),
-  file="~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/itu-admission-to-itu-discharge.csv")        
+  file="~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/symptomatic-to-admission.csv")        
 plotProbabilityMatrix(survSurfcsv,"weibull", p) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/daily_probability_by_age")
 
 ```

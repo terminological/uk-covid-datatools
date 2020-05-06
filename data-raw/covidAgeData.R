@@ -110,3 +110,23 @@ loadONS = function(file) {
 }
 
 loadONS(filenames[length(filenames)])
+
+
+#### PHE Coronavirus cases by age ----
+# url = "https://coronavirus.data.gov.uk/"
+json_url = "https://c19downloads.azureedge.net/downloads/data/data_latest.json"
+# "https://coronavirus.data.gov.uk/downloads/json/dated/coronavirus-cases_202004292132.json"
+# "https://coronavirus.data.gov.uk/downloads/json/dated/data_latest_202004292132.json"
+tmp = jsonlite::read_json(json_url,simplifyVector = TRUE)
+
+# glimpse(tmp$utlas$E09000002)
+# tmp3 = enframe(tmp$utlas,name = "UTLA")
+# tmp3 = tmp3 %>% unnest(cols=value)
+# tmp3 = tmp3 %>% mutate(name = map(value, ~.x$name$value))
+
+cases = bind_rows(
+  tmp$countries$E92000001$maleCases %>% mutate(gender="Male"),
+  tmp$countries$E92000001$femaleCases %>% mutate(gender="Female") 
+)
+
+

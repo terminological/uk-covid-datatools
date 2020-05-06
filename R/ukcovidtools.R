@@ -63,10 +63,10 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
       d = d %>% arrange(dates) %>% mutate(seq_id=row_number())
       siConfig$t_start = c(2:(nrow(d)-window))
       siConfig$t_end = siConfig$t_start+window
-      #browser()
       tmp4 = suppressWarnings(EpiEstim::estimate_R(d,method="parametric_si",config=siConfig,...))
       tmp5 = tmp4$R %>% mutate(seq_id=t_end)
       tmp6 = d %>% left_join(tmp5, by="seq_id")
+      #browser()
       return(tmp6 %>% select(-seq_id))
     } else {
       # not enough data
@@ -261,71 +261,81 @@ getUKCovidTimeseries = function() {
 #' @param unknownVar 
 #' @import dplyr
 #' @export
-normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar = "cumulative_cases", totalVar = "daily_total", unknownVar = "daily_unknown", adjustUnknowns=TRUE) {
+normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar = "cumulative_cases", totalExpr = NULL, unknownExpr = NULL, adjustUnknowns=FALSE) {
   grps = groups(groupedDf)
-  if (identical(grps,NULL)) warning("there input data is not grouped - this is probably a mistake")
+  if (identical(grps,NULL)) warning("the input data is not grouped - this is probably a mistake")
   dateVar = ensym(dateVar)
   cumulativeCasesVar = ensym(cumulativeCasesVar) 
-  totalVar = ensym(totalVar)
-  unknownVar = ensym(unknownVar)
-  # clear out NA's if there are any
-  if(adjustUnknowns) {
-    tmp = groupedDf %>% select(
-      !!!grps,
-      date = !!dateVar, 
-      cumulative_cases= !!cumulativeCasesVar,
-      total = !!totalVar,
-      unknown = !!unknownVar
-    ) %>% filter(!is.na(cumulative_cases))
-    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases*(1+unknown/total)) %>% select(-total,-unknown) 
-  } else {
-    tmp = groupedDf %>% select(
-      !!!grps,
-      date = !!dateVar, 
-      cumulative_cases= !!cumulativeCasesVar
-    ) %>% filter(!is.na(cumulative_cases))
-    tmp2 = tmp %>% mutate(adj_cumulative_cases = cumulative_cases)# %>% mutate(adj_cumulative_cases = cummax(adj_cumulative_cases))
+  totalExpr = enexpr(totalExpr)
+  if(identical(totalExpr,NULL)) {
+    totalExpr = expr(sum(cumulative_cases,na.rm=TRUE))
   }
-  # calculate incidece
-  tmp3 = tmp2 %>% group_by(!!!grps) %>% arrange(date) %>%
-    mutate(incidence = as.integer(round(lead(adj_cumulative_cases))-round(adj_cumulative_cases))) %>%
-    mutate(incidence = ifelse(is.na(incidence) & cumulative_cases==1,1,incidence)) # this was the index case otherwise we simply don't know incidence
-  # make sure incidence positive or zero
-  tmp4 = tmp3 %>% group_by(!!!grps) %>% arrange(date) %>%
-    mutate(incidence = ifelse(incidence<0,0,incidence)) 
-  tmp5 = tmp4 %>% 
-    group_by(!!!grps) %>% arrange(date) %>%
-    mutate(cumulative_cases = cumsum(ifelse(is.na(incidence),0,incidence))-incidence+min(cumulative_cases)) %>% select(-adj_cumulative_cases) %>% 
-    rename(!!dateVar := date) %>% filter(!is.na(cumulative_cases)) # make sure date is same as input.
-  # browser()
-  tmpDates = tmp5 %>% group_by(!!!grps) %>% group_modify(function(d,f,...) {
+  unknownExpr = enexpr(unknownExpr)
+  if(identical(unknownExpr,NULL)) {
+    unknownExpr = expr(0)
+  }
+  
+  tmp = groupedDf %>% select(
+    !!!grps,
+    date = !!dateVar, 
+    src_cumulative_cases= !!cumulativeCasesVar
+  ) %>% arrange(date) %>% filter(!is.na(src_cumulative_cases) & (is.na(lead(src_cumulative_cases)) | lead(src_cumulative_cases, default=Inf) > 0))
+  
+  # find the min / max date ranges for each group.
+  tmpDates = tmp %>% group_modify(function(d,f,...) {
     tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
   })
   
-  tmp6 = tmpDates %>% left_join(tmp5,by=c(sapply(grps,as_label),"date"))
-  #tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases) & lead(cumulative_cases)==1, 0, cumulative_cases))
-  tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases), lag(cumulative_cases,default=NA)+lag(incidence,default=NA), cumulative_cases))
-  tmp6 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(cumulative_cases = if_else(is.na(cumulative_cases), lead(cumulative_cases,default=NA)-incidence, cumulative_cases))
-  #tmp6 = tmp6 %>% fill(cumulative_cases)
+  # expand the dates to make sure whole range present so each time series
+  tmp2 = tmpDates %>% left_join(tmp, by=c(sapply(grps,as_label),"date"))
   
-  # tmp6 = tmp6 %>% mutate(incidence = if_else(is.na(incidence), as.integer(lead(cumulative_cases, default=NA)-cumulative_cases), incidence))
+  tmp3 = tmp2 %>% group_by(!!!grps) %>% arrange(date) %>%
+    # calculate incidence
+    mutate(incidence = lead(src_cumulative_cases)-src_cumulative_cases) %>%
+    # mutate(incidence = ifelse(is.na(incidence) & lead(cumulative_cases)==1,1,incidence)) %>%
+    # fix elements where incidence < 0 by setting incidence to 0
+    mutate(
+      cumulative_max = cummax(ifelse(is.na(src_cumulative_cases),-Inf,src_cumulative_cases)),
+      cumulative_cases = ifelse(lag(cumulative_max,default = -Inf) > src_cumulative_cases,NA,src_cumulative_cases),
+      incidence = ifelse(incidence<0,0,incidence)
+    ) 
   
-  # to do impute missing values
-  # tmp7 = tmp6 %>% mutate(log_cumulative_cases = log(cumulative_cases))
+  tmp4 = tmp3 %>%
+    # find the smallest value after this one (by ordering descending and finding the smallest value before this one)
+    arrange(desc(date)) %>%
+    mutate(next_larger = lag(cummin(ifelse(is.na(cumulative_cases),Inf,cumulative_cases)),default = max(cumulative_cases, na.rm = TRUE))) %>%
+    # if they are the same then the incidence was zero
+    mutate(cumulative_cases = ifelse(cumulative_max==next_larger,cumulative_max,cumulative_cases)) %>%
+    arrange(date)
+    
+  # impute missing incidences by linear interpolation
+  tmp5 = tmp4 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
+    imputed = is.na(src_cumulative_cases),
+    log_cumulative_cases = log(cumulative_cases),
+    log_cumulative_cases = tryCatch(imputeTS::na_interpolation(ifelse(log_cumulative_cases==-Inf,-1,log_cumulative_cases)), error=function(e) NA)
+  ) %>% mutate(
+    cumulative_cases = round(exp(log_cumulative_cases))
+  ) %>% mutate(
+    incidence = lead(cumulative_cases)-cumulative_cases
+  ) %>% select(!!!grps,date,src_cumulative_cases,cumulative_cases,incidence,log_cumulative_cases,imputed)
   
+  # clear out NA's if there are any
+  if(adjustUnknowns) {
+    
+    tmp6 = groupedDf %>% ungroup() %>% group_by(!!dateVar) %>% summarise(
+      total = first(!!totalExpr),
+      unknown = first(!!unknownExpr)
+    )
+    
+    tmp5 = tmp5 %>% inner_join(tmp6, by=c("date"))
+    
+    tmp5 = tmp5 %>% mutate(cumulative_cases = ifelse(unknown>0 & total>0, cumulative_cases*(1+unknown/total), cumulative_cases)) 
+    
+    tmp5 = tmp5 %>% select(-total,-unknown) 
+  } 
   
-  # browser()
-  tmp8 = tmp6 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
-      imputed = is.na(cumulative_cases),
-      cumulative_cases = tryCatch(imputeTS::na_interpolation(cumulative_cases), error=function(e) NA)
-      #log_cumulative_cases = tryCatch(imputeTS::na_interpolation(log_cumulative_cases), error=function(e) NA)
-    ) %>%
-    mutate(log_cumulative_cases = log(cumulative_cases)) %>% 
-    mutate(incidence = lead(cumulative_cases)-cumulative_cases) 
-  
-  #browser()
-  
-  tmp9 = tmp8 %>% 
+  # calculate community transmission start date
+  tmp9 = tmp5 %>% 
     group_modify(function(d,g,...) {
       if (nrow(d) < 11 | any(is.na(head(d$incidence,-1)))) {
         d = d %>% mutate(

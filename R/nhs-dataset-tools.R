@@ -1117,6 +1117,7 @@ bristolSurvivalSubset = function(bristolDf) {
 #' the chess data has some issues as
 #' different hospitals have different reporting strategies
 #' 
+#' @param CHESSdf - the raw chess data set
 #' @return a data frame of stats by trust representing reporting quality.
 #' @export
 chessQuality = function(CHESSdf) {
@@ -1138,7 +1139,15 @@ chessQuality = function(CHESSdf) {
 }
 
 
-
+#' The subset of the CHESS data of patients which are admitted to ITU
+#' 
+#' the chess data has some issues as
+#' different hospitals have different reporting strategies
+#' 
+#' @param CHESSdf - the raw chess data set
+#' @param date - the date of the data set
+#' @return a data frame of stats by trust representing reporting quality.
+#' @export
 chessItuSubset = function(CHESSdf, date) {
   CHESS_date = as.Date(date)
   # hospitals must have updated their data in last 3 days
@@ -1157,6 +1166,15 @@ chessItuSubset = function(CHESSdf, date) {
   )
 }
 
+#' The subset of the CHESS data of patients from hospitals that appear to be reporting all admissions
+#' 
+#' the chess data has some issues as
+#' different hospitals have different reporting strategies
+#' 
+#' @param CHESSdf - the raw chess data set
+#' @param date - the date of the data set
+#' @return a data frame of stats by trust representing reporting quality.
+#' @export
 chessAdmissionSubset = function(CHESSdf, date) {
   CHESS_date = as.Date(date)
   # hospitals must have updated their data in last 3 days
@@ -1180,9 +1198,9 @@ chessAdmissionSubset = function(CHESSdf, date) {
   )
 }
 
+# internal use
 chessDefaultFilter = function(CHESSdf, ...) {
   # remove records with finaloutcome but no finaloutcomedate
-  
   # remove records with outcome date earlier than admission date
   # remove unknown gender
   # create factors
@@ -1210,7 +1228,7 @@ chessDefaultFilter = function(CHESSdf, ...) {
 #' * checks all outcomes have an outcomedate
 #' * checks outcome dates are after admission date
 #' * excludes patients whose tests are >10 days after admission e.g. hospital acquired
-#' * exludes paediatric patients, and those with no known gender
+#' * excludes paediatric patients, and those with no known gender
 #' * adds censoring status (as status)
 #' * adds time from admission to outcome (as timeToOutcome)
 #' 
@@ -1266,6 +1284,7 @@ cleanseCHESSData = function(CHESSdf, date, removeOutliers = TRUE) {
 #' 
 #' allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is 
 #' based on regex.
+#' 
 #' %	Represents zero or more characters	bl% finds bl, black, blue, and blob
 #' _	Represents a single character	h_t finds hot, hat, and hit
 #' []	Represents any single character within the brackets	h[oa]t finds hot and hat, but not hit

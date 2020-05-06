@@ -1,0 +1,336 @@
+---
+title: "Current estimates of R(t) for SARS-CoV-2 in the UK"
+output: 
+  pdf_document:
+    fig_caption: yes
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/current-rt") })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+source("./lockdown-impact-data.R")
+```
+
+Robert Challen ^1,2^; Leon Danon ^3,4^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+Report date: `r Sys.Date()`
+
+```{r}
+
+keyDates = tibble(
+  date = as.Date(c(
+    "2020-03-16",
+    "2020-03-23",
+    "2020-04-06",
+    "2020-04-20"
+  )),
+  event = c(
+    "1 wk pre-lockdown",
+    "Lockdown",
+    "2 wks post-lockdown",
+    "4 wks post-lockdown")
+) %>% mutate(label = paste0(date,": \n",event))
+
+
+
+# markup the timeseries data with key dates:
+
+r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14")) %>% filter(!stringr::str_starts(code,"N"))
+r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09"))
+r0UK = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region == "UK")
+r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+r0UKDeaths = ts$r0UKRegionalDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region == "UK")
+r0UKRegionalDeaths = ts$r0UKRegionalDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+
+latestDate = max(r0UK$date, na.rm=TRUE)
+tdp = function(x,y,z) sprintf("%1.2f (%1.2f; %1.2f)", x ,y, z)
+```
+
+
+
+## Methods and assumptions
+
+* This report uses EpiEstim library [@Cori2013-xe; @Cori_undated-bn; @Thompson2019-pq] on case and mortality data
+* The data is aggregated from Public Health England [@Public_Health_England_undated-mm], Wales [@Public_Health_Wales_undated-xg] and Scotland's [@Scotland_undated-tg] sites , and from Northern Ireland's HSC site [@HSE_undated-xu]. The data was retrieved from Tom White's aggregated covid 19 UK data github site [@White_undated-ha]. 
+* The R(t) is calculated using a 7 day rolling window.
+* Unless mentioned otherwise the R(t) is calculated using confirmed cases. This is a biased estimate and is influenced by volumes of tests conducted and testing policy. It is also affected by the change of reporting cases to the sample date as this is incomplete until the tests are finished.
+* R(t) calculated by deaths is also biased where the methodology for reporting the deaths is changing, e.g. inclusion of care homes. Similarly it will tend to underestimate when full case data is not yet available or complete. It is therefore a biased low estimate in the last few days.
+* In the regional data there are frequently confirmed cases that are not properly assigned to any region. As this varies from day to day it is a source of bias and has in the past been corrected by proportionately distrbuting the unassigned cases to each region [@Challen2020-qc]. However over the last few days there has been so much missing that this in itself was causing an issue. This correction has been disabled for now. Any case based data estimates will likely be on the low side because of this.
+* As described previously [@Challen2020-qc] we assume a parametric serial interval with the following parameters:
+  + Serial interval mean plus 95% credible interval: `r tdp(wtSIs$mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si)`
+  + Serial interval standard deviation plus 95% credible interval: `r tdp(wtSIs$std_si, wtSIs$min_std_si, wtSIs$max_std_si)`
+* Rate of change estimates are calculated using previously described methods [@Challen2020-qc].
+
+# Results
+
+# UK Overview
+
+```{r}
+tmp = r0UK %>% filter(as.integer(date) == as.integer(latestDate-4))
+est1 = tdp(tmp$`Median(R)`, tmp$`Quantile.0.025(R)`, tmp$`Quantile.0.975(R)`)
+```
+
+The most recent median estimate of R(t) based on cases is `r est1` from the `r latestDate-4`. This is `r ifelse(tmp$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp$slope), tmp$slopeLowerCi, tmp$slopeUpperCi)` per day.
+
+
+```{r}
+tmp2 = r0UKDeaths %>% filter(as.integer(date) == as.integer(latestDate-4))
+est2 = tdp(tmp2$`Median(R)`, tmp2$`Quantile.0.025(R)`, tmp2$`Quantile.0.975(R)`)
+```
+
+The most recent median estimate of R(t) based on deaths is `r est2` from the `r latestDate-4`. This is `r ifelse(tmp2$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp2$slope), tmp2$slopeLowerCi, tmp2$slopeUpperCi)` per day.
+
+```{r fig1, fig.cap="The timeseries of R(t) estimates in the whole UK based on either cases, or deaths"}
+r0ukplot = ggplot()+
+  
+  geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="by cases"), data=r0UK, alpha=0.2)+
+  geom_line(mapping = aes(x=date, y=`Median(R)`, colour="by cases", scale=NULL), data=r0UK)+
+  
+  geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="by deaths"), data=r0UKDeaths, alpha=0.2)+
+  geom_line(mapping = aes(x=date, y=`Median(R)`, colour="by deaths", scale=NULL), data=r0UKDeaths)+
+  
+  geom_hline(yintercept = 1, colour="grey75")+
+  coord_cartesian(ylim=c(0.5, 2), xlim=c(latestDate-31,latestDate))+
+  geom_vline(xintercept=latestDate-4,colour="red")+
+  annotate("text", x=latestDate-4, y=1.1, colour="red", label="likely to change", hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+           size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  guides(colour="none")+labs(fill="")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))
+
+testing = ggplot(ts$tidyUKRegional %>% filter(uk_region=="UK"), aes(x=date,y=daily_tested/1000))+geom_bar(stat="identity",fill="grey75",width=0.7)+
+  coord_cartesian(xlim=c(latestDate-31,latestDate))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+ylab("Tests (1000s)")
+
+((r0ukplot+ theme(axis.text.x=element_blank(), axis.title.x = element_blank())) + testing + patchwork::plot_layout(ncol=1, heights = c(0.8,0.2))) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+```
+
+## R(t) by UK nations
+
+The R(t) in the different countries of the UK, based on deaths. 
+
+```{r}
+r0UKRegionalDeaths %>% ungroup() %>% filter(date==latestDate-4) %>% mutate(`R(t) 95% CI` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(`Date` = date,`Country` = uk_region, `R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table1_ukCountryRt")
+```
+
+The estimates based on cases (not shown) are notably lower than both these and the UK overall figure above. This needs investigation - one possibility is not all test results reported are being assigned to a country.
+
+The UK country rates based on deaths over time
+
+```{r fig2, fig.cap="The timeseries of R(t) estimates for the nations of the UK"}
+r0ukregionalplotdeaths = ggplot(r0UKRegionalDeaths, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey75")+
+  
+  coord_cartesian(ylim=c(0.5, 2), xlim=c(latestDate-31,latestDate))+
+  #geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  geom_vline(xintercept=latestDate-4,colour="red")+
+  # ggrepel::geom_text_repel(
+  #         aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+  #         size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
+  facet_wrap(vars(uk_region))
+
+r0ukregionalplotdeaths %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig2_ukRegionRtDeaths")
+```
+
+## R(t) by England NHS region
+
+The same analysis as above but looking at NHS regions. There is lots of missing data from the 30th April and 1st May on the PHE Coronavirus tracker. This has been raised as an issue. These case based estimates underrepresent in last 5 days.
+
+```{r}
+r0EnglandNHS %>% ungroup() %>% filter(date==latestDate-4) %>% mutate(`R(t) 95% CI` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(`Date` = date,`NHS Region` = england_nhs_region, `R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table2_NHSregionRt")
+```
+
+```{r fig3, fig.cap="The timeseries of R(t) estimates for the sub-national regions of NHS England"}
+
+#glimpse(ts$tidyEnglandNHS)
+englandnhsplot = ggplot(r0EnglandNHS, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey50")+
+  facet_wrap(vars(england_nhs_region)) + 
+  standardPrintOutput::narrowAndTall()+
+  coord_cartesian(ylim=c(0.5, 2), xlim=c(latestDate-31,latestDate))+
+  #geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
+  geom_vline(xintercept=latestDate-4,colour="red")+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
+
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig3-NHSregionRt")
+```
+
+## R(t) by Unitary Authority in England, and Local Health Boards in Wales and Scotland
+
+The same analysis demonstrating R(t) but on a smaller regional level, plotted on a map at various time points.
+
+```{r}
+data("UKCovidMaps")
+
+# https://github.com/tidyverse/ggplot2/issues/3391
+# some issues joining tibble onto sf - which 
+
+r0shapes = UKCovidMaps$reportingRegions %>% 
+  # fill in missing dates to prevent the map having disappearing / reappearing regions
+  crossing(tibble(date=unique(r0CombinedUK$date))) %>% 
+  left_join(keyDates, by="date") %>%
+  left_join(
+    r0CombinedUK,
+    by=c("code","date"), suffix=c("",".dup")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+  sf::st_as_sf()
+
+
+
+```
+
+```{r}
+defaultR0Map = function(data) {
+  return(
+    ggplot(data)+
+    geom_sf(aes(fill=`Median(R)`))+
+    scale_fill_gradient2(
+      low="green",
+      mid="white",
+      high="red",
+      midpoint=0,
+      trans="log",
+      na.value = "black", 
+      limits=c(0.2,5), 
+      breaks=c(0.2,0.5,1,2,5), 
+      labels=c("<0.2","0.5","1","2",">5"),
+      oob=scales::squish)+
+    standardPrintOutput::narrowAndTall()+
+    standardPrintOutput::mapTheme()
+  )
+}
+```
+
+This analysis covers the last 4 days. There is quite a lot of missing data in recent days.
+
+```{r fig4, fig.cap="A map of R(t) estimates for the Unitary Authority and Local Health Boards of England, Scotland, and Wales"}
+
+listAppend = function(list1,list2) {
+  list1[[length(list1)+1]] <- list2
+  return(list1)
+}
+
+plotCols = list()
+plotDates = c(latestDate-6,latestDate-5,latestDate-4,latestDate-1)
+
+ukwide = lapply(plotDates, function(plotDate) {
+  defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+labs(subtitle = plotDate)
+})
+plotCols = ukwide #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap")
+  
+london = lapply(plotDates, function(plotDate) {
+  defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+ coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)
+})
+plotCols = plotCols %>% append(london)
+  
+rtDensity = lapply(plotDates, function(plotDate) {
+  ggplot(r0shapes %>% filter(date==plotDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,3))+
+    theme(axis.text.y=element_blank(),axis.title.y=element_blank())
+})
+plotCols = plotCols %>% append(rtDensity)
+
+tmp = patchwork::wrap_plots(plotCols,ncol=4,byrow = TRUE, tag_level = "new")+plot_annotation(tag_levels = "A") 
+tmp %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map")
+
+```
+
+### Regions with highest R(t)
+
+```{r}
+
+r0CombinedUK %>% filter(date == latestDate-4) %>% arrange(desc(`Median(R)`)) %>% head(10) %>% mutate(
+  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")),
+  `Worsening?` = if_else(slope>0,ifelse(`slopeLowerCi`>0,"yes","possibly"),""),
+  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **",""))
+  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Worsening?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_top10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
+  
+``` 
+
+### Regions with the fastest increase in R(t)
+
+```{r}
+
+r0CombinedUK %>% filter(date == latestDate-4) %>% arrange(desc(slope)) %>% head(10) %>% mutate(
+  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")),
+  `Increasing?` = if_else(`Median(R)`>1,ifelse(`Quantile.0.025(R)`>1,"yes","possibly"),""),
+  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **",""))
+  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Increasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_top10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
+  
+``` 
+
+### Regions with lowest R(t)
+
+```{r}
+
+r0CombinedUK %>% filter(date == latestDate-4) %>% arrange(`Median(R)`) %>% head(10) %>% mutate(
+  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")),
+  `Improving?` = if_else(slope<0,ifelse(`slopeUpperCi`<0,"yes","possibly"),""),
+  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **",""))
+  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Improving?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table5_bottom10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
+  
+``` 
+
+### Regions with the fastest decrease in R(t)
+
+```{r}
+
+r0CombinedUK %>% filter(date == latestDate-4) %>% arrange(slope) %>% head(10) %>% mutate(
+  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")),
+  `Decreasing?` = if_else(`Median(R)`<1,ifelse(`Quantile.0.975(R)`<1,"yes","possibly"),""),
+  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **",""))
+  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Decreasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_bottom10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
+  
+``` 
+
+# Limitations
+
+# References

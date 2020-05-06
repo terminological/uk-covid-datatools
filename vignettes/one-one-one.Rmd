@@ -1,0 +1,89 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+```{r setup}
+library(tidyverse)
+```
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+
+oneoneone <- readxl::read_excel("~/S3/encrypted/2020-05-04/04052020-111-999-tel-online-data-OS.xlsx", 
+    sheet = "Extracted Data", col_types = c("date", 
+        "numeric", "numeric", "numeric", 
+        "text", "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric"))
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+
+ts = oneoneone %>% rename(date = DateVal, region=Geography) %>% select(-Day,-Month,-Year) %>% pivot_longer( 
+  cols = c(-date, -region), names_to = "category", values_to = "incidence") 
+  
+ts2 = ts %>% group_by(region,category) %>% mutate(date = as.Date(date)) %>% arrange(date) %>% filter(!is.na(incidence))
+grps = ts2 %>% groups()
+
+tmpDates = ts2 %>% group_modify(function(d,f,...) {
+    tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
+  })
+
+ts3 = tmpDates %>% left_join(ts2, by=c(sapply(grps,as_label),"date"))
+ts3 = ts3 %>% mutate(incidence = ifelse(is.na(incidence),0,incidence))
+```
+
+```{r}
+source("./covid-serial-interval.R")
+ts4 = ts3 %>% filter(stringr::str_detect(category,"COVID")) %>% 
+  mutate(category2 = case_when(
+    category %like% "%-COVID Self%" ~ "mild",
+    category %like% "%-COVID risk Clinical Assessment service 1 hour" ~ "severe",
+    category %like% "%-COVID risk%" ~ "moderate",
+    category %like% "%-Emergency%" ~ "severe",
+    TRUE ~ as.character(NA)
+  )) %>%
+  mutate(category3 = case_when(
+    category2 %in% c("mild","moderate") ~ "mild/moderate",
+    category2 == "severe" ~ "severe",
+    TRUE ~ as.character(NA)
+  ))
+
+ts5 = ts4 %>% filter(!is.na(category2)) %>% group_by(category2,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(category2) %>% 
+  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
+
+ts6 = ts4 %>% filter(!is.na(category3)) %>% group_by(category3,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(category3) %>% 
+  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
+
+
+ggplot(ts6,aes(x=date, y=incidence,colour=category3))+geom_point()+geom_smooth(method = "lm", data = ts6 %>% group_by(category3) %>% arrange(date) %>% tail(80))+scale_y_log10()
+
+ggplot(ts6,aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_line(aes(colour=category3))+
+  geom_ribbon(aes(fill=category3),alpha=0.2)+
+  scale_x_date(date_breaks = "1 week")+
+  
+  # guides(colour="none")+
+  coord_cartesian(ylim=c(0,2))
+
+```
