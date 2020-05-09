@@ -1,0 +1,73 @@
+---
+title: "Demographics of Covid 19 cases over time"
+output: 
+  pdf_document:
+    fig_caption: yes
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-rt") })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Estimating R(t) from NHS 111 data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+library(tidyverse)
+library(patchwork)
+standardPrintOutput::setDefaults()
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+ll = ukcovidtools::getLineList("~/S3/encrypted/2020-05-07/Anonymised Line List 20200507.xlsx")
+# uses LTLA as most detailed geography
+
+# IMD:
+# http://data-communities.opendata.arcgis.com/datasets/indices-of-multiple-deprivation-imd-2019
+# LSOA2011 and LAD2019
+
+demog = ll %>% mutate(ageCat = cut(age, 
+    breaks = c(-Inf,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
+    labels = c("0-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80+")
+)) #%>% group_by(sex,ageCat,lab_report_date) %>% summarise(incidence = n())
+    
+
+anim = ggplot(demog %>% filter(sex != "UNKNOWN"), aes(x=age,fill=sex))+geom_histogram(position="dodge", size=0.7,binwidth = 1)+
+  gganimate::transition_time(lab_report_date)
+
+gif = gganimate::animate(anim, renderer=gganimate::magick_renderer(), width=800, height=600, nframes=200)
+
+gif
+```
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,19 +1,62 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Estimating the Reproduction Number for SARS-CoV-2 in the UK using telephone triage records"
+output: 
+  pdf_document:
+    fig_caption: yes
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-rt") })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Estimating R(t) from NHS 111 data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
 
-```{r setup}
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
 library(tidyverse)
+library(patchwork)
+standardPrintOutput::setDefaults()
 ```
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Leon Danon ^3,4^
 
-```{r}
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
 
-oneoneone <- readxl::read_excel("~/S3/encrypted/2020-05-04/04052020-111-999-tel-online-data-OS.xlsx", 
+# Background
+
+Estimates of R(t) are traditionally done on deaths or confirmed cases of disease. This is known to produce biased estimates in the near term, as deaths are right censored, case numbers are dependent on the quantity of testing conducted, the current policy of who is eligible for testing, and the turn around time for testing. Both cases and deaths are subject to reporting delay, which usually result in underestimates of incidence and hence R(t). This is further compounded by the fact that both case numbers and deaths are quite late indicators of viral transmission, as before transmission is detected the virus undergoes an incubation period, the patient may or may not develop symptoms, which progress to a point where they are tested, and then there may be long and variable period between that and death.
+
+There are other markers of infection that may be more rapidly responsive to changes in viral transmission and here we investigate using the number of calls to NHS 111 as a proxy for cases of COVID-19 and compare an estimate of R(t) based on this to one obtained form confirmed cases or deaths.
+
+# Methods
+
+We used a publicly available time series of cases and deaths data from Public health England and Wales, and Scotland [@Public_Health_England_undated-mm; @Public_Health_Wales_undated-xg; @Scotland_undated-tg] obtained from Tom White's aggregated UK Covid data on GitHub [@White_undated-ha]. We obtained NHS 111 data from Public Health England on May the 4th 2020 (filename 04052020-111-999-tel-online-data-OS.xlsx, not available publicly). Missing data was imputed and the time series processed using EpiEstim [@Cori2013-xe; @Cori_undated-bn; @Thompson2019-pq] as described elsewhere [@Challen2020-qc].
+
+The NHS 111 data includes information on people who contacted the emergency services via different routes, i.e. the NHS 111 website, or phoned 111 or 999. Where the contact concerned symptoms and signs of COVID-19 outcome of the outcome is recorded and this was classified as either "self care", "clinical review" (within 4-12 hours), "urgent clinical review" (within 2 hours), or needing an "emergency ambulance". 
+
+# Results
+
+```{r load111}
+source("./lockdown-impact-data.R")
+
+oneoneone <- readxl::read_excel("~/S3/encrypted/2020-05-08/20200508-111-999-tel-online-data.xlsx", 
     sheet = "Extracted Data", col_types = c("date", 
         "numeric", "numeric", "numeric", 
         "text", "numeric", "numeric", "numeric", 
@@ -29,61 +72,186 @@ oneoneone <- readxl::read_excel("~/S3/encrypted/2020-05-04/04052020-111-999-tel-
         "numeric", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
         "numeric"))
+
+ts111 = oneoneone %>% rename(date = DateVal, region=Geography) %>% select(-Day,-Month,-Year) %>% pivot_longer( 
+  cols = c(-date, -region), names_to = "category", values_to = "incidence") %>% mutate(
+    route = case_when(
+      category %like% "111-ONLINE%" ~ "online",
+      category %like% "111-Outcome%" ~ "111 call",
+      category %like% "999-Outcome%" ~ "999 call",
+      TRUE ~ "other" # as.character(NA)
+    ),
+    result = case_when(
+      category %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
+      category %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
+      category %like% "%Clinical Assessment%" ~ "clinical review",
+      category %like% "%Emergency Ambulance%" ~ "emergency ambulance",
+      (category %like% "%Self Care%" | category %like% "%isolate%") ~ "self care",
+      TRUE ~ "other" #as.character(NA)
+    ),
+  ) %>%
+  mutate(result = factor(result,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
+  
+ts111_2 = ts111 %>% group_by(region,category, route, result) %>% mutate(date = as.Date(date)) %>% arrange(date) %>% filter(!is.na(incidence))
+grps = ts111_2 %>% groups()
+
+tmpDates = ts111_2 %>% group_modify(function(d,f,...) {
+  tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
+})
+
+ts111_3 = tmpDates %>% left_join(ts111_2, by=c(sapply(grps,as_label),"date"))
+
+ts111_4 = ts111_3 %>% mutate(incidence = ifelse(is.na(incidence),0,incidence))
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+Table 1 shows the breakdown of the different outcomes of contacts to 111, 999 and 111 online, in England (?does this include Wales) and Scotland.
 
 ```{r}
-
-ts = oneoneone %>% rename(date = DateVal, region=Geography) %>% select(-Day,-Month,-Year) %>% pivot_longer( 
-  cols = c(-date, -region), names_to = "category", values_to = "incidence") 
-  
-ts2 = ts %>% group_by(region,category) %>% mutate(date = as.Date(date)) %>% arrange(date) %>% filter(!is.na(incidence))
-grps = ts2 %>% groups()
-
-tmpDates = ts2 %>% group_modify(function(d,f,...) {
-    tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
-  })
-
-ts3 = tmpDates %>% left_join(ts2, by=c(sapply(grps,as_label),"date"))
-ts3 = ts3 %>% mutate(incidence = ifelse(is.na(incidence),0,incidence))
+ts111 %>% filter(!is.na(incidence)) %>% group_by(`Region` = region,`Route`=route,`Result`=result) %>% summarise(
+  `Date range` = paste0(as.Date(min(date),"1970-01-01"), " to ", as.Date(max(date),"1970-01-01")),
+  `Contacts` = sprintf("%1.0f",sum(incidence, na.rm = TRUE))
+) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/NHS-111-rt/Table1_111Summary")
 ```
+
+Restricting analysis from here on to England data specific to COVID-19.
 
 ```{r}
 source("./covid-serial-interval.R")
-ts4 = ts3 %>% filter(stringr::str_detect(category,"COVID")) %>% 
-  mutate(category2 = case_when(
-    category %like% "%-COVID Self%" ~ "mild",
-    category %like% "%-COVID risk Clinical Assessment service 1 hour" ~ "severe",
-    category %like% "%-COVID risk%" ~ "moderate",
-    category %like% "%-Emergency%" ~ "severe",
-    TRUE ~ as.character(NA)
-  )) %>%
-  mutate(category3 = case_when(
-    category2 %in% c("mild","moderate") ~ "mild/moderate",
-    category2 == "severe" ~ "severe",
-    TRUE ~ as.character(NA)
-  ))
 
-ts5 = ts4 %>% filter(!is.na(category2)) %>% group_by(category2,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(category2) %>% 
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
+plotRt = function(df, group) {
+  group = ensym(group)
+  p2 = ggplot(df,aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+    geom_rect(xmin=as.Date("2020-04-10"),xmax=as.Date("2020-04-14"),ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")+
+    geom_line(aes(colour=!!group))+
+    geom_ribbon(aes(fill=!!group),alpha=0.2,show.legend = FALSE)+
+    geom_hline(yintercept = 1,colour="grey50")+
+    geom_vline(xintercept = as.Date("2020-03-23"),colour="black",linetype="dashed")+
+    scale_x_date(date_breaks = "1 week")+
+    # guides(colour="none")+
+    coord_cartesian(ylim=c(0.5,2.5),xlim=c(as.Date("2020-03-16"),Sys.Date()))+standardPrintOutput::narrower()
+  return(p2)
+}
 
-ts6 = ts4 %>% filter(!is.na(category3)) %>% group_by(category3,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(category3) %>% 
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
-
-
-ggplot(ts6,aes(x=date, y=incidence,colour=category3))+geom_point()+geom_smooth(method = "lm", data = ts6 %>% group_by(category3) %>% arrange(date) %>% tail(80))+scale_y_log10()
-
-ggplot(ts6,aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
-  geom_line(aes(colour=category3))+
-  geom_ribbon(aes(fill=category3),alpha=0.2)+
-  scale_x_date(date_breaks = "1 week")+
+plotByGroup = function(df, group) {
+  group = ensym(group)
+  p1 = ggplot(df,aes(x=date, y=incidence,colour=!!group))+
+    geom_rect(xmin=as.Date("2020-04-10"),xmax=as.Date("2020-04-14"),ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")+
+    geom_line()+geom_point(size=0.5,show.legend = FALSE)+
+    scale_y_log10()+standardPrintOutput::narrower()+#standardPrintOutput::hideX()+
+    geom_vline(xintercept = as.Date("2020-03-23"),colour="black",linetype="dashed")+
+    
+    scale_x_date(date_breaks = "1 week")+
+    coord_cartesian(xlim=c(as.Date("2020-03-16"),Sys.Date()))+standardPrintOutput::narrower()
   
-  # guides(colour="none")+
-  coord_cartesian(ylim=c(0,2))
+  p2 = plotRt(df, !!group)
+
+  return(
+    ((p1+p2)/patchwork::guide_area())+
+      patchwork::plot_annotation(tag_levels = "A")+
+      patchwork::plot_layout(guides="collect", heights = c(1,0.1))
+  )
+}
+```
+
+Figure 1 shows numbers of contact events stratified by route. Online likely to be less severe, 111 mild or moderate, 999 life threatening
+
+Panel A:
+
+* Lock down date as dashed line on 23rd March 2020. Easter holiday weekend as grey bar.
+* start of time series data collection around 16th March, well into the outbreak
+* logarithmic decrease in number of calls to 111, 999 and online visits to 111 since lock down
+* evidence of a weekly variation in online 111 visits with low numbers at weekends.
+
+Panel B:
+
+* R(t) as calculated using incidence of calls, visits, or online
+* rapid decrease in rate of transmission calculated using incidence of 111 and 999 calls following lock down.
+* negative expansion rates (i.e. R(t) < 1) following 1 week - measured by 111 calls or 2 weeks measured by 999 calls
+
+
+```{r}
+ts111_5 = ts111_4 %>% filter(result != "other") %>% group_by(route,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(route) %>% 
+  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
+
+plotByGroup(ts111_5, route) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure1_111byRoute")
+```
+
+Figure 2 shows numbers of contact events by outcome where self care expected to be mild cases, clinical review moderate or severe, and emergency ambulance for life threatening.
+
+Panel A:
+
+* evidence of policy change as call volumes reduce from self care to clinical review on 2020-04-10, coinciding with Easter.
+* self care and clinical review problematic to interpret
+* urgent clinical review, and emergency ambulance rates decreasing exponentially.
+
+Panel B:
+
+* anomalies in R(t) calculations cause by change in policy for self care / clinical review
+* estimates of transmission using emergency ambulance and urgent clinical review fell rapidly following lock down, becoming less than 1 around the 3rd April. Reached a minimal value on 15th April of about 0.7 and has been gradually increasing since, to a value of about 0.95.
+
+
+```{r}
+ts111_6 = ts111_4 %>% filter(result != "other") %>% group_by(result,date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% group_by(result) %>% 
+  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
+
+plotByGroup(ts111_6, result) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure2_111byResult")
+```
+
+Figure 3 shows R(t) from calculated from 111 & 999 calls which required ambulance or urgent clinical review, versus those calculated by confirmed tests, or deaths.
+
+* R(t) from deaths and tests have weekly oscillation due to reporting artefacts.
+* Judging by the date at which R(t) crosses 1, as anticipated R(t) calculated from tests and deaths lag R(t) from 111 data by about 10 days and 17 days respectively.
+
+```{r}
+final111 = ts111_4 %>% filter(result %in% c("urgent clinical review","emergency ambulance") & route %in% c("111 call","999 call")) %>% 
+  group_by(date) %>% summarise(incidence = sum(incidence)) %>% ungroup() %>% 
+  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7) %>%
+  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="111 & 999, severe cases")
+
+finalCases = ts$r0UKRegional %>% filter(uk_region == "England") %>% 
+  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="PHE confirmed cases") %>%
+  filter(date < Sys.Date()-4)
+
+finalDeaths = ts$r0UKRegionalDeaths %>% filter(uk_region == "England") %>% 
+  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="PHE deaths") %>%
+  filter(date < Sys.Date()-4)
+
+final = bind_rows(
+  final111, finalCases, finalDeaths
+)
+
+plotRt(final, source) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure3_ComparisonVsDeathsAndCases")
 
 ```
+
+<!-- # ```{r} -->
+<!-- # mobility <- readr::read_csv("https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv?cachebust=a88b56a24e1a1e25",  -->
+<!-- #     col_types = cols(date = col_date(format = "%Y-%m-%d"))) -->
+<!-- # # unique(mobility$country_region_code) -->
+<!-- # uk_mob = mobility %>% filter(country_region_code == "GB") -->
+<!-- # tidy_uk_mob = uk_mob %>% filter(is.na(sub_region_1)) %>% select(-sub_region_1, -sub_region_2, -country_region_code, -country_region) %>% pivot_longer(cols=-date, names_to = "index", values_to = "change") %>% mutate(index = stringr::str_remove(index,"_percent_change_from_baseline")) -->
+<!-- # ggplot(tidy_uk_mob, aes(x=date, colour=index, y=change))+geom_line()+coord_cartesian(x=c(as.Date("2020-03-16"),Sys.Date()))+scale_x_date(date_breaks="1 week") -->
+<!-- # ``` -->
+<!-- #  -->
+<!-- #  -->
+
+# Discussion
+
+* Using R(t) calculated from 111 & 999 call data is valid and gives us a more up to date picture
+* We anticipate R(t) from confirmed cases will reach a minimum very shortly and start to increase
+* We anticipate R(t) from deaths will continue to drop reaching a minimum in one week
+* Calls for severe incidences of coronavirus
+
+# Limitations & next steps
+
+* Multiple contacts for same patient
+* Data available to us at the moment does not have regional breakdown, or location of patients. This would be highly valuable for detecting outbreaks in the future.
+
+# Conclusion
+
+* Calls to 111 for COVID-19 that are triaged over the phone as severe are a potential mechanism for tracking future outbreaks
+* Reducing the lead time for detecting changes in R(t) improves our ability to respond
+* We need a spatial breakdown of these figures for it to be truly useful.
+* There is evidence from 111 & 999 calls that adherence to the lock down is waning. This will prolong the plateau of cases.
+
+# References
