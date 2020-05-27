@@ -143,7 +143,8 @@ gbPopShapefile = rbind(
   wards2018 %>% filter(!stringr::str_starts(wd18cd,"S")) %>% select(code = wd18cd, name = wd18nm,geometry)
 )
 
-gbPopShapefile = suppressWarnings(gbPopShapefile %>% sf::st_simplify(dTolerance=0.001))
+gbPopShapefile = suppressWarnings(gbPopShapefile %>% sf::st_simplify(dTolerance=0.00025))
+object.size(gbPopShapefile)
 
 gbPopEstimates = rbind(
   ewPopByWard %>% rename(code = WD18CD, name=WD18NM),
@@ -151,7 +152,7 @@ gbPopEstimates = rbind(
 )
 
 saveShapefile(gbPopShapefile,"~/Git/uk-covid-datatools/data-raw/GB_Detailed_Demographic_Map")
-write.csv(gbPopEstimates, file="~/Git/uk-covid-datatools/data-raw/GB_Detailed_Demographic_Estimates")
+write.csv(gbPopEstimates, file=gzfile("~/Git/uk-covid-datatools/data-raw/GB_Detailed_Demographic_Estimates.csv.gz"))
 
 #### Demographics by 2011 wards (for metawards model) ----
 
