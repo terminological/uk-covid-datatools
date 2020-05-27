@@ -14,19 +14,12 @@ devtools::load_all("~/Git/standard-print-output/")
 source("~/Git/uk-covid-datatools/data-raw/rawDataFunctions.R")
 library(survival)
 library(patchwork)
+
+paths=findDatafile()
+standardPrintOutput::setDefaults()
 ```
 
 ```{r}
-paths=list(
-  chess="~/S3/encrypted/15Apr/CHESS COVID19 CaseReport 20200415.csv",
-  lineList="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  ff100="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  chessSummary="~/S3/encrypted/15Apr/CHESS Aggregate Report 20200415.csv",
-  sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx",
-  bristol="~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv"
-)
-
-ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 CHESS = getCHESS(paths$chess)
 cq = CHESS %>% chessQuality()
 # ggplot(cq, aes(x=trustcode, y=records))+geom_bar(stat="identity")+standardPrintOutput::narrowAndTall()
@@ -35,7 +28,7 @@ p = ggplot(cq, aes(x=knownOutcomePercent, y=knownAdmittedItuPercent, label=trust
 p2 = ggExtra::ggMarginal(p, type="histogram")
 p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/chessDataQuality")
 
-CHESSClean = CHESS %>% chessAdmissionSubset("2020-04-15")
+CHESSClean = CHESS %>% chessAdmissionSubset()
 ```
 
 ## Survival model - Admission to outcome
@@ -191,11 +184,11 @@ surf2
 ```
 
 ```{r}
-survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 1:30)
+survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 0:30)
 write.csv(
   survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf),
   file="~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/admission-to-discharge.csv")        
-plotProbabilityMatrix(survSurfcsv,"gamma") %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/daily_probability_by_age")
+plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/daily_probability_by_age")
 
 ```
 
@@ -205,7 +198,7 @@ plotProbabilityMatrix(survSurfcsv,"gamma") %>% saveThirdPageFigure("~/Dropbox/co
 Do a set of Kolmogorov-Smirnov tests on different combinations of parameters and log normal distributions
 
 ```{r}
-bri = getBristolData(paths$bristol)
+bri = getBristolData("~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv")
 bri2 = bri %>% bristolSurvivalSubset() 
 bri3 = bri2 %>% generateSurvivalData(
   idVar = record_number,

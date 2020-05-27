@@ -18,18 +18,22 @@ vignette: >
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  echo = FALSE,
-  warning = FALSE,
-  message = FALSE
+	echo = FALSE,
+	# message = FALSE,
+	# warning = FALSE,
+	collapse = TRUE,
+	comment = "#>"
 )
-
 devtools::load_all("~/Git/standard-print-output/")
 devtools::load_all("~/Git/uk-covid-datatools/")
 library(tidyverse)
 library(patchwork)
+library(reticulate)
 standardPrintOutput::setDefaults()
+
+
+#py_install("sympy")
+# py_config()
 ```
 
 ## R Markdown
@@ -39,28 +43,117 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r cars}
-ll = ukcovidtools::getLineList("~/S3/encrypted/2020-05-07/Anonymised Line List 20200507.xlsx")
+ll = ukcovidtools::getLineList(paths$lineList)
 # uses LTLA as most detailed geography
+
+# ONS age breakdown deaths
+# https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fbirthsdeathsandmarriages%2fdeaths%2fdatasets%2fweeklyprovisionalfiguresondeathsregisteredinenglandandwales%2f2020/publishedweek172020.xlsx
+# 
 
 # IMD:
 # http://data-communities.opendata.arcgis.com/datasets/indices-of-multiple-deprivation-imd-2019
 # LSOA2011 and LAD2019
 
-demog = ll %>% mutate(ageCat = cut(age, 
-    breaks = c(-Inf,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
-    labels = c("0-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80+")
-)) #%>% group_by(sex,ageCat,lab_report_date) %>% summarise(incidence = n())
-    
+ages = c("0-19","20-49","50-59","60-69","70-79","80+")
 
-anim = ggplot(demog %>% filter(sex != "UNKNOWN"), aes(x=age,fill=sex))+geom_histogram(position="dodge", size=0.7,binwidth = 1)+
-  gganimate::transition_time(lab_report_date)
+llDemog = ll %>% mutate(
+  ageCat = ukcovidtools::ageToAgeCat(age, ageLabels = ages), 
+  gender=stringr::str_sub(sex,1,1), 
+  specimen_date=as.Date(specimen_date))
 
-gif = gganimate::animate(anim, renderer=gganimate::magick_renderer(), width=800, height=600, nframes=200)
+#%>% group_by(sex,ageCat,lab_report_date) %>% summarise(incidence = n())
+ukDemog = UKDemographics2018$byNationAgeAndGender  %>% filter(nation == "England") %>% mutate(
+  ageCat = ukcovidtools::ageToAgeCat(age, ageLabels = ages)
+) %>% group_by(nation, ageCat, gender) %>% summarise(count = sum(count))
 
-gif
+sex=c("MALE","FEMALE")
+dateRange = tibble(specimen_date = as.Date(min(llDemog$specimen_date):max(llDemog$specimen_date),"1970-01-01")) %>% 
+  crossing(ages) %>% 
+  crossing(sex) %>%
+  rename(ageCat=ages)
+
+demog2 = llDemog %>% inner_join(ukDemog,by=c("ageCat","gender")) %>%   
+    group_by(ageCat,sex,specimen_date) %>% summarise(
+      incidence = n(),
+      incidencePer100K = n()/first(count)*100000,
+    ) 
+
+demog2 = dateRange %>% left_join(demog2,by=c("specimen_date","ageCat","sex")) %>% 
+  mutate(
+    incidence = ifelse(is.na(incidence),0,incidence),
+    incidencePer100K = ifelse(is.na(incidencePer100K),0,incidencePer100K)
+  )
+
+demog2 = demog2 %>% group_by(ageCat,sex) %>% arrange(specimen_date) %>% group_modify(function(d,g,...) {
+  d = d %>% mutate(
+      #smooth_incidence = signal::sgolayfilt(incidence,p = 2,n = 7),
+      #smooth_incidencePer100K = signal::sgolayfilt(incidencePer100K,p = 2,n = 7),
+      smooth_incidence = stats::filter(incidence, rep(1,7)/7, sides=1),
+      smooth_incidencePer100K = stats::filter(incidencePer100K, rep(1,7)/7, sides=1),
+    )
+  return(d)
+}) %>% ungroup() %>% mutate(ageCat= ukcovidtools::ageCatToFactor(ageCat, ageLabels = ages)) %>% filter(specimen_date < max(specimen_date)-4)
+```
+
+```{r}
+# ggplot(demog2,aes(x=specimen_date, y=incidencePer100K, colour=sex))+geom_line()+facet_wrap(vars(ageCat))#+scale_y_continuous(trans="sqrt")
+incidencePlot = ggplot(demog2,
+  aes(x=specimen_date, y=smooth_incidencePer100K,colour=sex))+
+  geom_line()+
+  geom_vline(xintercept = as.Date("2020-03-23"), colour="black", linetype="dashed")+
+  facet_wrap(vars(ageCat))+
+  xlab("date")+scale_x_date(date_breaks = "2 week",date_labels = "%d-%m")+
+  ylab("daily incid per 100K")+#theme(axis.text.x = element_text(angle=90,vjust=0.5))+
+  coord_cartesian(xlim=c(as.Date("2020-03-01"),max(demog2$specimen_date,na.rm = TRUE)))+
+  standardPrintOutput::narrowAndTall()
+  
+incidencePlot %>% saveThirdPageFigure("~/Dropbox/covid19/by-age/incidenceDynamics")
+#+scale_y_continuous(trans="sqrt")
+```
+```{r}
+source("./covid-serial-interval.R")
+demog3 = demog2 %>% group_by(specimen_date, ageCat) %>% summarise(src_incidence = sum(incidence)) %>% ungroup() %>% group_by(ageCat) %>%
+  arrange(specimen_date) %>% mutate(incidence = stats::filter(src_incidence, rep(1,7)/7)) %>% group_by(ageCat) %>% tidyEstimateRt(cfg,dateVar = specimen_date,incidenceVar = incidence,window = 7) %>% deltaR0timeseries(dateVar = specimen_date)
+```
+
+```{r}
+plotRt(demog3,dateVar = specimen_date, facetVars = vars(ageCat), rtlim = c(0.5,1.5))
 ```
 
 
+```{r}
+anim = ggplot(demog2, aes(x=ageCat,fill=sex,y=smooth_incidencePer100K))+geom_histogram(stat="identity",position="dodge", size=0.7,binwidth = 1)+#scale_y_continuous(trans="sqrt")+
+  gganimate::transition_time(specimen_date)
+
+gif = gganimate::animate(anim, renderer=gganimate::magick_renderer(), width=800, height=600, nframes=100)
+
+#gif
+```
+
+## Generalised Richards Model
+
+```{python, warning=TRUE, results="asis"}
+
+import sympy as sp
+sp.init_printing()
+
+t, r, K, a = sp.symbols('t r K a')
+C = sp.Function("C")(t)
+dCdt = C.diff(t)
+expr = sp.Eq(dCdt, r*C*(1-(C/K)**a))
+expr
+#print('<math>')
+#sp.print_mathml(expr)
+#print('</math>')
+#print('<div>'+sp.print_mathml(expr)+'</div>')
+#print("$$ "+sp.latex(expr)+" $$")
+
+d2Cdt2 = dCdt.diff(t)
+expr2 = sp.Eq(d2Cdt2, sp.diff(r*C*(1-(C/K)**a),t))
+expr2
+#d2Cdt2.expand()
+
+```
 
 ## Including Plots
 

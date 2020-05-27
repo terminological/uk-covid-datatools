@@ -2,6 +2,7 @@
 
 library(readxl)
 library(tidyverse)
+devtools::load_all("~/Git/uk-covid-datatools/")
 setwd("~/Git/uk-covid-datatools/data-raw/")
 source("./rawDataFunctions.R")
 
@@ -59,7 +60,7 @@ source("./rawDataFunctions.R")
 # UKDemographics2019ByLSOA = tmp
 # usethis::use_data(UKDemographics2019ByLSOA, overwrite = TRUE)
 
-#### Ward demogrphaics ----
+#### E&W Ward demogrphaics ----
 
 # Get teh most up to date estimates of demographics - mid year 2018 which uses WD18CD
 
@@ -88,14 +89,15 @@ convert2 = function(demogByLSOA) {
   return(tmp)
 }
 
-tmp = convert2(demogByWard_F) %>% mutate(gender = "F") %>% bind_rows(
+ewPopByWard = convert2(demogByWard_F) %>% mutate(gender = "F") %>% bind_rows(
   convert2(demogByWard_M) %>% mutate(gender = "M") 
 ) %>% filter(!is.na(count))
 
-UKDemographics2018ByWard = tmp %>% mutate(ageGroup = ageToAgeCat(age)) %>% group_by(WD18CD,WD18NM,gender,ageGroup) %>% summarise(count = sum(count))
 rm(tmp)
 rm(demogByWard_F,demogByWard_M)
-#### Wards shapefile ----
+
+
+#### E&W Wards shapefile ----
 
 # TODO: make this a generic way of getting all demographics for random areas
 wards2011 = getShapefile("Wards_December_2011_Boundaries_EW_BFE", 
@@ -106,51 +108,114 @@ wards2011 = getShapefile("Wards_December_2011_Boundaries_EW_BFE",
 # http://geoportal.statistics.gov.uk/datasets/a0b43fe01c474eb9a18b6c90f91664c2_0
 wards2018 = getShapefile("Wards_December_2018_Full_Clipped_Boundaries_GB",
                          "https://opendata.arcgis.com/datasets/a0b43fe01c474eb9a18b6c90f91664c2_0.zip?outSR=%7B%22wkid%22%3A27700%2C%22latestWkid%22%3A27700%7D", simplify=FALSE)
-#ggplot(wards2018)+geom_sf()
 
-wards2011$originalArea = wards2011 %>% sf::st_area()
-wards2018$newArea = wards2018 %>% sf::st_area() 
-wards2011 = wards2011 %>% rename(WD11CD = wd11cd, WD11NM = wd11nm)
-wards2018 = wards2018 %>% rename(WD18CD = wd18cd, WD18NM=wd18nm)
-intersection = wards2011 %>% sf::st_intersection(wards2018)
-intersection$intersectionArea = intersection %>% sf::st_area()
-# intersection = intersection %>% rename(WD11CD = wd11cd, WD11NM = wd11nm, WD18CD = wd18cd, WD18NM=wd18nm)
-intersection = intersection %>% as_tibble() %>% mutate(
-    frac18 = intersectionArea/newArea,
-    frac11 = intersectionArea/originalArea
-  ) %>% select(WD11CD, WD11NM, frac11, frac18, WD18CD, WD18NM)
+#### Scotland ----
 
-#avWardPop = mean(UKTotalDemographics2018ByWard$count)
-totPop = sum(UKDemographics2018ByWard$count)
+scotUrl = "https://www.nrscotland.gov.uk/files//statistics/population-estimates/mid-19/mid-year-pop-est-19-data.xlsx"
+destfile <- "~/Git/uk-covid-datatools/data-raw/Population/scot_mid_year_pop_est_19_data.xlsx"
+if(!file.exists(destfile)) curl::curl_download(scotUrl, destfile)
+scotPopMale = read_excel(destfile, sheet = "Table 2", range = "A57:CQ107")
+scotPopFemale = read_excel(destfile, sheet = "Table 2", range = "A110:CQ160")
 
-intersection = intersection %>% #left_join(UKDemographics2018ByWard %>% select(-WD18NM) %>% rename(demog18 = count), by=c("WD18CD"))
-  inner_join(UKDemographics2018ByWard %>% select(-WD18NM) %>% rename(demog18 = count), by=c("WD18CD"))
-# there are some for which we have not demograhics. These are small area ones and will set them to 0
-# View(intersection %>% filter(is.na(demog18)))
-# intersection = intersection %>% mutate(demog18 = ifelse(is.na(demog18),0,demog18))
-# missing = intersection %>% filter(is.na(ageGroup))
-# intersection = intersection %>% filter(!is.na(ageGroup))
+cleanScotPop = function(df) {
+  df %>% select(-`...4`,-`All Ages`) %>% rename(code = `Area code1`,name=`Area name`) %>%
+    filter(!is.na(code)) %>%
+    pivot_longer(cols=matches("[0-9]+\\+?"), names_to = "age", values_to = "count") %>% mutate(age = age %>% stringr::str_extract("^[0-9]+") %>% as.integer())
+}
 
-intersection = intersection %>% mutate(
-  demog = demog18*frac18
+tmp = cleanScotPop(scotPopFemale) %>% mutate(gender = "F") %>% bind_rows(
+  cleanScotPop(scotPopMale) %>% mutate(gender = "M") 
+) %>% filter(!is.na(count))
+
+scotPopByCouncil = tmp %>% filter(code %>% stringr::str_starts("S12")) 
+scotPopByNHS = tmp %>% filter(code %>% stringr::str_starts("S08"))
+
+scotCouncilShapes = getShapefile("pub_las",
+  "https://geo.spatialhub.scot/geoserver/sh_las/wfs?authkey=b85aa063-d598-4582-8e45-e7e6048718fc&request=GetFeature&service=WFS&version=1.1.0&typeName=pub_las&outputFormat=SHAPE-ZIP", simplify=FALSE)
+
+scotlandHealthBoardShapeFile = getShapefile("SG_NHS_HealthBoards_2019",
+  "http://sedsh127.sedsh.gov.uk/Atom_data/ScotGov/ZippedShapefiles/SG_NHS_HealthBoards_2019.zip")
+
+#### overarching shape file and single year population estimates for E, W and S ---
+
+gbPopShapefile = rbind(
+  scotCouncilShapes %>% rename(name = local_auth) %>% mutate(code = as.character(code)) %>% select(-hectares),
+  wards2018 %>% filter(!stringr::str_starts(wd18cd,"S")) %>% select(code = wd18cd, name = wd18nm,geometry)
 )
 
-intersection = intersection %>% as_tibble() %>% 
-  select(WD11CD, WD11NM, frac11, gender, ageGroup, demog, frac18, WD18CD, WD18NM = WD18NM.x)
-intersection = intersection %>% mutate(frac11 = as.double(frac11), frac18 = as.double(frac18), demog = as.double(demog))
+gbPopEstimates = rbind(
+  ewPopByWard %>% rename(code = WD18CD, name=WD18NM),
+  scotPopByCouncil
+)
 
-any(is.na(intersection$ageGroup))
+saveShapefile(gbPopShapefile,"~/Git/uk-covid-datatools/data-raw/GB_Detailed_Demographic_Map")
+write.csv(gbPopEstimates, file="~/Git/uk-covid-datatools/data-raw/GB_Detailed_Demographic_Estimates")
 
-# write.csv(demographicMapping, "~/Git/uk-covid-datatools/data-raw/UKDemographicsByWard2011andWard2018.csv")
+#### Demographics by 2011 wards (for metawards model) ----
 
-# This is the 2018 demographics projected onto the 2011 Ward structure, at a detailed population level.
-UKDemographics2018ByWard2011 = intersection %>% group_by(WD11CD, WD11NM, ageGroup, gender) %>% summarise(count = sum(demog)) %>% ungroup() %>% 
-  mutate(WD11CD = as.character(WD11CD), WD11NM = as.character(WD11NM)) %>%
-  ensurer::ensure_that(abs(sum(.$count) - totPop) < 1000) 
+UKDemographics2018ByWard = ewPopByWard %>% mutate(ageGroup = ageToAgeCat(age)) %>% group_by(WD18CD,WD18NM,gender,ageGroup) %>% summarise(count = sum(count)) %>% ungroup()
+totPop = sum(UKDemographics2018ByWard$count)
+
+UKDemographics2018ByWard2011 = ukcovidtools::interpolateByArea(
+  UKDemographics2018ByWard %>% group_by(gender,ageGroup), 
+  count, 
+  wards2018 %>% rename(WD18CD = wd18cd), WD18CD, 
+  wards2011 %>% rename(WD11CD = wd11cd, WD11NM = wd11nm) %>% group_by(WD11CD,WD11NM)
+)
+
+#### Demographics by country and age and gender
+
+UKByNationAndAgeAndGender = gbPopEstimates %>% mutate(nation = case_when(
+  code %>% stringr::str_starts("E") ~ "England",
+  code %>% stringr::str_starts("S") ~ "Scotland",
+  code %>% stringr::str_starts("W") ~ "Wales",
+  TRUE ~ as.character(NA)
+)) %>% group_by(nation, age, gender) %>% summarise(count = sum(count))
+
+
+# wards2011$originalArea = wards2011 %>% sf::st_area()
+# wards2018$newArea = wards2018 %>% sf::st_area() 
+# wards2011 = wards2011 %>% rename(WD11CD = wd11cd, WD11NM = wd11nm)
+# wards2018 = wards2018 %>% rename(WD18CD = wd18cd, WD18NM=wd18nm)
+# intersection = wards2011 %>% sf::st_intersection(wards2018)
+# intersection$intersectionArea = intersection %>% sf::st_area()
+# # intersection = intersection %>% rename(WD11CD = wd11cd, WD11NM = wd11nm, WD18CD = wd18cd, WD18NM=wd18nm)
+# intersection = intersection %>% as_tibble() %>% mutate(
+#     frac18 = intersectionArea/newArea,
+#     frac11 = intersectionArea/originalArea
+#   ) %>% select(WD11CD, WD11NM, frac11, frac18, WD18CD, WD18NM)
+# 
+# #avWardPop = mean(UKTotalDemographics2018ByWard$count)
+# 
+# intersection = intersection %>% #left_join(UKDemographics2018ByWard %>% select(-WD18NM) %>% rename(demog18 = count), by=c("WD18CD"))
+#   inner_join(UKDemographics2018ByWard %>% select(-WD18NM) %>% rename(demog18 = count), by=c("WD18CD"))
+# # there are some for which we have not demograhics. These are small area ones and will set them to 0
+# # View(intersection %>% filter(is.na(demog18)))
+# # intersection = intersection %>% mutate(demog18 = ifelse(is.na(demog18),0,demog18))
+# # missing = intersection %>% filter(is.na(ageGroup))
+# # intersection = intersection %>% filter(!is.na(ageGroup))
+# 
+# intersection = intersection %>% mutate(
+#   demog = demog18*frac18
+# )
+# 
+# intersection = intersection %>% as_tibble() %>% 
+#   select(WD11CD, WD11NM, frac11, gender, ageGroup, demog, frac18, WD18CD, WD18NM = WD18NM.x)
+# intersection = intersection %>% mutate(frac11 = as.double(frac11), frac18 = as.double(frac18), demog = as.double(demog))
+# 
+# any(is.na(intersection$ageGroup))
+# 
+# # write.csv(demographicMapping, "~/Git/uk-covid-datatools/data-raw/UKDemographicsByWard2011andWard2018.csv")
+# 
+# # This is the 2018 demographics projected onto the 2011 Ward structure, at a detailed population level.
+# UKDemographics2018ByWard2011 = intersection %>% group_by(WD11CD, WD11NM, ageGroup, gender) %>% summarise(count = sum(demog)) %>% ungroup() %>% 
+#   mutate(WD11CD = as.character(WD11CD), WD11NM = as.character(WD11NM)) %>%
+#   ensurer::ensure_that(abs(sum(.$count) - totPop) < 1000) 
 
 UKDemographics2018 = list(
   by2018Ward = UKDemographics2018ByWard,
-  by2011Ward = UKDemographics2018ByWard2011
+  by2011Ward = UKDemographics2018ByWard2011,
+  byNationAgeAndGender = UKByNationAndAgeAndGender
 )
 
 usethis::use_data(UKDemographics2018, overwrite = TRUE)

@@ -135,3 +135,7 @@ LSOA11_to_LAD19 %>% group_by(LSOA11CD) %>% count() %>% filter(n > 1) %>% ensure_
 write.csv(WD11_to_LSOA11, "~/Git/uk-covid-datatools/data-raw/LSOA11_to_LAD19.csv")
 usethis::use_data(LSOA11_to_LAD19, overwrite = TRUE)
 
+#### load PHE mapping ----
+
+PHE_region_to_NHS_region <- read_csv("~/Git/uk-covid-datatools/data-raw/PHE_region_to_NHS_region.csv")
+usethis::use_data(PHE_region_to_NHS_region, overwrite = TRUE)

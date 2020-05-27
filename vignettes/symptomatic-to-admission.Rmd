@@ -208,10 +208,11 @@ surf2
 
 To estimate this we need to know how likely it is that someone who is symptomatic is admitted.
 There is no good definition of symptomatic.
-We can use a ragne of proxy measures for symptomatic or infected
+We can use a range of proxy measures for symptomatic or infected
 
 * People testing positive in South Korea => we assume that south korea is catching the majority of patients who are infected who are known positive versus hospital admissions
 * People testing positive in Spain => we assume that Spain (like the UK) is testing only those with high probability of disease with severe symptoms
+* 111 calls. We assume that those calling 111 are symptomatic, and those being referred for urgent investigation are severe. - no age breakdown though.
 
 # adjust for probability of ITU admission
 

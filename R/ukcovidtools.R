@@ -44,7 +44,7 @@ print_and_capture <- function(x)
 #' @return a dataframe with groupwise Rt estimates
 #' @import dplyr
 #' @export
-tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "incidence", window=2,...) {
+tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "incidence",  method="uncertain_si", window=2,...) {
   grps = groups(groupedDf)
   dateVar = ensym(dateVar)
   incidenceVar = ensym(incidenceVar)
@@ -63,7 +63,7 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
       d = d %>% arrange(dates) %>% mutate(seq_id=row_number())
       siConfig$t_start = c(2:(nrow(d)-window))
       siConfig$t_end = siConfig$t_start+window
-      tmp4 = suppressWarnings(EpiEstim::estimate_R(d,method="parametric_si",config=siConfig,...))
+      tmp4 = suppressWarnings(EpiEstim::estimate_R(d,method = method,config=siConfig,...))
       tmp5 = tmp4$R %>% mutate(seq_id=t_end)
       tmp6 = d %>% left_join(tmp5, by="seq_id")
       #browser()
@@ -84,7 +84,7 @@ tidyEstimateRt = function(groupedDf, config, dateVar = "date", incidenceVar = "i
         `Quantile.0.975(R)` = NA
       ))
     }
-  }) %>% rename(date=dates)
+  }) %>% rename(!!dateVar := dates)
   return(groupedDf %>% left_join(tmp2, by=joinBy) %>% select(-I,-t_start,-t_end,-check))
 }
 
@@ -126,22 +126,69 @@ getUKCovidTimeseries = function() {
     left_join(
       tmp %>% group_by(code) %>% summarise(name = min(name)), by="code"
     )
-
+  non_england_uk = tmp %>% mutate(country = case_when(
+    stringr::str_starts(code,"S") ~ "Scotland",
+    stringr::str_starts(code,"W") ~ "Wales",
+    stringr::str_starts(code,"E") ~ "England",
+    stringr::str_starts(code,"N") ~ "Northern Ireland"
+  )) %>% filter(country != "England")
+  
   #browser()
   
   covid_19_indicators_uk <- read_csv("https://github.com/tomwhite/covid-19-uk-data/raw/master/data/covid-19-indicators-uk.csv", 
                                      col_types = cols(Date = col_date(format = "%Y-%m-%d")))
   
-  tmp = tmp %>% mutate(Country = case_when(
-    stringr::str_starts(code,"S") ~ "Scotland",
-    stringr::str_starts(code,"W") ~ "Wales",
-    stringr::str_starts(code,"E") ~ "England",
-    stringr::str_starts(code,"N") ~ "Northern Ireland"
-  )) %>% left_join(covid_19_indicators_uk %>% filter(Indicator == "ConfirmedCases"), by = c("date"="Date","Country"="Country")) %>% select(-Indicator) %>% rename(daily_total=Value)
+  country_totals = covid_19_indicators_uk %>% pivot_wider(names_from = Indicator, values_from = Value) 
+  country_totals = country_totals %>% expand(Date,Country) %>% left_join(country_totals, by=c("Date","Country"))
   
-  tmp = tmp %>% group_by(date,Country) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases))
+  tmp = country_totals %>% group_by(Date) %>% mutate(
+    missingTests = sum(ifelse(Country=="UK",1,-1)*Tests,na.rm=TRUE),
+    missingCases = sum(ifelse(Country=="UK",1,-1)*ConfirmedCases,na.rm=TRUE),
+    missingDeaths = sum(ifelse(Country=="UK",1,-1)*Deaths,na.rm=TRUE)
+  )
   
-  tidyCombinedUK = tmp
+  country_totals = tmp %>% mutate(
+    Tests = ifelse(Country == "England" & missingTests > 0, missingTests, Tests)
+  ) %>% filter(Date > as.Date("2020-03-05")) %>% select(-missingCases,-missingTests,-missingDeaths) %>%
+    rename(date=Date,country=Country, cumulative_cases=ConfirmedCases,cumulative_tested=Tests,cumulative_deaths=Deaths)
+  
+  uk_totals_including_private = country_totals %>% filter(country == "UK")
+  country_totals = country_totals %>% filter(country != "UK")
+  
+  ph_cases = read_csv("https://coronavirus.data.gov.uk/downloads/csv/coronavirus-cases_latest.csv", 
+                      col_types = cols(`Specimen date` = col_date(format = "%Y-%m-%d")))
+  ph_cases_2 = ph_cases %>% select(date = `Specimen date`, code = `Area code`, name=`Area name`,cumulative_cases = `Cumulative lab-confirmed cases`, type=`Area type`)
+  
+  #country_totals = ph_cases_2 %>% filter(type == "Nation") %>% select(-type)
+  phe_region = ph_cases_2 %>% filter(type == "Region") %>% select(-type)
+  
+  nhs_region = ph_cases_2 %>% filter(type == "Region") %>% 
+    select(-type) %>% inner_join(PHE_region_to_NHS_region, by=c("code"="PHEC_code")) %>% 
+    select(-code,-name) %>% rename(code = NHSER_code, name = NHSER_name) %>% 
+    group_by(code,name,date) %>% summarise(cumulative_cases = sum(cumulative_cases))
+
+  
+    
+  england_utla = ph_cases_2 %>% filter(type == "Upper tier local authority") %>% select(-type)
+  england_ltla = ph_cases_2 %>% filter(type == "Lower tier local authority") %>% select(-type)
+  
+  
+  
+  
+  
+  combinedUK = non_england_uk %>% rbind(england_utla %>% mutate(country="England"))
+  combinedUK_LTLA = non_england_uk %>% rbind(england_ltla %>% mutate(country="England"))
+  
+  tidyCombinedUK = combinedUK %>% 
+    left_join(country_totals %>% rename(daily_total = cumulative_cases) %>% select(-cumulative_tested, -cumulative_deaths), by = c("date","country")) %>% 
+    group_by(date,country) %>% 
+    mutate(daily_unknown = daily_total-sum(cumulative_cases))
+  
+  tidyCombinedUK_LTLA = combinedUK_LTLA %>% 
+    left_join(country_totals %>% rename(daily_total = cumulative_cases) %>% select(-cumulative_tested, -cumulative_deaths), by = c("date","country")) %>% 
+    group_by(date,country) %>% 
+    mutate(daily_unknown = daily_total-sum(cumulative_cases))
+  
   
   
   # UKregional=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=163112336&single=true&output=csv", 
@@ -155,13 +202,23 @@ getUKCovidTimeseries = function() {
   # northernIreland = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=1217212942&single=true&output=csv")
   # englandUnitAuth=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=796246456&single=true&output=csv")
   
-  englandUnitAuth2NHSregion=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=1933702254&single=true&output=csv")
+  # englandUnitAuth2NHSregion=readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQod-HdDk4Nl8BFcunG5P-QA2CuKdIXCfK53HJDxcsaYlOov4FFc-yQciJyQFrqX5_n_ixz56S7uNBh/pub?gid=1933702254&single=true&output=csv")
+  # 
+  # tidyEnglandNHS = tidyCombinedUK %>% inner_join(englandUnitAuth2NHSregion, by=c("code"="GSS_CD")) %>% group_by(date,Region) %>% summarise(
+  #   cumulative_cases = sum(cumulative_cases),
+  #   daily_total = first(daily_total),
+  #   daily_unknown = first(daily_unknown)
+  # ) %>% rename(england_nhs_region = Region)
+  # 
   
-  tidyEnglandNHS = tidyCombinedUK %>% inner_join(englandUnitAuth2NHSregion, by=c("code"="GSS_CD")) %>% group_by(date,Region) %>% summarise(
-    cumulative_cases = sum(cumulative_cases),
-    daily_total = first(daily_total),
-    daily_unknown = first(daily_unknown)
-  ) %>% rename(england_nhs_region = Region)
+  tidyEnglandPHE = phe_region %>% 
+    left_join(country_totals %>% filter(country=="England") %>% rename(daily_total = cumulative_cases) %>% select(-cumulative_tested, -cumulative_deaths), by = c("date")) %>% 
+    group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases), england_phe_region = name)
+  
+  tidyEnglandNHS = nhs_region %>% 
+    left_join(country_totals %>% filter(country=="England") %>% rename(daily_total = cumulative_cases) %>% select(-cumulative_tested, -cumulative_deaths), by = c("date")) %>% 
+    group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases), england_nhs_region = name)
+  
   
   
   # tidy England unitary authority region
@@ -221,12 +278,27 @@ getUKCovidTimeseries = function() {
   #   ungroup() %>% group_by(uk_region)
   # 
   
-  tidyUKRegional = covid_19_indicators_uk %>% pivot_wider(names_from = "Indicator", values_from = "Value") %>% rename(date = Date, uk_region = Country, cumulative_cases=ConfirmedCases, cumulative_deaths = Deaths, cumulative_tested = Tests) %>%
+  tidyUKRegional = country_totals %>% rename(uk_region = country) %>%
     group_by(uk_region) %>% arrange(date) %>% mutate(
-      daily_cases = cumulative_cases-lag(cumulative_cases, default=0),
-      daily_deaths = cumulative_deaths-lag(cumulative_deaths, default=0),
+      # daily_cases = cumulative_cases-lag(cumulative_cases, default=0),
+      # daily_deaths = cumulative_deaths-lag(cumulative_deaths, default=0),
       daily_tested = cumulative_tested-lag(cumulative_tested, default=0)
     )
+  
+  tidyUK = country_totals %>% group_by(date) %>%
+    summarise(
+      cumulative_cases = sum(cumulative_cases),
+      cumulative_deaths = sum(cumulative_deaths),
+      cumulative_tested = sum(cumulative_tested)
+    ) %>% arrange(date) %>% mutate(
+      # daily_cases = cumulative_cases-lag(cumulative_cases, default=0),
+      # daily_deaths = cumulative_deaths-lag(cumulative_deaths, default=0),
+      daily_tested = cumulative_tested-lag(cumulative_tested, default=0)
+    ) %>% left_join(uk_totals_including_private %>% rename(
+      cumulative_cases_from_tracker = cumulative_cases,
+      cumulative_tested_from_tracker = cumulative_tested,
+      cumulative_deaths_from_tracker = cumulative_deaths
+    ) %>% select(-country), by="date")
   
   return(list(
     # UKregional=UKregional,
@@ -236,13 +308,16 @@ getUKCovidTimeseries = function() {
     # walesHealthBoard=walesHealthBoard,
     # northernIrelandLocalGovernmentDistrict=northernIreland,
     # englandUnitAuth2NHSregion=englandUnitAuth2NHSregion,
+    tidyUK=tidyUK,
     tidyUKRegional=tidyUKRegional,
     tidyEnglandNHS=tidyEnglandNHS,
+    tidyEnglandPHE=tidyEnglandPHE,
     # tidyEnglandUnitAuth=tidyEnglandUnitAuth,
     # tidyScotlandHealthBoard=tidyScotlandHealthBoard,
     # tidyWalesHealthBoard=tidyWalesHealthBoard,
     # tidyNorthernIrelandLocalGovernmentDistrict=tidyNorthernIreland,
-    tidyCombinedUK=tidyCombinedUK
+    tidyCombinedUK=tidyCombinedUK,
+    tidyCombinedUK_LTLA=tidyCombinedUK_LTLA
   ))
 }
 
@@ -261,7 +336,7 @@ getUKCovidTimeseries = function() {
 #' @param unknownVar 
 #' @import dplyr
 #' @export
-normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar = "cumulative_cases", totalExpr = NULL, unknownExpr = NULL, adjustUnknowns=FALSE) {
+normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar = "cumulative_cases", totalExpr = NULL, unknownExpr = NULL, adjustUnknowns=FALSE, smoothWeekly=FALSE, reportDelay=3) {
   grps = groups(groupedDf)
   if (identical(grps,NULL)) warning("the input data is not grouped - this is probably a mistake")
   dateVar = ensym(dateVar)
@@ -282,12 +357,13 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
   ) %>% arrange(date) %>% filter(!is.na(src_cumulative_cases) & (is.na(lead(src_cumulative_cases)) | lead(src_cumulative_cases, default=Inf) > 0))
   
   # find the min / max date ranges for each group.
+  # truncate the data set by reportDelay dates for unreliable dates
   tmpDates = tmp %>% group_modify(function(d,f,...) {
-    tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
+    tibble(date = as.Date(min(d$date):(max(d$date)-reportDelay),"1970-01-01"))
   })
   
   # expand the dates to make sure whole range present so each time series
-  tmp2 = tmpDates %>% left_join(tmp, by=c(sapply(grps,as_label),"date"))
+  tmp2 = tmpDates %>% left_join(tmp, by=c(unlist(sapply(grps,as_label)),"date"))
   
   tmp3 = tmp2 %>% group_by(!!!grps) %>% arrange(date) %>%
     # calculate incidence
@@ -309,12 +385,19 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
     arrange(date)
     
   # impute missing incidences by linear interpolation
-  tmp5 = tmp4 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
+  tmp4_5 = tmp4 %>% group_by(!!!grps) %>% arrange(date) %>% mutate(
     imputed = is.na(src_cumulative_cases),
-    log_cumulative_cases = log(cumulative_cases),
-    log_cumulative_cases = tryCatch(imputeTS::na_interpolation(ifelse(log_cumulative_cases==-Inf,-1,log_cumulative_cases)), error=function(e) NA)
-  ) %>% mutate(
-    cumulative_cases = round(exp(log_cumulative_cases))
+    log_cumulative_cases = log(cumulative_cases+1),
+    log_cumulative_cases = tryCatch(imputeTS::na_interpolation(log_cumulative_cases), error=function(e) NA)
+  ) 
+  
+  if(smoothWeekly) {
+    #tmp4_5 = tmp4_5 %>% mutate(log_cumulative_cases = stats::filter(log_cumulative_cases,filter = rep(1,7)/7))
+    tmp4_5 = tmp4_5 %>% mutate(log_cumulative_cases = signal::sgolayfilt(log_cumulative_cases,p=1,n=7))
+  }
+  
+  tmp5 = tmp4_5 %>% mutate(
+    cumulative_cases = cummax(exp(log_cumulative_cases)-1)
   ) %>% mutate(
     incidence = lead(cumulative_cases)-cumulative_cases
   ) %>% select(!!!grps,date,src_cumulative_cases,cumulative_cases,incidence,log_cumulative_cases,imputed)
@@ -340,15 +423,18 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
       if (nrow(d) < 11 | any(is.na(head(d$incidence,-1)))) {
         d = d %>% mutate(
           estimated_exponent = NA,
-          community_transmission_date = NA
+          community_transmission_date = NA,
+          little_r = NA,
         )
       } else {
         #browser()
         d = d %>% mutate(
-            estimated_exponent = signal::sgolayfilt(d %>% mutate(log_cumulative_cases = if_else(log_cumulative_cases < 0, -log(2), log_cumulative_cases)) %>% pull(log_cumulative_cases),p = 1,n = 11,m = 1)
+            #estimated_exponent = signal::sgolayfilt(d %>% mutate(log_cumulative_cases = if_else(log_cumulative_cases < 0, -log(2), log_cumulative_cases)) %>% pull(log_cumulative_cases),p = 1,n = 11,m = 1)
+            estimated_exponent = signal::sgolayfilt(d %>% pull(log_cumulative_cases),p = 2,n = 11,m = 1)
           ) %>% mutate(
-            estimated_exponent = if_else(log_cumulative_cases < 0, as.double(NA), estimated_exponent)
-          ) %>% mutate(
+            #estimated_exponent = if_else(log_cumulative_cases < 0, as.double(NA), estimated_exponent)
+          #) %>% mutate(
+            little_r = exp(estimated_exponent)-1,
             intercept_date = as.Date(as.numeric(date) - log_cumulative_cases/ifelse(estimated_exponent>0,estimated_exponent,NA),"1970-01-01")
           ) %>% mutate(
             community_transmission_date = suppressWarnings(as.Date(max(intercept_date, na.rm = TRUE),"1970-01-01"))
@@ -399,8 +485,10 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
 #' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
 #' @import dplyr
 #' @export
-deltaR0timeseries = function(R0timeseries) {
-  tmp = R0timeseries %>% group_modify(function(d,g,...) {
+deltaR0timeseries = function(R0timeseries, dateVar = "date") {
+  dateVar = ensym(dateVar)
+  if (!(as_label(dateVar) %in% colnames(R0timeseries))) stop("no dateVar column in input")  
+  tmp = R0timeseries %>% rename(date = !!dateVar) %>% group_modify(function(d,g,...) {
     if ((min(d$date)+10)>max(d$date)) return(tibble(date=as.Date(NA),slope=as.double(NA),slopeLowerCi=as.double(NA),slopeUpperCi=as.double(NA),r_squared=as.double(NA)))
     endDate = seq((min(d$date)+10),max(d$date),1)
     r0s = sapply(endDate, function(x) d$`Median(R)`[d$date > x-10 & d$date <=x]) # hopefully a vector of vectors
@@ -424,14 +512,52 @@ deltaR0timeseries = function(R0timeseries) {
     }
     return(d %>% left_join(out,by="date"))
   })
-  return(tmp)
+  return(tmp %>% rename(!!dateVar := date))
 }
 
-getDemographics = function() {
-  library(readxl)
-  url <- "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2fpopulationestimatesforukenglandandwalesscotlandandnorthernireland%2fmid20182019laboundaries/ukmidyearestimates20182019ladcodes.xls"
-  destfile <- "ukmidyearestimates20182019ladcodes.xls"
-  curl::curl_download(url, destfile)
-  ukmidyearestimates20182019ladcodes <- read_excel(destfile)
-  View(ukmidyearestimates20182019ladcodes)
+#' Plot the EpiEstim output in a standard way
+#' 
+#' @param df a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim
+#' @param group - the colour aesthetic
+#' @param dateVar - the name of the date column
+#' @param facetVars - the facetting variables
+#' @param features - 
+#' @param rtlim - the max and min or Rt to display
+#' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
+#' @import dplyr
+#' @export
+plotRt = function(df, group=NULL, dateVar = "date", facetVars = NULL, features=c("lockdown","easter"), rtlim=c(0.5,2.5), dates="2020-03-09") {
+  group = tryCatch(ensym(group),error = function(e) NULL)
+  dateVar = ensym(dateVar)
+  dates = as.Date(dates)
+  if (length(dates) == 1) dates = c(dates,Sys.Date())
+  
+  p2 = ggplot(df,aes(x=!!dateVar, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))
+  
+  if("easter" %in% features) p2 = p2 + geom_rect(xmin=as.Date("2020-04-10"),xmax=as.Date("2020-04-14"),ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
+  if("lockdown" %in% features) p2 = p2 + geom_vline(xintercept = as.Date("2020-03-23"),colour="black",linetype="dashed")
+  
+  if(identical(group,NULL)) {
+    p2 = p2 + geom_line()+
+      geom_ribbon(alpha=0.2,show.legend = FALSE)
+  } else {
+    p2 = p2 +geom_line(aes(colour=!!group))+
+      geom_ribbon(aes(fill=!!group),alpha=0.2,show.legend = FALSE)
+  }
+  p2 = p2 + geom_hline(yintercept = 1,colour="grey50")+
+    scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
+    coord_cartesian(ylim=rtlim,xlim=dates)+standardPrintOutput::narrower()
+  if(!identical(facetVars,NULL)) {
+    p2 = p2 + facet_wrap(facetVars)
+  }
+  return(p2)
 }
+
+# getDemographics = function() {
+#   library(readxl)
+#   url <- "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2fpopulationestimatesforukenglandandwalesscotlandandnorthernireland%2fmid20182019laboundaries/ukmidyearestimates20182019ladcodes.xls"
+#   destfile <- "ukmidyearestimates20182019ladcodes.xls"
+#   curl::curl_download(url, destfile)
+#   ukmidyearestimates20182019ladcodes <- read_excel(destfile)
+#   View(ukmidyearestimates20182019ladcodes)
+# }

@@ -14,20 +14,14 @@ devtools::load_all("~/Git/standard-print-output/")
 source("~/Git/uk-covid-datatools/data-raw/rawDataFunctions.R")
 library(survival)
 library(patchwork)
+
+paths=findDatafile()
+standardPrintOutput::setDefaults()
 ```
 
 ```{r}
-paths=list(
-  chess="~/S3/encrypted/15Apr/CHESS COVID19 CaseReport 20200415.csv",
-  lineList="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  ff100="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  chessSummary="~/S3/encrypted/15Apr/CHESS Aggregate Report 20200415.csv",
-  sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx",
-  bristol="~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv"
-)
-
-ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
-CHESSClean = getCHESS(paths$chess) %>% chessAdmissionSubset("2020-04-15")
+CHESS = getCHESS(paths$chess)
+CHESSClean = CHESS %>% chessAdmissionSubset()
 
 CHESSClean %>% select(
   trustcode, 
@@ -184,7 +178,7 @@ who are already admitted to ITU and fitting the difference between hospital admi
 
 ```{r}
 
-CHESSItu = getCHESS(paths$chess) %>% chessItuSubset("2020-04-15")
+CHESSItu = CHESS %>% chessItuSubset()
 
 uncensoredAdmissionToItuAdmission = CHESSItu %>% filter(age>15) %>% generateSurvivalData(
   idVar = caseid,

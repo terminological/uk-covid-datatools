@@ -1,0 +1,341 @@
+---
+title: "Testing epiestim"
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}    
+
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/epiestim-testing", output_file='epiestim-testing.pdf')) })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+source("./covid-serial-interval.R")
+source("./lockdown-impact-data.R")
+if (!exists("paths",inherits=FALSE)) paths = findDatafile()
+```
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+
+
+
+ff100 = getFF100(path = paths$ff100)
+
+tmp = ff100 %>% inner_join(ff100, by=c("ContactOf_FF100_ID"="FF100_ID"),suffix=c(".infectee",".infector"))
+tmp = tmp %>% select(FF100_ID,ContactOf_FF100_ID,contains("date"))
+tmp2 = tmp %>% mutate(
+  EL = 0L, ER = 1L,
+  SL = as.integer(date_onset.infectee - date_onset.infector),
+  SR = as.integer(date_onset.infectee - date_onset.infector +1),
+  type=0L) %>% select(EL,ER,SL,SR,type)
+(ggplot(tmp2, aes(x=SL)) + geom_bar(width=0.7)) %>% saveSixthPageFigure("~/Dropbox/covid19/epiestim-testing/UKSerialInterval")
+
+
+
+# tmp2 = ff100 %>% mutate(
+#   EL = 0L, 
+#   ER = as.integer(date_exposure_last - date_exposure_first),
+#   SL = as.integer(date_onset - date_exposure_first),
+#   SR = as.integer(date_onset - date_exposure_first+1),
+#   type=0L) %>% mutate(ER = ifelse(ER>SL,SL,ER)) %>% select(EL,ER,SL,SR,type) %>% filter(SL>0)
+# tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
+
+
+```
+
+```{r}
+tmp2 = tmp2 %>% filter(SL>0)
+tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
+
+MCMC_seed <- 1
+overall_seed <- 2
+mcmc_control <- EpiEstim::make_mcmc_control(seed = MCMC_seed, 
+                                  burnin = 1000)
+dist <- "G" # fitting a Gamma dsitribution for the SI
+config <- EpiEstim::make_config(list(si_parametric_distr = dist,
+                           mcmc_control = mcmc_control,
+                           seed = overall_seed, 
+                           n1 = 50, 
+                           n2 = 50))
+
+# rm(`%in%`) = function(x,y) {
+#   return(sapply(x, function(x1) {any(y == x1)}))
+# }
+
+## first estimate the SI distribution using function dic.fit.mcmc fron 
+## coarseDataTools package:
+n_mcmc_samples <- config$n1*mcmc_control$thin
+SI_fit <- coarseDataTools::dic.fit.mcmc(dat = tmp3,
+                  dist = "G",#off1G",
+                  init.pars = EpiEstim::init_mcmc_params(tmp2, dist),
+                  burnin = mcmc_control$burnin,
+                  n.samples = n_mcmc_samples,
+                  seed = mcmc_control$seed)
+
+si_sample <- EpiEstim::coarse2estim(SI_fit, thin = mcmc_control$thin)$si_sample
+
+calcGammaMean = function(x) {
+shape = SI_fit@ests["shape",x]
+scale = SI_fit@ests["scale",x]
+out = list()
+out$mean = shape*scale
+out$sd = sqrt(shape*scale^2)
+return(out)
+}
+
+gammaMean = sprintf("%1.2f (%1.2f-%1.2f)",
+  calcGammaMean("est")[["mean"]],
+  calcGammaMean("CIlow")[["mean"]],
+  calcGammaMean("CIhigh")[["mean"]]
+)
+
+
+
+gammaShape = sprintf("%1.2f (%1.2f-%1.2f)",
+  SI_fit@ests["shape","est"],
+  SI_fit@ests["shape","CIlow"],
+  SI_fit@ests["shape","CIhigh"]
+)
+
+gammaScale = sprintf("%1.2f (%1.2f-%1.2f)",
+  SI_fit@ests["scale","est"],
+  SI_fit@ests["scale","CIlow"],
+  SI_fit@ests["scale","CIhigh"]
+)
+
+gammaSd = sprintf("%1.2f (%1.2f-%1.2f)",
+  calcGammaMean("est")[["sd"]],
+  calcGammaMean("CIlow")[["sd"]],
+  calcGammaMean("CIhigh")[["sd"]]
+)
+
+(ggplot(tmp2, aes(x=SL)) + geom_histogram(aes(y=..density..),fill=NA,colour = "black", binwidth=1)+ #,width=0.7) +
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","est"], scale = SI_fit@ests["scale","est"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue")+
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIlow"], scale = SI_fit@ests["scale","CIlow"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIhigh"], scale = SI_fit@ests["scale","CIhigh"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
+    annotate("text", x = 10, y = 0.5, label = paste0("Mean: ",gammaMean,"\nSD: ",gammaSd,"\nShape: ",gammaShape,"\nScale: ",gammaScale),hjust="inward",vjust="inward")+
+    xlab("days")
+) %>% saveSixthPageFigure("~/Dropbox/covid19/epiestim-testing/UKSerialInterval2")
+
+```
+
+```{r}
+
+serialIntervals2 = serialIntervals %>% bind_rows(tibble(
+  mean_si_estimate = calcGammaMean("est")[["mean"]],
+  mean_si_estimate_low_ci = calcGammaMean("CIlow")[["mean"]],
+  mean_si_estimate_high_ci = calcGammaMean("CIhigh")[["mean"]],
+  std_si_estimate = calcGammaMean("est")[["sd"]],
+  std_si_estimate_low_ci = calcGammaMean("CIlow")[["sd"]],
+  std_si_estimate_high_ci = calcGammaMean("CIhigh")[["sd"]],
+  sample_size = 50L,
+  population = "UK",
+  assumed_distribution = "gamma",
+  estimate_type = "serial interval",
+  source = "Current analysis",
+  note = "none"
+))
+
+SItable = serialIntervals2 %>% mutate(
+  `Mean\n(95% CrI) days`=conf(mean_si_estimate,mean_si_estimate_low_ci,mean_si_estimate_high_ci),
+  `Std\n(95% CrI) days`=conf(std_si_estimate,std_si_estimate_low_ci,std_si_estimate_high_ci),
+) %>% select(-contains("si_estimate")) %>% select(
+  `Reference`=source,
+  `Statistic`=estimate_type,
+  `Mean\n(95% CrI) days`,
+  `Std\n(95% CrI) days`,
+  `N`=sample_size,
+  `Distribution` = assumed_distribution,
+  `Population`=population
+)
+
+SItable %>% group_by(`Reference`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/epiestim-testing/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
+
+```
+
+
+```{r}
+
+planning_scenario <- read_csv("~/Dropbox/covid19/epiestim-testing/planning_scenario.csv", 
+    col_types = cols(X1 = col_skip(), Date = col_date(format = "%Y-%m-%d")))
+
+planning_scenario = planning_scenario %>% tidyr::pivot_longer(cols = c(-Date,-Rt), names_to = "variable", values_to = "incidence")
+planning_scenario = 
+  planning_scenario %>% mutate(variable = stringr::str_replace_all(variable,"([0-9]).([0-9])","\\1_\\2")) %>% separate(variable,into=c("source","subgroup"),sep = "\\.") %>%
+  mutate(noisy_incidence = as.integer(rnorm(n(),mean=incidence,sd=incidence/4)))
+```
+
+```{r}
+rate = 1/7.9
+si_distr = c(0,pexp(1:60, rate) - pexp(0:59,rate),1-pexp(60,rate))
+planningCfg = EpiEstim::make_config(si_distr = si_distr, method="non_parametric_si")
+planningRt = planning_scenario %>% group_by(source,subgroup) %>% arrange(Date) %>% mutate(cumulative_cases = cumsum(incidence)) %>% normaliseAndCleanse(dateVar = Date) %>% tidyEstimateRt(planningCfg, window=7, method="non_parametric_si")
+planningRt2 = planning_scenario %>% group_by(source,subgroup) %>% arrange(Date) %>% mutate(cumulative_cases = cumsum(noisy_incidence)) %>% normaliseAndCleanse(dateVar = Date) %>% tidyEstimateRt(planningCfg, window=7, method="non_parametric_si")
+
+```
+
+```{r}
+# & source %in% c("admissions","deaths","infected")
+p1 = ggplot(planningRt %>% filter(subgroup=="total"), aes(x=date,y=`Median(R)`,ymin=`Quantile.0.025(R)`,ymax=`Quantile.0.975(R)`,colour=source,fill=source)) +
+        geom_line(data=planning_scenario,mapping = aes(x=Date,y=Rt),inherit.aes = FALSE,colour="black")+
+         geom_line()+
+         geom_ribbon(alpha=0.2)+
+        coord_cartesian(ylim=c(0,4))+scale_x_date(date_breaks = "2 weeks")+narrowAndTall()
+          #+
+         #geom_line(
+
+p1 %>% saveThirdPageFigure("~/Dropbox/covid19/epiestim-testing/rtDynamics")
+```
+
+```{r}
+# & source %in% c("admissions","deaths","infected")
+p2 = ggplot(planningRt2 %>% filter(subgroup=="total"), aes(x=date,y=`Median(R)`,ymin=`Quantile.0.025(R)`,ymax=`Quantile.0.975(R)`,colour=source,fill=source)) +
+        geom_line(data=planning_scenario,mapping = aes(x=Date,y=Rt),inherit.aes = FALSE,colour="black")+
+         geom_line()+
+         geom_ribbon(alpha=0.2)+
+        coord_cartesian(ylim=c(0,4))+scale_x_date(date_breaks = "2 weeks")+narrowAndTall()
+          #+
+         #geom_line(
+
+p2 %>% saveThirdPageFigure("~/Dropbox/covid19/epiestim-testing/rtDynamicsWithNoise")
+```
+
+```{r}
+
+ukts = ts$tidyUK %>% filter(date < max(date)-3) %>% normaliseAndCleanse(smoothWeekly = TRUE)
+
+# ukts
+
+
+
+I = ukts %>% filter(!is.na(incidence)) %>% pull(incidence)
+dates = ukts %>% filter(!is.na(incidence)) %>% pull(date)
+ends = as.Date(c("2020-03-21","2020-04-05","2020-05-07"))
+
+
+out = NULL
+
+for(endDate in ends) {
+
+  start = match(endDate,dates) - 7
+  end = match(endDate,dates)
+  
+  for (siMean in seq(2,10,0.25)) {
+    #siMean = 4
+    for (siSd in seq(0.25,10,0.25)) {
+    #siSd = 4  
+      
+      cfg_tmp = EpiEstim::make_config(mean_si = siMean, std_si = siSd, t_end = end, t_start = start, method="parametric_si")
+      rEst = EpiEstim::estimate_R(I, method="parametric_si", config = cfg_tmp)
+      out = bind_rows(
+        out,
+        tibble(
+          startDate = as.Date(endDate-7,"1970-01-01"),
+          endDate = as.Date(endDate,"1970-01-01"),
+          siMean = siMean,
+          siSd = siSd,
+          medianR = rEst$R$`Median(R)`
+        )                    
+      )
+    }
+  }
+  
+}
+
+
+(ggplot(ukts,aes(x=date,y=incidence))+geom_line()+geom_point()+geom_vline(xintercept = ends,colour="red")) %>% saveSixthPageFigure("~/Dropbox/covid19/epiestim-testing/epidemicCurve")
+
+
+```
+
+
+```{r}
+
+plotSiVariability = function(d, contours) {
+  ggplot(out %>% filter(endDate == d), aes(x=siMean, y=siSd, z=medianR, fill=medianR))+geom_tile()+
+    metR::geom_contour2(colour="black", breaks=contours)+
+    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.2)+
+    scale_fill_gradient2(high="red",mid="white",low="green", midpoint=1, guide="none")+
+    
+    geom_linerange(data=serialIntervals,aes(
+      xmin=mean_si_estimate_low_ci,xmax=mean_si_estimate_high_ci,
+      y=std_si_estimate),inherit.aes = FALSE,colour="grey50")+
+    geom_linerange(data=serialIntervals,aes(
+      x=mean_si_estimate,ymin=std_si_estimate_low_ci,ymax=std_si_estimate_high_ci),inherit.aes = FALSE,colour="grey50")+
+    geom_point(data=serialIntervals,aes(x=mean_si_estimate,y=std_si_estimate, size=sample_size),inherit.aes = FALSE,colour="black")+
+    
+    geom_linerange(data=wtSIs,aes(
+      xmin=min_mean_si, xmax=max_mean_si,
+      y=std_si),inherit.aes = FALSE,colour="blue")+
+    geom_linerange(data=wtSIs,aes(
+      x=mean_si,
+      ymin=min_std_si, ymax=max_std_si),inherit.aes = FALSE,colour="blue")+
+    geom_point(data=wtSIs,aes(x=mean_si,y=std_si),inherit.aes = FALSE,colour="blue")+
+    
+    coord_cartesian(xlim=c(2,10),ylim=c(0.25,10))+
+    scale_size(range=c(0.1,2),name = "Samples")+
+    labs(subtitle = d,x="SI Mean",y="SI Std Dev")
+}
+
+contours = list(
+  seq(1,5,0.4),
+  seq(0.9,1.6,0.05),
+  seq(0.7,1,0.02)
+)
+
+plts = sapply(1:length(ends), FUN = function(i) {plotSiVariability(ends[[i]], contours[[i]])}, simplify = FALSE)
+
+patchwork::wrap_plots(plts, ncol=1, guides = "collect") %>% saveFullPageFigure("~/Dropbox/covid19/epiestim-testing/siSensitivity")
+
+```

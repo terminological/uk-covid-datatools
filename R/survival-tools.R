@@ -387,9 +387,9 @@ plotIncidenceSurface = function(surfacesDf, distr) {
 }
 
 
-plotProbabilityMatrix = function(surfacesDf, distr, pVar = "p" ) {
-  pVar = ensym(pVar)
-  ggplot(surfacesDf %>% filter(model==distr) %>% mutate(tmp_p = !!pVar),
+plotProbabilityMatrix = function(surfacesDf, distr, pExpr = "p" ) {
+  pExpr = enexpr(pExpr)
+  ggplot(surfacesDf %>% filter(model==distr) %>% mutate(tmp_p = !!pExpr),
       aes(x=days,y=as.integer(ageCat),z=tmp_p, fill=tmp_p, label=sprintf("%1.2f",tmp_p),colour=tmp_p))+
       geom_tile(colour="white")+
       geom_text(angle=90, size=2, colour="black")+

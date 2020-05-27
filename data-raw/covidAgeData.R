@@ -112,21 +112,49 @@ loadONS = function(file) {
 loadONS(filenames[length(filenames)])
 
 
-#### PHE Coronavirus cases by age ----
-# url = "https://coronavirus.data.gov.uk/"
-json_url = "https://c19downloads.azureedge.net/downloads/data/data_latest.json"
-# "https://coronavirus.data.gov.uk/downloads/json/dated/coronavirus-cases_202004292132.json"
-# "https://coronavirus.data.gov.uk/downloads/json/dated/data_latest_202004292132.json"
-tmp = jsonlite::read_json(json_url,simplifyVector = TRUE)
+#### UK age cases ----
+ageLabels = c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80+")
+linelistPath = "~/S3/encrypted/2020-05-07/Anonymised Line List 20200507.xlsx"
 
-# glimpse(tmp$utlas$E09000002)
-# tmp3 = enframe(tmp$utlas,name = "UTLA")
-# tmp3 = tmp3 %>% unnest(cols=value)
-# tmp3 = tmp3 %>% mutate(name = map(value, ~.x$name$value))
-
-cases = bind_rows(
-  tmp$countries$E92000001$maleCases %>% mutate(gender="Male"),
-  tmp$countries$E92000001$femaleCases %>% mutate(gender="Female") 
+ll = ukcovidtools::getLineList(linelistPath)
+llDemog = ll %>% filter(!is.na(age) & sex != "UNKNOWN") %>% mutate(ageCat = cut(age, 
+                                     breaks = c(ageLabels %>% stringr::str_extract("^[0-9]+") %>% as.integer(),Inf),
+                                     labels = ageLabels,
+                                     include.lowest = TRUE
+), gender=stringr::str_sub(sex,1,1), specimen_date=as.Date(specimen_date)) %>% group_by(ageCat,gender,specimen_date) %>% summarise(
+  incidence = n()
 )
 
+#%>% group_by(sex,ageCat,lab_report_date) %>% summarise(incidence = n())
+ukDemog = UKDemographics2018$by2018Ward %>% ungroup() %>% group_by(gender,ageGroup) %>% summarise(pop = sum(count))
+
+dateRange = tibble(specimen_date = as.Date(min(llDemog$specimen_date):max(llDemog$specimen_date),"1970-01-01")) %>% 
+  crossing(ageCat=ageLabels) %>% 
+  crossing(gender=c("MALE","FEMALE"))
+
+demog2 = llDemog %>% inner_join(ukDemog,by=c("ageCat"="ageGroup","gender"="gender")) %>% group_by(ageCat,sex,specimen_date) %>% summarise(
+  incidence = n(),
+  incidencePer100K = n()/first(pop)*100000,
+) 
+
+# #### PHE Coronavirus cases by age ----
+# # url = "https://coronavirus.data.gov.uk/"
+# json_url = "https://c19downloads.azureedge.net/downloads/data/data_latest.json"
+# # "https://coronavirus.data.gov.uk/downloads/json/dated/coronavirus-cases_202004292132.json"
+# # "https://coronavirus.data.gov.uk/downloads/json/dated/data_latest_202004292132.json"
+# tmp = jsonlite::read_json(json_url,simplifyVector = TRUE)
+# 
+# # glimpse(tmp$utlas$E09000002)
+# # tmp3 = enframe(tmp$utlas,name = "UTLA")
+# # tmp3 = tmp3 %>% unnest(cols=value)
+# # tmp3 = tmp3 %>% mutate(name = map(value, ~.x$name$value))
+# 
+# cases = bind_rows(
+#   tmp$countries$E92000001$maleCases %>% mutate(gender="Male"),
+#   tmp$countries$E92000001$femaleCases %>% mutate(gender="Female") 
+# )
+
+# ONS age breakdown deaths
+# https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fbirthsdeathsandmarriages%2fdeaths%2fdatasets%2fweeklyprovisionalfiguresondeathsregisteredinenglandandwales%2f2020/publishedweek172020.xlsx
+# 
 

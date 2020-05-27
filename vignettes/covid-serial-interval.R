@@ -1,43 +1,27 @@
 #### Serial intervals from the literature ----
 
-serialIntervals = tibble(
-  mean_si_estimate = c(3.96, 6.3, 4.22, 4.56, 3.95, 5.21, 4.7, 7.5,6.6),
-  mean_si_estimate_low_ci = c(3.53, 5.2, 3.43, 2.69,-4.47, -3.35, 3.7, 5.3, 0.7),
-  mean_si_estimate_high_ci = c(4.39, 7.6, 5.01, 6.42, 12.51,13.94, 6.0, 19.0, 19.0),
-  std_si_estimate = c(4.75,4.2, 0.4, 0.95, 4.24, 4.32, 2.3, 3.4, NA),
-  std_si_estimate_low_ci = c(4.46, 3.1, NA, NA, 4.03, 4.06, 1.6, NA, NA),
-  std_si_estimate_high_ci = c(5.07, 5.3, NA, NA, 4.95, 5.58, 3.5, NA, NA),
-  sample_size = c(468,48,135,93,45,54,28,16,90),
-  population = c("China", "Shenzhen","Taijin","Singapore","Taijin","Singapore", "SE Asia", "Wuhan","Italy"),
-  source = c(
-    "Zhanwei Du et al. Serial Interval of COVID-19 among Publicly Reported Confirmed Cases. Emerging Infectious Disease journal 26, (2020)",
-    "Bi, Q. et al. Epidemiology and Transmission of COVID-19 in Shenzhen China: Analysis of 391 cases and 1,286 of their close contacts. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.03.20028423",
-    "Tindale, L. et al. Transmission interval estimates suggest pre-symptomatic spread of COVID-19. Epidemiology (2020) doi:10.1101/2020.03.03.20029983",
-    "Tindale, L. et al. Transmission interval estimates suggest pre-symptomatic spread of COVID-19. Epidemiology (2020) doi:10.1101/2020.03.03.20029983",
-    "Ganyani, T. et al. Estimating the generation interval for COVID-19 based on symptom onset data. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.05.20031815",
-    "Ganyani, T. et al. Estimating the generation interval for COVID-19 based on symptom onset data. Infectious Diseases (except HIV/AIDS) (2020) doi:10.1101/2020.03.05.20031815",
-    "Nishiura, H., Linton, N. M. & Akhmetzhanov, A. R. Serial interval of novel coronavirus (COVID-19) infections. Int. J. Infect. Dis. (2020) doi:10.1016/j.ijid.2020.02.060",
-    "Li, Q. et al. Early Transmission Dynamics in Wuhan, China, of Novel Coronavirus-Infected Pneumonia. N. Engl. J. Med. (2020) doi:10.1056/NEJMoa2001316",
-    "Cereda, D. et al. The early phase of the COVID-19 outbreak in Lombardy, Italy. arXiv [q-bio.PE] (2020)")
-)
+serialIntervals = read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
 
-unk=function(x) ifelse(is.na(x),"unk",x)
+unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
+conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
 
+#TODO: remove this from here
 SItable1 = serialIntervals %>% mutate(
-  `Mean SI\n(95% CrI) days`=paste0(mean_si_estimate,"\n(",unk(mean_si_estimate_low_ci),"-",
-                                   unk(mean_si_estimate_high_ci),")"),
-  `Std SI\n(95% CrI) days`=paste0(unk(std_si_estimate),"\n(",unk(std_si_estimate_low_ci),"-",unk(std_si_estimate_high_ci),")")
-) %>% select(-contains("estimate")) %>% select(
+  `Mean\n(95% CrI) days`=conf(mean_si_estimate,mean_si_estimate_low_ci,mean_si_estimate_high_ci),
+  `Std\n(95% CrI) days`=conf(std_si_estimate,std_si_estimate_low_ci,std_si_estimate_high_ci),
+) %>% select(-contains("si_estimate")) %>% select(
   `Reference`=source,
-  `Mean SI\n(95% CrI) days`,
-  `Std SI\n(95% CrI) days`,
+  `Statistic`=estimate_type,
+  `Mean\n(95% CrI) days`,
+  `Std\n(95% CrI) days`,
   `N`=sample_size,
+  `Distribution` = assumed_distribution,
   `Population`=population
 )
 
 #### Calculate the mean serial intervals ----
 
-wtSIs = serialIntervals %>% summarise(
+wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma") %>% summarise(
   mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
   min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
   max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
@@ -61,3 +45,13 @@ cfg = EpiEstim::make_config(list(
   std_std_si = wtSIs$std_si,
   min_std_si = wtSIs$min_std_si, 
   max_std_si = wtSIs$max_std_si), method="uncertain_si")
+
+
+## How to you reconstruct a distribution from a cfg object?
+# EpiEstim::discr_si
+# sds = qgamma(seq(5,195,5)/200,cfg$$std_si, cfg$std_std_si)
+# means = qgamma(seq(5,195,5)/200,cfg$mean_si, cfg$std_mean_si)
+# out = rep(0,21)
+# pgamma()
+
+

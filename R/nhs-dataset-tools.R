@@ -1,12 +1,48 @@
-# load CHESS data set
-
-#' create a neighbourhood network from a shapefile
+#' Find NHS data file paths
 #' 
 #' @param path - a path to the chess csv file
 #' @import dplyr
 #' @return raw CHESS data set
 #' @export
-getCHESS = function(path) {
+findDatafile = function(type = NULL, path="~/S3/encrypted/") {
+  path = path.expand(path)
+  tmp = list.files(path=path,recursive = TRUE)
+
+  fn = function(search) {
+    tmp2 = tmp %>% stringr::str_subset(search)
+    tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove("-")
+    tmp3 = tmp2[tmp2Date == max(tmp2Date)]
+    return(paste0(path,tmp3))
+  }
+  
+  paths=list(
+    chess=fn("CHESS COVID19"), #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
+    lineList=fn("Anonymised Line List"),
+    rcgp=fn("RCGP"),
+    deathsLineList=fn("COVID19 Deaths"),
+    ff100=fn("FF100"),
+    chessSummary=fn("CHESS Aggregate Report"),
+    oneOneOne = fn("SPIM-111-999"),
+    onsWeekly = fn("SPIM_ONS"),
+    aeSitrep = fn("AESitrep"),
+    trust = fn("SPIM_trust"),
+    seroprevalence = fn("seroprev")
+    # sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx"
+  )
+  if (identical(type,NULL)) {
+    return(paths)
+  } else {
+    return(paths[type])
+  }
+}
+
+#' Load the CHESS dataset from a path
+#' 
+#' @param path - a path to the chess csv file
+#' @import dplyr
+#' @return raw CHESS data set
+#' @export
+getCHESS = function(path = findDatafile("chess")) {
   out = readr::read_csv(path, 
                   col_types = readr::cols(
                     caseid = readr::col_integer(),
@@ -122,7 +158,7 @@ getCHESS = function(path) {
 #' @import dplyr
 #' @return raw CHESS data set
 #' @export
-getLineList = function(path) {
+getLineList = function(path = findDatafile("lineList")) {
   readxl::read_excel(path.expand(path), 
          col_types = c("numeric", "text", "text", 
                        "text", "text", "text", "text", "text", 
@@ -136,7 +172,7 @@ getLineList = function(path) {
 #' @import dplyr
 #' @return raw FF100 data set
 #' @export
-getFF100 = function(path) {
+getFF100 = function(path = findDatafile("ff100")) {
     readr::read_csv(path,
                  col_types = readr::cols(
                    FF100_ID = readr::col_integer(),
@@ -210,7 +246,7 @@ getFF100 = function(path) {
 #' @import dplyr
 #' @return raw FF100 data set
 #' @export
-getCHESSSummary = function(path) {
+getCHESSSummary = function(path = findDatafile("chessSummary")) {
   read_csv(path, col_types = readr::cols(
     DateRange = readr::col_date("%d-%m-%Y"),
     DateOfAdmission = readr::col_date("%d-%m-%Y"),
@@ -231,6 +267,79 @@ getCHESSSummary = function(path) {
  return(chessSummary)
 }
 
+getPublicOneOneOne = function() {
+  # https://digital.nhs.uk/data-and-information/publications/statistical/mi-potential-covid-19-symptoms-reported-through-nhs-pathways-and-111-online/latest
+  pathwaysPreApril = read_csv("https://files.digital.nhs.uk/0D/F87186/NHS%20Pathways%20Covid-19%20data%20CCG%20mapped.csv", 
+                              col_types = cols(SiteType = col_character(), 
+                                               `Call Date` = col_date(format = "%d/%m/%Y")))
+  
+  pathways = readr::read_csv(paste0("https://files.digital.nhs.uk/E4/966842/NHS%20Pathways%20Covid-19%20data%20",Sys.Date()-1,".csv"), 
+           col_types = cols(SiteType = col_character(), 
+                            `Call Date` = col_date(format = "%d/%m/%Y")))
+  online = readr::read_csv(paste0("https://files.digital.nhs.uk/98/744310/111%20Online%20Covid-19%20data_",Sys.Date()-1,".csv"), 
+                             col_types = cols(
+                                              `journeydate` = col_date(format = "%d/%m/%Y")))
+  onlinePreApril = read_csv("https://files.digital.nhs.uk/73/5CE08B/111%20Online%20Covid-19%20data_CCG%20mapped.csv", 
+                            col_types = cols(
+                                             `journeydate` = col_date(format = "%d/%m/%Y")))
+  out = bind_rows(
+    
+    pathwaysPreApril %>% select(-CCGCode, -CCGName) %>% rename(source = SiteType, date = `Call Date`, gender = `Gender`, ageGroup = `AgeBand`, code = `April20 mapped CCGCode`, name=`April20 mapped CCGName`, incidence = `TriageCount`),
+    pathways %>% filter(`Call Date`>max(pathwaysPreApril$`Call Date`,na.rm=TRUE)) %>% rename(source = SiteType, date = `Call Date`, gender = `Sex`, ageGroup = `AgeBand`, code = `CCGCode`, name=`CCGName`, incidence = `TriageCount`),
+    
+    onlinePreApril %>% select(-CCGCode, -CCGName) %>% mutate(source = "online") %>% rename(date = `journeydate`, gender = `gender`, ageGroup = `ageband`, code = `April20 mapped CCGCode`, name=`April20 mappedCCGName`, incidence = `Total`),
+    online %>% filter(journeydate>max(onlinePreApril$journeydate,na.rm=TRUE)) %>% mutate(source = "online") %>% rename(date = `journeydate`, gender = `sex`, ageGroup = `ageband`, code = `ccgcode`, name=`ccgname`, incidence = `Total`)
+  )
+  
+  
+  out2 = out %>% mutate(ageGroup = case_when(
+    ageGroup == "70-120 years" ~ "70+",
+    ageGroup == "70+ years" ~ "70+",
+    ageGroup == "19-69 years" ~ "19-69",
+    TRUE ~ as.character(NA)
+  ))
+  out2 = out2 %>% filter(!is.na(ageGroup) & code != "NULL" & name != "NULL")
+  out2 = out2 %>% group_by(gender,ageGroup,code,name,source) %>% arrange(date) %>% mutate(cumulative = cumsum(incidence))
+  
+  # code mapping to NHS region.
+  # https://geoportal.statistics.gov.uk/datasets/clinical-commissioning-group-to-stp-and-nhs-england-region-april-2020-lookup-in-england/data
+  
+  return(out2)
+}
+
+
+#' Load 111 data
+#' 
+#' @param path - path to the line list file
+#' @import dplyr
+#' @return raw 111 data
+#' @export
+getOneOneOne = function(path = findDatafile("oneOneOne")) {
+  oneoneone <- readxl::read_excel(path.expand(path), 
+    sheet = "Extracted Data", col_types = "text")
+  
+  ts111 = oneoneone %>% rename(level = ReportLevel, region=Geography) %>% mutate(date = as.Date(paste0(Year,"-",Month,"-",Day),"%Y-%m-%d")) %>% select(-DateVal,-Day,-Month,-Year) %>% pivot_longer( 
+    cols = c(-date, -region, -level), names_to = "category", values_to = "incidence") %>% mutate(
+      incidence = as.numeric(incidence),
+      route = case_when(
+        category %like% "111-ONLINE%" ~ "online",
+        category %like% "111-Outcome%" ~ "111 call",
+        category %like% "999-Outcome%" ~ "999 call",
+        TRUE ~ "other" # as.character(NA)
+      ),
+      result = case_when(
+        category %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
+        category %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
+        category %like% "%Clinical Assessment%" ~ "clinical review",
+        category %like% "%Emergency Ambulance%" ~ "emergency ambulance",
+        (category %like% "%Self Care%" | category %like% "%isolate%") ~ "self care",
+        TRUE ~ "other" #as.character(NA)
+      ),
+    ) %>%
+    mutate(result = factor(result,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
+  
+  return(ts111)
+}
 
 #' Load Bristol data
 #' 
@@ -1148,16 +1257,16 @@ chessQuality = function(CHESSdf) {
 #' @param date - the date of the data set
 #' @return a data frame of stats by trust representing reporting quality.
 #' @export
-chessItuSubset = function(CHESSdf, date) {
-  CHESS_date = as.Date(date)
+chessItuSubset = function(CHESSdf, date = max(CHESSdf$dateupdated,na.rm=TRUE)) {
+  CHESS_date = as.Date(date,"1970-01-01")
   # hospitals must have updated their data in last 3 days
   # and have fewer than 5 outcomes recorded with unknown dates
   incHosp = chessQuality(CHESSdf) %>%
     filter(
-      recentDate >= CHESS_date-3 & 
-        outcomeWithoutDates < 5
+      as.Date(recentDate) >= CHESS_date-3 & 
+        outcomeWithoutDates/knownOutcomes < 0.1
       )
-  
+  #browser()
   return(
     CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
       inner_join(incHosp %>% select(-trustname), by="trustcode") %>% 
@@ -1175,8 +1284,8 @@ chessItuSubset = function(CHESSdf, date) {
 #' @param date - the date of the data set
 #' @return a data frame of stats by trust representing reporting quality.
 #' @export
-chessAdmissionSubset = function(CHESSdf, date) {
-  CHESS_date = as.Date(date)
+chessAdmissionSubset = function(CHESSdf, date = max(CHESSdf$dateupdated,na.rm = TRUE)) {
+  CHESS_date = as.Date(date,"1970-01-01")
   # hospitals must have updated their data in last 3 days
   # and have fewer than 5 outcomes recorded with unknown dates
   # and have fewer than half of their patients admitted to ITU (remove hospitals that only submit ITU data)
@@ -1184,13 +1293,13 @@ chessAdmissionSubset = function(CHESSdf, date) {
   # excludes in hospital cases
   incHosp = chessQuality(CHESSdf) %>% select(-trustname) %>%
     filter(
-      recentDate >= CHESS_date-3 & 
-        outcomeWithoutDates < 5 &
+      as.Date(recentDate) >= CHESS_date-3 & 
+        outcomeWithoutDates/knownOutcomes < 0.1 &
         knownAdmittedItuPercent < 0.5 &
         knownOutcomePercent > 0.1
     )
       
-  
+  #browser()
   return(
     CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
       inner_join(incHosp, by="trustcode") %>% 
@@ -1278,7 +1387,83 @@ cleanseCHESSData = function(CHESSdf, date, removeOutliers = TRUE) {
 }
 
 
+#' reformats an Rt data set to SPI-M template
+#' 
+#' @param df - the dataframe with Rt estimates
+#' @param geographyExpr - the derivation of the geographic name
+#' @param modelName - the model
+#' @param dateVar - the column with dates
+#' @param groupName - the group submitting the estimate
+#' @import dplyr
+#' @return a tibble of the formatted estimates
+#' @export
+convertRtToSPIM = function(df, geographyExpr, modelName, dateVar = "date", groupName = "Exeter") {
+  dateVar = ensym(dateVar)
+  geographyExpr = enexpr(geographyExpr)
+  return(tibble(
+    `Group`=groupName,
+    `Model`=modelName,
+    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
+    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
+    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
+    `Day of Value` = df %>% pull(!!dateVar) %>% format("%d") %>% as.integer(),
+    `Month of Value` = df %>% pull(!!dateVar) %>% format("%m") %>% as.integer(),
+    `Year of Value` = df %>% pull(!!dateVar) %>% format("%Y") %>% as.integer(),
+    `Geography` = df %>% mutate(geo_out = !!geographyExpr) %>% pull(geo_out),
+    `ValueType` = "R",
+    `Quantile 0.05` = df %>% pull(`Quantile.0.05(R)`) %>% round(2),
+    `Quantile 0.1` = NA,
+    `Quantile 0.15` = NA,	
+    `Quantile 0.2` = NA,	
+    `Quantile 0.25` = df %>% pull(`Quantile.0.25(R)`) %>% round(2),
+    `Quantile 0.35` = NA,	
+    `Quantile 0.4` = NA,	
+    `Quantile 0.45` = NA,
+    `Quantile 0.5` = df %>% pull(`Median(R)`) %>% round(2),
+    `Quantile 0.55` = NA,
+    `Quantile 0.6` = NA,	
+    `Quantile 0.65` = NA,	
+    `Quantile 0.7` = NA,	
+    `Quantile 0.75` = df %>% pull(`Quantile.0.75(R)`) %>% round(2),
+    `Quantile 0.8` = NA,	
+    `Quantile 0.85` = NA,	
+    `Quantile 0.9` = NA,	
+    `Quantile 0.95` = df %>% pull(`Quantile.0.95(R)`) %>% round(2),
+  ))
+}
 
+convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter") {
+  return(tibble(
+    `Group`=groupName,
+    `Model`=modelName,
+    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
+    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
+    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
+    `Day of Value` = NA,
+    `Month of Value` = NA,
+    `Year of Value` = NA,
+    `Geography` = NA,
+    `ValueType` = c("mean_generation_time","kappa"),
+    `Quantile 0.05` = c(cfg$min_mean_si, cfg$min_std_si^2) %>% round(3),
+    `Quantile 0.1` = NA,
+    `Quantile 0.15` = NA,	
+    `Quantile 0.2` = NA,	
+    `Quantile 0.25` = NA,
+    `Quantile 0.35` = NA,	
+    `Quantile 0.4` = NA,	
+    `Quantile 0.45` = NA,
+    `Quantile 0.5` = c(cfg$mean_si, cfg$std_si^2) %>% round(3),
+    `Quantile 0.55` = NA,
+    `Quantile 0.6` = NA,	
+    `Quantile 0.65` = NA,	
+    `Quantile 0.7` = NA,	
+    `Quantile 0.75` = NA,
+    `Quantile 0.8` = NA,	
+    `Quantile 0.85` = NA,	
+    `Quantile 0.9` = NA,	
+    `Quantile 0.95` = c(cfg$max_mean_si, cfg$max_std_si^2) %>% round(3)
+  ))
+}
 
 #' SQL like filtering in data tables
 #' 
@@ -1302,4 +1487,72 @@ cleanseCHESSData = function(CHESSdf, date, removeOutliers = TRUE) {
     # most usually character, but integer and numerics will be silently coerced by grepl
     grepl(pattern, vector, ignore.case = ignore.case, fixed = fixed)
   }
+}
+
+
+getDstlSource = function(path = findDatafile("trust")) {
+  tmp = readxl::read_excel(path, 
+                   sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+  tmp2 = tmp %>% pivot_longer(
+      cols=c(-DateVal,-Day,-Month,-Year,-ReportLevel,-Geography,-TrustCode,-TrustName),
+      names_to = "variable",
+      values_to = "value"
+    ) %>% filter(!is.na(value)) %>% mutate(
+      variable = variable %>% stringr::str_replace("acute1","acuteOne")
+    ) %>% mutate(
+      ageRange = stringr::str_extract(variable,"(<|>|Under )?[0-9]?[0-9]-?[0-9]?[0-9]?\\+?"),
+      source = stringr::str_extract(variable,"^[^0-9<>]+")
+    ) %>% mutate(
+      ageRange = ifelse(stringr::str_detect(variable,"unknown age"),"unk",ageRange),
+      gender = variable %>% stringr::str_extract("male|female"),
+      source = source %>% stringr::str_remove("unknown age") %>% stringr::str_remove_all("males?|females?") %>% stringr::str_remove_all("[^a-zA-Z]+$")
+    )
+  tmp3 = tmp2 %>% mutate(
+    date = as.Date(DateVal),
+    value = as.numeric(value)
+  ) %>% select(-Day,-Month,-Year)
+  
+  tmp4 = tmp3 %>% mutate(
+    type = case_when(
+      stringr::str_detect(source,"cum") ~ "cumulative",
+      stringr::str_detect(source,"total") ~ "cumulative",
+      stringr::str_detect(source,"inc") ~ "incidence",
+      stringr::str_detect(source,"prev") ~ "prevalence",
+      stringr::str_detect(source,"weekly") ~ "incidence",
+      stringr::str_detect(source,"admissions") ~ "incidence",
+      stringr::str_detect(source,"daily") ~ "incidence",
+      stringr::str_detect(source,"test") ~ "incidence",
+      TRUE ~ as.character(NA)
+    ),
+    statistic = case_when(
+      stringr::str_detect(source,"eath") ~ "death",
+      stringr::str_detect(source,"icu") ~ "icu admission",
+      stringr::str_detect(source,"osp") ~ "hospital admission",
+      stringr::str_detect(source,"test") ~ "case",
+      stringr::str_detect(source,"case") ~ "case",
+      stringr::str_detect(source,"carehome") ~ "case",
+      TRUE ~ as.character(NA)
+    )
+  )
+  
+  tmp4 %>% rename(date = DateVal) %>% mutate(code=ifelse(is.na(TrustCode), ))
+  
+  # # summarise the data set
+  # View(
+  #   tmp4 %>% filter(is.na(ageRange)) %>% 
+  #     group_by(ReportLevel, variable) %>% 
+  #     summarise(n = ifelse(n_distinct(TrustCode)<n_distinct(Geography),n_distinct(Geography),n_distinct(TrustCode))) %>% 
+  #     pivot_wider(names_from = ReportLevel, values_from = n))
+  
+  return(tmp4)
+  # list(
+  #   icuPrevalenceEWRegion = "icu_prev",
+  #   icuPrevalenceEngHospital = "icu_prev_acute1",
+  #   icuPrevalenceScotland = "NRS_icu_prev",
+  #   hospPrevalenceEWRegion = "hosp_prev",
+  #   hospPrevalenceScotland = "NRS_hosp_prev",
+  #   incidDeathEWRegion = "CHESS_confirmed_death_inc_line",
+  #   
+  # )
+  
 }

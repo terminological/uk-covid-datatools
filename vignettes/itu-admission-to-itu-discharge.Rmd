@@ -14,19 +14,13 @@ devtools::load_all("~/Git/standard-print-output/")
 source("~/Git/uk-covid-datatools/data-raw/rawDataFunctions.R")
 library(survival)
 library(patchwork)
+
+paths=findDatafile()
+standardPrintOutput::setDefaults()
 ```
 
 ```{r}
-paths=list(
-  chess="~/S3/encrypted/15Apr/CHESS COVID19 CaseReport 20200415.csv",
-  lineList="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  ff100="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  chessSummary="~/S3/encrypted/15Apr/CHESS Aggregate Report 20200415.csv",
-  sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx",
-  bristol="~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv"
-)
 
-ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 CHESS = getCHESS(paths$chess)
 cq = CHESS %>% chessQuality()
 # ggplot(cq, aes(x=trustcode, y=records))+geom_bar(stat="identity")+standardPrintOutput::narrowAndTall()
@@ -35,7 +29,7 @@ p = ggplot(cq, aes(x=knownOutcomePercent, y=knownAdmittedItuPercent, label=trust
 p2 = ggExtra::ggMarginal(p, type="histogram")
 p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/chessDataQuality")
 
-CHESSClean = CHESS %>% chessItuSubset("2020-04-15")
+CHESSClean = CHESS %>% chessItuSubset()
 ```
 
 ## Survival model - Admission to outcome
@@ -176,7 +170,10 @@ surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-d
 
 ```{r}
 
-(ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=median_lo,ymax=median_hi, group=1))+geom_line(stat="smooth")+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median length of stay")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig5_losMedianByAge")
+largerOf = function(x,y) {return(ifelse(x>y,x,y))}
+smallerOf = function(x,y) {return(ifelse(x<y,x,y))}
+
+(ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=smallerOf(median_lo,median_hi),ymax=largerOf(median_lo,median_hi), group=1))+geom_line()+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median length of stay")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig5_losMedianByAge")
 
 ```
 
@@ -191,11 +188,11 @@ surf2
 ```
 
 ```{r}
-survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 1:30)
+survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 0:45)
 write.csv(
   survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf),
   file="~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/itu-admission-to-itu-discharge.csv")        
-plotProbabilityMatrix(survSurfcsv,"gamma") %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/daily_probability_by_age")
+plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/daily_probability_by_age")
 
 ```
 

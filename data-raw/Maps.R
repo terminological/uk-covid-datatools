@@ -21,6 +21,9 @@ walesHealthBoardShapefile = getShapefile("Local_Health_Boards_April_2019_Boundar
 unitaryAuthorityShapefile = getShapefile("Counties_and_Unitary_Authorities_April_2019_Boundaries_EW_BUC", 
           "https://opendata.arcgis.com/datasets/a917c123e49d436f90660ef6a9ceb5cc_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D") %>% filter(ctyua19cd %>% stringr::str_starts("E"))
 
+# LTLAgeojson = geojsonsf::geojson_sf("https://c19pub.azureedge.net/assets/geo/ltlas_v1.geojson",expand_geometries = TRUE)
+# plot(LTLAgeojson)
+# View(LTLAgeojson)
 
 ukShapefile = rbind(
   unitaryAuthorityShapefile %>% select(code = ctyua19cd, name = ctyua19nm, area = st_areasha, geometry),
@@ -49,6 +52,15 @@ ladShapefile = getShapefile("Local_Authority_Districts_December_2019_Boundaries_
 ggplot(ladShapefile)+geom_sf()
 
 
+ukShapefileLTLA = rbind(
+  ladShapefile  %>% filter(lad19cd %>% stringr::str_starts("E")) %>% select(code = lad19cd, name = lad19nm, area = st_areasha, geometry),
+  walesHealthBoardShapefile %>% select(code = lhb19cd, name=lhb19nm, area = st_areasha, geometry),
+  northernIrelandShapefile %>% select(code = LGDCode, name=LGDNAME, area = AREA, geometry),
+  scotlandHealthBoardShapeFile  %>% select(code = HBCode, name=HBName, area = Shape_Area, geometry)
+) %>% mutate(out_code = code)
+
+
+
 # wards2019 = getShapefile("Wards_December_2019_Boundaries_EW_BFE",
 #   "https://opendata.arcgis.com/datasets/24fd788001d941c5a244dda6fe81dbb2_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D")
 # ggplot(wards2019)+geom_sf()
@@ -57,15 +69,14 @@ ggplot(ladShapefile)+geom_sf()
 UKCovidMaps = list(
   unitaryAuthority = unitaryAuthorityShapefile,
   reportingRegions = ukShapefile,
+  reportingRegionsLTLA = ukShapefileLTLA,
   ward2011 = wards2011,
   # ward2019 = wards2019,
   localAuthorityDistrict = ladShapefile
 )
 
 usethis::use_data(UKCovidMaps, overwrite = TRUE)
-if (!dir.exists("~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions")) dir.create("~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions")
-setwd("~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions")
-suppressWarnings(sf::st_write(UKCovidMaps$reportingRegions, "UK_covid_reporting_regions.shp", driver="ESRI Shapefile"))
-setwd("~/Git/uk-covid-datatools/data-raw/")
-zip("~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions.zip","UK_covid_reporting_regions")
-unlink("~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions", recursive=TRUE)
+
+
+writeShapefile(UKCovidMaps$reportingRegions,"~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions.zip")
+writeShapefile(UKCovidMaps$reportingRegionsLTLA,"~/Git/uk-covid-datatools/data-raw/UK_covid_reporting_regions_LTLA.zip")
