@@ -143,6 +143,8 @@ gbPopShapefile = rbind(
   wards2018 %>% filter(!stringr::str_starts(wd18cd,"S")) %>% select(code = wd18cd, name = wd18nm,geometry)
 )
 
+gbPopShapefile = suppressWarnings(gbPopShapefile %>% sf::st_simplify(dTolerance=0.001))
+
 gbPopEstimates = rbind(
   ewPopByWard %>% rename(code = WD18CD, name=WD18NM),
   scotPopByCouncil
