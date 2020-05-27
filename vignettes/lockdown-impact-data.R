@@ -1,4 +1,5 @@
 
+
 if (file.exists(paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),".Rdata"))) {
   
   load(file=paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),".Rdata"))
@@ -55,6 +56,7 @@ if (file.exists(paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),
     group_by(code, name) %>% normaliseAndCleanse(adjustUnknowns = FALSE, smoothWeekly = TRUE) %>% tidyEstimateRt(cfg, window=7) #, totalExpr = daily_total, unknownExpr = daily_total-sum(cumulative_cases) ) %>% tidyEstimateRt(cfg, window=7)
   
   
+
   
   #### Add in rate of change R(t) estimates
   

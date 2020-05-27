@@ -110,6 +110,7 @@ incidencePlot = ggplot(demog2,
 incidencePlot %>% saveThirdPageFigure("~/Dropbox/covid19/by-age/incidenceDynamics")
 #+scale_y_continuous(trans="sqrt")
 ```
+
 ```{r}
 source("./covid-serial-interval.R")
 demog3 = demog2 %>% group_by(specimen_date, ageCat) %>% summarise(src_incidence = sum(incidence)) %>% ungroup() %>% group_by(ageCat) %>%
@@ -155,12 +156,4 @@ expr2
 
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

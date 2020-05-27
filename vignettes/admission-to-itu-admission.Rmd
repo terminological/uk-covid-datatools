@@ -22,7 +22,6 @@ standardPrintOutput::setDefaults()
 ```{r}
 CHESS = getCHESS(paths$chess)
 CHESSClean = CHESS %>% chessAdmissionSubset()
-
 CHESSClean %>% select(
   trustcode, 
   trustname,

@@ -18,7 +18,6 @@ vignette: >
   %\VignetteIndexEntry{Regional infectivity of COVID-19}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
-
 ---
 
 ```{r, include = FALSE}
@@ -186,6 +185,7 @@ r0ukplot = ggplot()+
   #geom_vline(xintercept=latestDate,colour="red")+
   #annotate("text", x=latestDate, y=1.1, colour="red", label="likely to change", hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
   #         size=(10/ggplot2:::.pt/(96/72)))+
+
   scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
   guides(colour="none")+labs(fill="")+
   theme(axis.text.x=element_text(angle = 90, vjust =0.5))
@@ -370,6 +370,7 @@ Observations which have a high confidence of being high or low are marked with a
 ```{r}
 
 r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(`Median(R)`)) %>% head(10) %>% mutate(
+
   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")),
   `Worsening?` = if_else(slope>0,ifelse(`slopeLowerCi`>0,"yes","possibly"),""),
   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **",""))

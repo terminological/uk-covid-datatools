@@ -173,9 +173,6 @@ getUKCovidTimeseries = function() {
   england_ltla = ph_cases_2 %>% filter(type == "Lower tier local authority") %>% select(-type)
   
   
-  
-  
-  
   combinedUK = non_england_uk %>% rbind(england_utla %>% mutate(country="England"))
   combinedUK_LTLA = non_england_uk %>% rbind(england_ltla %>% mutate(country="England"))
   
@@ -219,6 +216,12 @@ getUKCovidTimeseries = function() {
     left_join(country_totals %>% filter(country=="England") %>% rename(daily_total = cumulative_cases) %>% select(-cumulative_tested, -cumulative_deaths), by = c("date")) %>% 
     group_by(date) %>% mutate(daily_unknown = daily_total-sum(cumulative_cases), england_nhs_region = name)
   
+  
+  tidyEnglandNHS = tidyCombinedUK %>% inner_join(englandUnitAuth2NHSregion, by=c("code"="GSS_CD")) %>% group_by(date,Region) %>% summarise(
+    cumulative_cases = sum(cumulative_cases),
+    daily_total = first(daily_total),
+    daily_unknown = first(daily_unknown)
+  ) %>% rename(england_nhs_region = Region)
   
   
   # tidy England unitary authority region
@@ -299,7 +302,7 @@ getUKCovidTimeseries = function() {
       cumulative_tested_from_tracker = cumulative_tested,
       cumulative_deaths_from_tracker = cumulative_deaths
     ) %>% select(-country), by="date")
-  
+
   return(list(
     # UKregional=UKregional,
     # englandNHS=englandNHS,
@@ -364,7 +367,7 @@ normaliseAndCleanse = function(groupedDf, dateVar = "date", cumulativeCasesVar =
   
   # expand the dates to make sure whole range present so each time series
   tmp2 = tmpDates %>% left_join(tmp, by=c(unlist(sapply(grps,as_label)),"date"))
-  
+
   tmp3 = tmp2 %>% group_by(!!!grps) %>% arrange(date) %>%
     # calculate incidence
     mutate(incidence = lead(src_cumulative_cases)-src_cumulative_cases) %>%

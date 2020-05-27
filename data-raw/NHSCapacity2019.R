@@ -35,6 +35,7 @@ usethis::use_data(NHSCapacity2019, overwrite=TRUE)
 
 #### TODO: eyeball tests ----
 
+
 tmp = NHSCapacity2019$hospitals %>% filter(tier1) %>% sf::st_as_sf(coords = c("long","lat"), crs=4326)
 #ggplot(UKCovidMaps$reportingRegions)+geom_sf()+geom_sf(data=tmp)
 
@@ -43,7 +44,6 @@ leaflet::leaflet() %>%
    leaflet::addCircleMarkers(data=tmp, color="#FF0000", popup = as.character(tmp$name))
 
 
-#### Sitrep data ----
 
 
 ```

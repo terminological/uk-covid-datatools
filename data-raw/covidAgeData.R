@@ -158,3 +158,4 @@ demog2 = llDemog %>% inner_join(ukDemog,by=c("ageCat"="ageGroup","gender"="gende
 # https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fbirthsdeathsandmarriages%2fdeaths%2fdatasets%2fweeklyprovisionalfiguresondeathsregisteredinenglandandwales%2f2020/publishedweek172020.xlsx
 # 
 
+

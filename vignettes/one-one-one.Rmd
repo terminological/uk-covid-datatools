@@ -60,11 +60,10 @@ The NHS 111 data includes information on people who contacted the emergency serv
 # Results
 
 ```{r load111}
-
-
 ts111 = getOneOneOne(paths$oneOneOne)
   
 ts111_2 = ts111 %>% group_by(level,region,category, route, result) %>% mutate(date = as.Date(date)) %>% arrange(date) %>% filter(!is.na(incidence))
+
 grps = ts111_2 %>% groups()
 
 tmpDates = ts111_2 %>% group_modify(function(d,f,...) {
@@ -90,8 +89,6 @@ Restricting analysis from here on to England data specific to COVID-19.
 ```{r}
 source("./covid-serial-interval.R")
 
-
-
 plotByGroup = function(df, group) {
   group = ensym(group)
   p1 = ggplot(df,aes(x=date, y=incidence,colour=!!group))+
@@ -113,13 +110,13 @@ plotByGroup = function(df, group) {
 }
 ```
 
-
 ```{r fig1, fig.cap="The incidence of contact events for 111 online, 111 and 999 services in England, and R(t) estimates based on those contact events as a proxy for cases."}
 ts111_5 = ts111_3 %>% filter(result != "other") %>% group_by(route,date) %>% summarise(incidence = sum(incidence, na.rm = TRUE)) %>% filter(incidence != 0) %>% ungroup() %>% group_by(route) %>% 
   ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
 
 plotByGroup(ts111_5, route) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure1_111byRoute")
 ```
+
 
 Figure 1 shows numbers of contact events stratified by route. Online likely to be less severe, 111 mild or moderate, 999 life threatening
 
@@ -243,6 +240,5 @@ Figure 4 shows R(t) estimated on a regional basis using both 111 and 999 calls w
 * Reducing the lead time for detecting changes in R(t) improves our ability to respond.
 * We need a spatial breakdown of these figures for it to be truly useful.
 * There is evidence from 111 & 999 calls that either adherence to the lock down is waning, or significant numbers of cases are not being reported. This will prolong the plateau of new cases beyond that expected by epidemiological models.
-* 
 
 # References
