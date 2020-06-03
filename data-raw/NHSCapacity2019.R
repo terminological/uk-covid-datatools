@@ -43,7 +43,15 @@ leaflet::leaflet() %>%
    leaflet::addTiles() %>% 
    leaflet::addCircleMarkers(data=tmp, color="#FF0000", popup = as.character(tmp$name))
 
+# https://data.england.nhs.uk/dataset/ods-nhs-trusts-and-sites
+standardFormat = c( "Organisation Code",  "Name",  "National Grouping",  "High Level Health Geography",  "Address Line 1",  "Address Line 2",  "Address Line 3",  "Address Line 4",
+                    "Address Line 5",  "Postcode",  "Open Date",  "Close Date",  "Null 1",  "Organisation SubType Code",  "Parent Organisation Code",  "Null 2",  "Null 3",  "Contact Telephone Number",
+                    "Null 4",  "Null 5",  "Null 6",  "Amended Record Indicator",  "Null 7",  "GOR Code",  "Null 8",  "Null 9",  "Null 10"
+)
 
+etr = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% select(-starts_with("Null"))
+ets =  readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/ets.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% select(-starts_with("Null"))
+eccg = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% select(-starts_with("Null"))
 
 
 ```

@@ -50,11 +50,12 @@ if (file.exists(paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),
   #   group_by(code, name) %>% normaliseAndCleanse(adjustUnknowns = FALSE) %>% tidyEstimateRt(cfg, window=7) #, totalExpr = daily_total, unknownExpr = daily_total-sum(cumulative_cases) ) %>% tidyEstimateRt(cfg, window=7)
   # # TODO: Dates missing
   # 
-  message("calculating rt for UK at LTLA level")
-  ts$r0CombinedUK_LTLA = ts$tidyCombinedUK_LTLA %>% #filter(date < as.Date("2020-04-11")) %>% 
-    #filter(!stringr::str_starts(code,"N")) %>% 
-    group_by(code, name) %>% normaliseAndCleanse(adjustUnknowns = FALSE, smoothWeekly = TRUE) %>% tidyEstimateRt(cfg, window=7) #, totalExpr = daily_total, unknownExpr = daily_total-sum(cumulative_cases) ) %>% tidyEstimateRt(cfg, window=7)
   
+  # message("calculating rt for UK at LTLA level")
+  # ts$r0CombinedUK_LTLA = ts$tidyCombinedUK_LTLA %>% #filter(date < as.Date("2020-04-11")) %>% 
+  #   #filter(!stringr::str_starts(code,"N")) %>% 
+  #   group_by(code, name) %>% normaliseAndCleanse(adjustUnknowns = FALSE, smoothWeekly = TRUE) %>% tidyEstimateRt(cfg, window=7) #, totalExpr = daily_total, unknownExpr = daily_total-sum(cumulative_cases) ) %>% tidyEstimateRt(cfg, window=7)
+  # 
   
 
   
@@ -73,9 +74,9 @@ if (file.exists(paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),
   # ts$r0CombinedUK = ts$r0CombinedUK %>% deltaR0timeseries()
   # write_csv(ts$r0CombinedUK, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Unitary_Authority.csv")
   
-  ts$r0CombinedUK_LTLA = ts$r0CombinedUK_LTLA %>% deltaR0timeseries()
-  write_csv(ts$r0CombinedUK_LTLA, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Lower_Tier_Local_Authority.csv")
-  
+  # ts$r0CombinedUK_LTLA = ts$r0CombinedUK_LTLA %>% deltaR0timeseries()
+  # write_csv(ts$r0CombinedUK_LTLA, "~/Git/uk-covid-datatools/vignettes/Supplementary_Rt_Timeseries_by_Lower_Tier_Local_Authority.csv")
+  # 
   # all UK regions
   message("calculating rates of change UK")
   ts$r0UK = ts$r0UK %>% deltaR0timeseries()
@@ -90,7 +91,7 @@ if (file.exists(paste0("~/Dropbox/covid19/current-rt/rt-timeseries-",Sys.Date(),
   ts$r0EnglandNHS = ts$r0EnglandNHS %>% deltaR0timeseries()
   ts$r0EnglandPHE = ts$r0EnglandPHE %>% deltaR0timeseries()
   
-  ts$r0CombinedUK = ts$r0CombinedUK_LTLA %>% ungroup()
+  # ts$r0CombinedUK = ts$r0CombinedUK_LTLA %>% ungroup()
   ts$r0EnglandNHS = ts$r0EnglandNHS %>% ungroup()
   ts$r0EnglandPHE = ts$r0EnglandPHE %>% ungroup()
   ts$r0UKRegional = ts$r0UKRegional %>% ungroup()

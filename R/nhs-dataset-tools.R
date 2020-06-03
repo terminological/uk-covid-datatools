@@ -1397,12 +1397,13 @@ cleanseCHESSData = function(CHESSdf, date, removeOutliers = TRUE) {
 #' @import dplyr
 #' @return a tibble of the formatted estimates
 #' @export
-convertRtToSPIM = function(df, geographyExpr, modelName, dateVar = "date", groupName = "Exeter") {
+convertRtToSPIM = function(df, geographyExpr, modelName, dateVar = "date", groupName = "Exeter", version="0.1") {
   dateVar = ensym(dateVar)
   geographyExpr = enexpr(geographyExpr)
   return(tibble(
     `Group`=groupName,
     `Model`=modelName,
+    `Version`=version,
     `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
     `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
     `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
@@ -1432,17 +1433,18 @@ convertRtToSPIM = function(df, geographyExpr, modelName, dateVar = "date", group
   ))
 }
 
-convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter") {
+convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter", version="0.1") {
   return(tibble(
     `Group`=groupName,
     `Model`=modelName,
+    `Version`=version,
     `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
     `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
     `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
-    `Day of Value` = NA,
-    `Month of Value` = NA,
-    `Year of Value` = NA,
-    `Geography` = NA,
+    `Day of Value` = Sys.Date() %>% format("%d") %>% as.integer(),
+    `Month of Value` = Sys.Date() %>% format("%m") %>% as.integer(),
+    `Year of Value` = Sys.Date() %>% format("%Y") %>% as.integer(),
+    `Geography` = "United Kingdom",
     `ValueType` = c("mean_generation_time","kappa"),
     `Quantile 0.05` = c(cfg$min_mean_si, cfg$min_std_si^2) %>% round(3),
     `Quantile 0.1` = NA,

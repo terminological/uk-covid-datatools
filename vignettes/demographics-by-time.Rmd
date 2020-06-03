@@ -31,7 +31,7 @@ library(patchwork)
 library(reticulate)
 standardPrintOutput::setDefaults()
 
-
+paths = findDatafile()
 #py_install("sympy")
 # py_config()
 ```
@@ -118,7 +118,7 @@ demog3 = demog2 %>% group_by(specimen_date, ageCat) %>% summarise(src_incidence 
 ```
 
 ```{r}
-plotRt(demog3,dateVar = specimen_date, facetVars = vars(ageCat), rtlim = c(0.5,1.5))
+plotRt(demog3,dateVar = specimen_date, facetVars = vars(ageCat), rtlim = c(0.5,1.5)) %>% saveThirdPageFigure("~/Dropbox/covid19/by-age/rtByAge")
 ```
 
 

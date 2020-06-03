@@ -80,8 +80,8 @@ keyDates = tibble(
 
 # markup the timeseries data with key dates:
 
-r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
-r0CombinedUK_LTLA = ts$r0CombinedUK_LTLA %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
+# r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
+# r0CombinedUK_LTLA = ts$r0CombinedUK_LTLA %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
 
 r0EnglandPHE = ts$r0EnglandPHE %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
 r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
@@ -105,9 +105,9 @@ exportSPIM = bind_rows(
   r0UKDeaths %>% filter(!is.na(`Median(R)`)) %>%
     #filter(date == max(date)) %>% 
     convertRtToSPIM("United Kingdom",modelName = "EpiEstim/Deaths"),
-  r0UKTracker %>% filter(!is.na(`Median(R)`)) %>%
-    #filter(date == max(date)) %>% 
-    convertRtToSPIM("United Kingdom",modelName = "EpiEstim/PHETrackerCases"),
+  # r0UKTracker %>% filter(!is.na(`Median(R)`)) %>%
+  #   #filter(date == max(date)) %>% 
+  #   convertRtToSPIM("United Kingdom",modelName = "EpiEstim/PHETrackerCases"),
   r0UKRegional %>% filter(!is.na(`Median(R)`)) %>%
     #group_by(uk_region) %>% filter(date == max(date)) %>% 
     convertRtToSPIM(uk_region,modelName = "EpiEstim/4NationsCases"),
@@ -119,7 +119,7 @@ exportSPIM = bind_rows(
     convertRtToSPIM(england_nhs_region,modelName = "EpiEstim/4NationsCases"),
   cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases"),
   cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths"),
-  cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
+  # cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
 )
 
 excelOutput <- openxlsx::createWorkbook()
@@ -259,154 +259,154 @@ englandpheplot = ggplot(r0EnglandPHE, aes(x=date, y=`Median(R)`, ymin=`Quantile.
 englandpheplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig3-NHSregionRt")
 ```
 
-## R(t) by Lower Tier Local Authority in England, and Local Health Boards in Wales and Scotland
+<!-- ## R(t) by Lower Tier Local Authority in England, and Local Health Boards in Wales and Scotland -->
 
-The following maps provide the most recent (from `r latestDate`) observation of the time varying reproduction number in all the different local authority districts in England, and health boards in Scotland and Wales. Full regional breakdown is not published on a daily basis in Northern Ireland. In panel A and D we see the low confidence interval estimate for R(t), in B and E, the median, and in C and F the high confidence interval. In panels G,H and I the relative frequency of the R(t) observation for all regions is plotted, a curve to the left of 1 implies the majority of regions implies case numbers are overall decreasing, a curve to the right of one implies case numbers are overall increasing.
+<!-- The following maps provide the most recent (from `r latestDate`) observation of the time varying reproduction number in all the different local authority districts in England, and health boards in Scotland and Wales. Full regional breakdown is not published on a daily basis in Northern Ireland. In panel A and D we see the low confidence interval estimate for R(t), in B and E, the median, and in C and F the high confidence interval. In panels G,H and I the relative frequency of the R(t) observation for all regions is plotted, a curve to the left of 1 implies the majority of regions implies case numbers are overall decreasing, a curve to the right of one implies case numbers are overall increasing. -->
 
-```{r}
-data("UKCovidMaps")
+<!-- ```{r} -->
+<!-- data("UKCovidMaps") -->
 
-# https://github.com/tidyverse/ggplot2/issues/3391
-# some issues joining tibble onto sf - which 
+<!-- # https://github.com/tidyverse/ggplot2/issues/3391 -->
+<!-- # some issues joining tibble onto sf - which  -->
 
-r0shapes = UKCovidMaps$reportingRegionsLTLA %>% 
-  # fill in missing dates to prevent the map having disappearing / reappearing regions
-  crossing(tibble(date=unique(r0CombinedUK_LTLA$date))) %>% 
-  left_join(keyDates, by="date") %>%
-  left_join(
-    r0CombinedUK_LTLA,
-    by=c("code","date"), suffix=c("",".dup")) %>% 
-  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
-  sf::st_as_sf()
-
-
-
-```
-
-```{r}
-defaultR0Map = function(data, facet="Median(R)") {
-  facet = ensym(facet)
-  return(
-    ggplot(data)+
-    geom_sf(aes(fill=!!facet),size=0.1)+
-    scale_fill_gradient2(
-      low="green",
-      mid="white",
-      high="red",
-      midpoint=0,
-      trans="log",
-      #na.value = "black", 
-      limits=c(0.2,5), 
-      breaks=c(0.2,0.5,1,2,5), 
-      labels=c("<0.2","0.5","1","2",">5"),
-      oob=scales::squish)+
-    standardPrintOutput::narrowAndTall()+
-    standardPrintOutput::mapTheme()
-  )
-}
-```
-
-```{r fig4, fig.cap="A geographical breakdown of R(t) observations in the UK based on cases. Left left column shows lower confidence limits, the central column is the median, and the right column the high confidence limit."}
-map1 = defaultR0Map(r0shapes %>% filter(date==latestDate), `Median(R)`)+guides(fill=guide_colourbar("Observed R(t)"))
-map2 = defaultR0Map(r0shapes %>% filter(date==latestDate), `Quantile.0.025(R)`)+guides(fill="none")
-map3 = defaultR0Map(r0shapes %>% filter(date==latestDate), `Quantile.0.975(R)`)+guides(fill="none")
-
-map4 = map1 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75))
-map5 = map2 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75))
-map6 = map3 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75))
-
-map7 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("Median")+standardPrintOutput::hideY()
-map8 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Quantile.0.025(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("Low CI")+standardPrintOutput::hideY()
-map9 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Quantile.0.975(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("High CI")+standardPrintOutput::hideY()
-
-out = (map2 + map1 + map3) / (map5+map4+map6) / (map8 + map7 + map9) / patchwork::guide_area() +patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(guides = "collect", heights = c(1,0.36,0.45,0.05)) 
-
-out %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map")
-
-```
+<!-- r0shapes = UKCovidMaps$reportingRegionsLTLA %>%  -->
+<!--   # fill in missing dates to prevent the map having disappearing / reappearing regions -->
+<!--   crossing(tibble(date=unique(r0CombinedUK_LTLA$date))) %>%  -->
+<!--   left_join(keyDates, by="date") %>% -->
+<!--   left_join( -->
+<!--     r0CombinedUK_LTLA, -->
+<!--     by=c("code","date"), suffix=c("",".dup")) %>%  -->
+<!--   mutate(ago=difftime(date,lubridate::now(),units="days")) %>%  -->
+<!--   sf::st_as_sf() -->
 
 
-<!-- This analysis covers the last 4 days. There is quite a lot of missing data in recent days. -->
 
-<!-- ```{r fig4, fig.cap="A map of R(t) estimates for the Unitary Authority and Local Health Boards of England, Scotland, and Wales"} -->
+<!-- ``` -->
 
-<!-- listAppend = function(list1,list2) { -->
-<!--   list1[[length(list1)+1]] <- list2 -->
-<!--   return(list1) -->
+<!-- ```{r} -->
+<!-- defaultR0Map = function(data, facet="Median(R)") { -->
+<!--   facet = ensym(facet) -->
+<!--   return( -->
+<!--     ggplot(data)+ -->
+<!--     geom_sf(aes(fill=!!facet),size=0.1)+ -->
+<!--     scale_fill_gradient2( -->
+<!--       low="green", -->
+<!--       mid="white", -->
+<!--       high="red", -->
+<!--       midpoint=0, -->
+<!--       trans="log", -->
+<!--       #na.value = "black",  -->
+<!--       limits=c(0.2,5),  -->
+<!--       breaks=c(0.2,0.5,1,2,5),  -->
+<!--       labels=c("<0.2","0.5","1","2",">5"), -->
+<!--       oob=scales::squish)+ -->
+<!--     standardPrintOutput::narrowAndTall()+ -->
+<!--     standardPrintOutput::mapTheme() -->
+<!--   ) -->
 <!-- } -->
+<!-- ``` -->
 
-<!-- plotCols = list() -->
-<!-- plotDates = c(latestDate-3,latestDate-2,latestDate-1,latestDate) -->
+<!-- ```{r fig4, fig.cap="A geographical breakdown of R(t) observations in the UK based on cases. Left left column shows lower confidence limits, the central column is the median, and the right column the high confidence limit."} -->
+<!-- map1 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Median(R)` = ifelse(incidence < 2 , NA, `Median(R)`)), `Median(R)`)+guides(fill=guide_colourbar("Observed R(t)")) -->
+<!-- map2 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Quantile.0.025(R)` = ifelse(incidence < 2 , NA, `Quantile.0.025(R)`)), `Quantile.0.025(R)`)+guides(fill="none") -->
+<!-- map3 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Quantile.0.975(R)` = ifelse(incidence < 2 , NA, `Quantile.0.975(R)`)), `Quantile.0.975(R)`)+guides(fill="none") -->
 
-<!-- ukwide = lapply(plotDates, function(plotDate) { -->
-<!--   defaultR0Map(r0shapes %>% filter(date==plotDate))+guides(fill="none")+labs(subtitle = plotDate) -->
-<!-- }) -->
-<!-- plotCols = ukwide #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap") -->
+<!-- map4 = map1 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75)) -->
+<!-- map5 = map2 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75)) -->
+<!-- map6 = map3 + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75)) -->
 
-<!-- london = lapply(plotDates, function(plotDate) { -->
-<!--   defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+ coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) -->
-<!-- }) -->
-<!-- plotCols = plotCols %>% append(london) -->
+<!-- map7 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("Median")+standardPrintOutput::hideY() -->
+<!-- map8 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Quantile.0.025(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("Low CI")+standardPrintOutput::hideY() -->
+<!-- map9 = ggplot(r0shapes %>% filter(date==latestDate), aes(x=`Quantile.0.975(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,2))+xlab("High CI")+standardPrintOutput::hideY() -->
 
-<!-- rtDensity = lapply(plotDates, function(plotDate) { -->
-<!--   ggplot(r0shapes %>% filter(date==plotDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,3))+ -->
-<!--     theme(axis.text.y=element_blank(),axis.title.y=element_blank()) -->
-<!-- }) -->
-<!-- plotCols = plotCols %>% append(rtDensity) -->
+<!-- out = (map2 + map1 + map3) / (map5+map4+map6) / (map8 + map7 + map9) / patchwork::guide_area() +patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(guides = "collect", heights = c(1,0.36,0.45,0.05))  -->
 
-<!-- tmp = patchwork::wrap_plots(plotCols,ncol=4,byrow = TRUE, tag_level = "new")+plot_annotation(tag_levels = "A")  -->
-<!-- tmp %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map") -->
+<!-- out %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map") -->
 
 <!-- ``` -->
 
 
+<!-- <!-- This analysis covers the last 4 days. There is quite a lot of missing data in recent days. --> -->
 
-### Regions with highest R(t)
+<!-- <!-- ```{r fig4, fig.cap="A map of R(t) estimates for the Unitary Authority and Local Health Boards of England, Scotland, and Wales"} --> -->
 
-In the following table the unitary authority areas with the highest median time varying reproduction number are listed, based on case numbers. As some of these areas are quite small there is a good deal of uncertainty in these observations. This list has been restricted to areas which have had more than 200 cases altogether, as areas with very few cases trajectory is heavily influenced by single cases.  As this R(t) value is a single observation we expect this to vary significantly from day to day, and these numbers need to be interpreted with caution.
+<!-- <!-- listAppend = function(list1,list2) { --> -->
+<!-- <!--   list1[[length(list1)+1]] <- list2 --> -->
+<!-- <!--   return(list1) --> -->
+<!-- <!-- } --> -->
 
-Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. An high R(t) which is worsening is worth monitoring. 
+<!-- <!-- plotCols = list() --> -->
+<!-- <!-- plotDates = c(latestDate-3,latestDate-2,latestDate-1,latestDate) --> -->
 
-```{r}
+<!-- <!-- ukwide = lapply(plotDates, function(plotDate) { --> -->
+<!-- <!--   defaultR0Map(r0shapes %>% filter(date==plotDate))+guides(fill="none")+labs(subtitle = plotDate) --> -->
+<!-- <!-- }) --> -->
+<!-- <!-- plotCols = ukwide #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap") --> -->
 
-r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(`Median(R)`)) %>% head(10) %>% mutate(
+<!-- <!-- london = lapply(plotDates, function(plotDate) { --> -->
+<!-- <!--   defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+ coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) --> -->
+<!-- <!-- }) --> -->
+<!-- <!-- plotCols = plotCols %>% append(london) --> -->
 
-  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")),
-  `Worsening?` = if_else(slope>0,ifelse(`slopeLowerCi`>0,"yes","possibly"),""),
-  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **",""))
-  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Worsening?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_top10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
-  
-``` 
+<!-- <!-- rtDensity = lapply(plotDates, function(plotDate) { --> -->
+<!-- <!--   ggplot(r0shapes %>% filter(date==plotDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,3))+ --> -->
+<!-- <!--     theme(axis.text.y=element_blank(),axis.title.y=element_blank()) --> -->
+<!-- <!-- }) --> -->
+<!-- <!-- plotCols = plotCols %>% append(rtDensity) --> -->
 
-<!-- ### Regions with the fastest increase in R(t) -->
+<!-- <!-- tmp = patchwork::wrap_plots(plotCols,ncol=4,byrow = TRUE, tag_level = "new")+plot_annotation(tag_levels = "A")  --> -->
+<!-- <!-- tmp %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map") --> -->
+
+<!-- <!-- ``` --> -->
+
+
+
+<!-- ### Regions with highest R(t) -->
+
+<!-- In the following table the unitary authority areas with the highest median time varying reproduction number are listed, based on case numbers. As some of these areas are quite small there is a good deal of uncertainty in these observations. This list has been restricted to areas which have had more than 200 cases altogether, as areas with very few cases trajectory is heavily influenced by single cases.  As this R(t) value is a single observation we expect this to vary significantly from day to day, and these numbers need to be interpreted with caution. -->
+
+<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. An high R(t) which is worsening is worth monitoring.  -->
 
 <!-- ```{r} -->
 
-<!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(slope)) %>% head(10) %>% mutate( -->
+<!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200 & incidence > 2) %>% arrange(desc(`Median(R)`)) %>% head(10) %>% mutate( -->
+
 <!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), -->
-<!--   `Increasing?` = if_else(`Median(R)`>1,ifelse(`Quantile.0.025(R)`>1,"yes","possibly"),""), -->
+<!--   `Worsening?` = if_else(slope>0,ifelse(`slopeLowerCi`>0,"yes","possibly"),""), -->
 <!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) -->
-<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Increasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  -->
-<!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_top10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
+<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Worsening?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_top10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
 
 <!-- ```  -->
 
-### Regions with lowest R(t)
+<!-- <!-- ### Regions with the fastest increase in R(t) --> -->
 
-In the following table the unitary authority areas with the lowest median time varying reproduction number are listed, based on case numbers. As above this list has been restricted to areas which have had more than 200 cases altogether. 
+<!-- <!-- ```{r} --> -->
 
-Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. A low R(t) which continues to improve (which includes the majority of this table) is reassuring. 
+<!-- <!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(slope)) %>% head(10) %>% mutate( --> -->
+<!-- <!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), --> -->
+<!-- <!--   `Increasing?` = if_else(`Median(R)`>1,ifelse(`Quantile.0.025(R)`>1,"yes","possibly"),""), --> -->
+<!-- <!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) --> -->
+<!-- <!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Increasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  --> -->
+<!-- <!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_top10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) --> -->
 
-```{r}
+<!-- <!-- ```  --> -->
 
-r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(`Median(R)`) %>% head(10) %>% mutate(
-  `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")),
-  `Improving?` = if_else(slope<0,ifelse(`slopeUpperCi`<0,"yes","possibly"),""),
-  `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **",""))
-  ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Improving?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% 
-  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table5_bottom10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1))
-  
-``` 
+<!-- ### Regions with lowest R(t) -->
+
+<!-- In the following table the unitary authority areas with the lowest median time varying reproduction number are listed, based on case numbers. As above this list has been restricted to areas which have had more than 200 cases altogether.  -->
+
+<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. A low R(t) which continues to improve (which includes the majority of this table) is reassuring.  -->
+
+<!-- ```{r} -->
+
+<!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200 & incidence > 2) %>% arrange(`Median(R)`) %>% head(10) %>% mutate( -->
+<!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")), -->
+<!--   `Improving?` = if_else(slope<0,ifelse(`slopeUpperCi`<0,"yes","possibly"),""), -->
+<!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **","")) -->
+<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Improving?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  -->
+<!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table5_bottom10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
+
+<!-- ```  -->
 
 <!-- ### Regions with the fastest decrease in R(t) -->
 

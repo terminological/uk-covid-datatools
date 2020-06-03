@@ -6,6 +6,42 @@ devtools::load_all("~/Git/uk-covid-datatools/")
 setwd("~/Git/uk-covid-datatools/data-raw/")
 source("./rawDataFunctions.R")
 
+#### LSOA and data zone population estimates
+#
+# England and wales:
+# https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2flowersuperoutputareamidyearpopulationestimates%2fmid2018sape21dt1a/sape21dt2mid2018lsoasyoaestimatesunformatted.zip
+# A zipped excel file
+# sheets are: Mid-2018 Males A5:CP34758
+# sheets are: Mid-2018 Females A5:CP34758
+# shapefile:
+# https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-boundaries-ew-bgc
+# https://opendata.arcgis.com/datasets/e993add3f1944437bc91ec7c76100c63_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D
+# Lower_Layer_Super_Output_Areas__December_2011__Boundaries_EW_BGC.shp
+#
+# Scotland:
+# https://www.nrscotland.gov.uk/statistics-and-data/statistics/statistics-by-theme/population/population-estimates/2011-based-special-area-population-estimates/small-area-population-estimates/time-series#2018
+# males - https://www.nrscotland.gov.uk/files//statistics/population-estimates/sape-time-series/males/sape-2018-males.xlsx
+# sheet - Table 1b Males (2018) A6:CR6982
+# females - https://www.nrscotland.gov.uk/files//statistics/population-estimates/sape-time-series/females/sape-2018-females.xlsx
+# sheet - Table 1c Females (2018) A6:CR6982
+# shapefile:
+# http://sedsh127.sedsh.gov.uk/Atom_data/ScotGov/ZippedShapefiles/SG_DataZoneBdry_2011.zip
+# SG_DataZoneBdry_2011.shp
+
+# Ethnicity:
+# https://www.nomisweb.co.uk/census/2011/ks201uk
+# 
+
+# TODO:
+# construct LSOA shapefile and deomgraphics estimates
+# function to aggregate estimates by ageband and recut into another shapefile
+# refactor supply demand algortihm to use this shapefile
+# ? LSOA ethnicity
+# function to retrieve shapefiles by code type
+## including shapefiles generated from supply demand algortihm
+## 
+
+
 #### High level estimates --- somewhat line up with shapefile
 
 # url <- "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2fpopulationestimatesforukenglandandwalesscotlandandnorthernireland%2fmid20182019laboundaries/ukmidyearestimates20182019ladcodes.xls"
@@ -162,7 +198,8 @@ totPop = sum(UKDemographics2018ByWard$count)
 UKDemographics2018ByWard2011 = ukcovidtools::interpolateByArea(
   UKDemographics2018ByWard %>% group_by(gender,ageGroup), 
   count, 
-  wards2018 %>% rename(WD18CD = wd18cd), WD18CD, 
+  wards2018 %>% rename(WD18CD = wd18cd), 
+  WD18CD, 
   wards2011 %>% rename(WD11CD = wd11cd, WD11NM = wd11nm) %>% group_by(WD11CD,WD11NM)
 )
 
