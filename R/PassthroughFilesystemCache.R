@@ -8,15 +8,19 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache", public=li
   
   wd = NULL,
   cache = list(),
+  nocache = FALSE,
+  debug = FALSE,
   
-  initialize = function(workingDirectory) {
+  initialize = function(workingDirectory, nocache = FALSE, debug=FALSE) {
     self$wd = path.expand(workingDirectory)
+    self$nocache = nocache
+    self$debug = debug
   },
   
   #' @description a pass through 2 level cache (memory / saved file / orElse function)
-  getSaved = function(id, orElse, nocache = FALSE, ...) {
+  getSaved = function(id, orElse, ...) {
     filename = paste0(self$wd,"/",id,".rda")
-    if(nocache) {
+    if(self$nocache) {
       self$cache[[id]] <- NULL
       unlink(filename)
     }
@@ -58,5 +62,8 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache", public=li
     } 
     return(onsZip)
   }
+  
+  
+  
   
 ))

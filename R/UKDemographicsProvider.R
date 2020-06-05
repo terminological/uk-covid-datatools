@@ -9,10 +9,12 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
   #TODO:
   # Gridded facebook UK population data
   geog = NULL,
+  codes = NULL,
   
-  initialize = function(geographyProvider) {
+  initialize = function(geographyProvider, codeMappingProvider, ...) {
     self$geog = geographyProvider
-    super$initialise(geographyProvider$wd)
+    self$codes = codeMappingProvider
+    super$initialize(workingDirectory = geographyProvider$wd, ...)
   },
   
   # TODO: Northern Ireland detailed demographics:
@@ -40,16 +42,16 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
         ageCols = colnames(demogByLSOA)[!is.na(as.integer(stringr::str_remove(colnames(demogByLSOA),"\\+")))]
         
         tmp = demogByLSOA %>%
-          select(-`All Ages`) %>%
+          dplyr::select(-`All Ages`) %>%
           tidyr::pivot_longer(cols=all_of(ageCols),names_to = "age",values_to = "count") #, names_ptypes = list(age=integer()))
         # browser()
-        tmp = tmp %>% rename(code = `Area Codes`, name=`Area Names`) %>% #, total=`All Ages`) %>%
-          mutate(age = as.integer(stringr::str_remove(age,"\\+")), codeType="LSOA11")
+        tmp = tmp %>% dplyr::rename(code = `Area Codes`, name=`Area Names`) %>% #, total=`All Ages`) %>%
+          dplyr::mutate(age = as.integer(stringr::str_remove(age,"\\+")), codeType="LSOA11")
         return(tmp)
       }
 
-      demogByLSOA_M <- read_excel(UKdemog, sheet="Mid-2018 Males", skip = 4) %>% convert() %>% mutate(gender = "M") 
-      demogByLSOA_F <- read_excel(UKdemog, sheet="Mid-2018 Females", skip = 4) %>% convert() %>% mutate(gender = "F") 
+      demogByLSOA_M <- readxl::read_excel(UKdemog, sheet="Mid-2018 Males", skip = 4) %>% convert() %>% dplyr::mutate(gender = "M") 
+      demogByLSOA_F <- readxl::read_excel(UKdemog, sheet="Mid-2018 Females", skip = 4) %>% convert() %>% dplyr::mutate(gender = "F") 
       
       scotDemogM = paste0(self$wd,"/demographicsScot_M.xlsx")
       scotDemogF = paste0(self$wd,"/demographicsScot_F.xlsx")
@@ -65,15 +67,15 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
       if(!file.exists(scotDemogF)) download.file(url="https://www.nrscotland.gov.uk/files//statistics/population-estimates/sape-time-series/females/sape-2018-females.xlsx",destfile = scotDemogF)
       
       convert2 = function(demogBySGDZ) {
-        demogBySGDZ = demogBySGDZ %>% select(-...4,-...5)
+        demogBySGDZ = demogBySGDZ %>% dplyr::select(-...4,-...5)
         ageCols = colnames(demogBySGDZ)[!is.na(as.integer(stringr::str_remove(colnames(demogBySGDZ),"\\.+")))]
-        demogBySGDZ = demogBySGDZ %>% pivot_longer(cols=all_of(ageCols),names_to="age",values_to="count")
-        demogBySGDZ = demogBySGDZ %>% mutate(age = as.integer(stringr::str_remove(age,"\\.+"))-6, codeType="SGDZ11") %>% rename(code = DataZone2011Code, name=DataZone2011Name) %>% select(-CouncilArea2018Name)
+        demogBySGDZ = demogBySGDZ %>% dplyr::pivot_longer(cols=all_of(ageCols),names_to="age",values_to="count")
+        demogBySGDZ = demogBySGDZ %>% dplyr::mutate(age = as.integer(stringr::str_remove(age,"\\.+"))-6, codeType="SGDZ11") %>% dplyr::rename(code = DataZone2011Code, name=DataZone2011Name) %>% dplyr::select(-CouncilArea2018Name)
         return(demogBySGDZ)
       }
       
-      demogBySGDZ_M =  read_excel(scotDemogM, sheet = "Table 1b Males (2018)", range = "A6:CR6982") %>% convert2() %>% mutate(gender = "M") 
-      demogBySGDZ_F =  read_excel(scotDemogF, sheet = "Table 1c Females (2018)", range = "A6:CR6982") %>% convert2() %>% mutate(gender = "F") 
+      demogBySGDZ_M =  read_excel(scotDemogM, sheet = "Table 1b Males (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "M") 
+      demogBySGDZ_F =  read_excel(scotDemogF, sheet = "Table 1c Females (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "F") 
       
       demographics = bind_rows(
         demogByLSOA_M,
@@ -88,11 +90,11 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
   
   #' @description get demographics interpolated to a specific shape file and aggregated to a given set of age bands, with optionally combining genders
   #' @param mapId = the mapId
-  #' @param outputShape = the sf object containing the shapefile of the desired output which must be grouped by desired output
-  #' @param outputShape = the sf object containing the shapefile of the desired output which must be grouped by desired output
+  #' @param outputShape = the sf object containing the shapefile of the desired output which may be grouped by desired output
+  #' @param outputVars = the desired output columns from the output shapefile enclosed by vars(...) (defaults to grouping of outputShape)
   #' @param ageBreaks = where to cut age groups? e.g. c(15,65,80) (max 90)
   #' @param combineGenders = merge the genders
-  getDemographics = function(mapId, outputShape = self$getMap(mapId) %>% group_by(code,name), outputVars = outputShape %>% groups(), ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+  getDemographicsForShape = function(mapId, outputShape = self$getMap(mapId) %>% dplyr::group_by(code,name), outputVars = outputShape %>% dplyr::groups(), ageBreaks = seq(5,90,5), combineGenders=FALSE) {
     
     # Cut the detailed demographics into desired age bands
     ageLabels = c(
@@ -100,15 +102,15 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
       paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
       paste0(ageBreaks[length(ageBreaks)],"+"))
     ageBreaks2 = c(-Inf,ageBreaks,Inf)
-    demog = self$getDetailedDemographics() %>% 
-      mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
-      select(-age) 
-    if (isTRUE(combineGenders)) {
-      demog = demog %>% group_by(ageCat,code) %>% summarise(count = sum(count))
-    } else {
-      demog = demog %>% group_by(ageCat,gender,code) %>% summarise(count = sum(count))
-    }
     
+    demog = self$getDetailedDemographics() %>% 
+      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
+      dplyr::select(-age) 
+    if (isTRUE(combineGenders)) {
+      demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
+    } else {
+      demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
+    }
     
     mapping = self$geog$interpolateByArea(
       inputDf = demog, 
@@ -122,17 +124,113 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
     )
     
     return(mapping)
+  },
+  
+  getDemographicsForCodeTypes = function(codeTypes, ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+    # get demographics encoded to level of LSOA and DZ
+    ageLabels = c(
+      paste0("<",ageBreaks[1]),
+      paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
+      paste0(ageBreaks[length(ageBreaks)],"+"))
+    ageBreaks2 = c(-Inf,ageBreaks,Inf)
+    
+    demog = self$getDetailedDemographics() %>% 
+      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
+      dplyr::select(-age) 
+    if (isTRUE(combineGenders)) {
+      demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
+    } else {
+      demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
+    }
+    
+    browser(expr = self$debug)
+    
+    codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(toCodeType %in% codeTypes)
+    tmp = demog %>% dplyr::ungroup() %>% dplyr::select(code) %>% dplyr::distinct() %>% dplyr::left_join(codeMap, by=c("code"="fromCode"))
+    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(toCode),0,1)))
+    
+    if(any(tmp$hits > 1)) warning("There are some LSOA or DZ areas which map to more than one output area. This will result in double counting of the total population.")
+    else if(any(tmp$hits == 0)) warning("There are some LSOA areas which are missing in the output areas, the output does not cover the whole population area.")
+    else message("Deomgraphic mapping: A one to one mapping between input and output exists!")
+    
+    if (isTRUE(combineGenders)) {
+      out = demog %>% dplyr::left_join(codeMap, by=c("code"="fromCode")) %>% dplyr::select(-code) %>% dplyr::rename(code = toCode, codeType = toCodeType) %>% dplyr::group_by(ageCat,code)  %>% dplyr::summarise(count = sum(count))
+    } else {
+      out = demog %>% dplyr::left_join(codeMap, by=c("code"="fromCode")) %>% dplyr::select(-code) %>% dplyr::rename(code = toCode, codeType = toCodeType) %>% dplyr::group_by(ageCat,code,gender)  %>% dplyr::summarise(count = sum(count))
+    }
+    
+    return(out)
+  },
+  
+  getDemographicsFromLSOAanDZMapping = function(mappingDf, fromCodeVar = "fromCode", toCodeVar = "toCode", fromCodeFracExpr = NULL, ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+    # fromCodeWeightVar, toCodeWeightVar, intersectionWeightVar / weightVar (=intersectionArea / fromCodeArea)
+    fromCodeVar = ensym(fromCodeVar)
+    toCodeVar = ensym(toCodeVar)
+    fromCodeFracExpr = tryCatch(enexpr(fromCodeFracExpr),error = function() expr(1))
+    # get demographics encoded to level of LSOA and DZ
+    ageLabels = c(
+      paste0("<",ageBreaks[1]),
+      paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
+      paste0(ageBreaks[length(ageBreaks)],"+"))
+    ageBreaks2 = c(-Inf,ageBreaks,Inf)
+    
+    demog = self$getDetailedDemographics() %>% 
+      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
+      dplyr::select(-age) 
+    if (isTRUE(combineGenders)) {
+      demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
+    } else {
+      demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
+    }
+    
+    browser(expr = self$debug)
+    
+    #codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(toCodeType %in% codeTypes)
+    codeMap = mappingDf %>% dplyr::rename(tmp_fromCode = !!fromCodeVar, tmp_toCode = !!toCodeVar) %>% dplyr::mutate(tmp_frac = !!fromCodeFracExpr) %>% dplyr::select(tmp_fromCode, tmp_toCode, tmp_frac)
+    tmp = demog %>% dplyr::ungroup() %>% dplyr::select(code) %>% dplyr::distinct() %>% dplyr::left_join(codeMap, by=c("code"="tmp_fromCode"))
+    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(toCode),0,1)))
+    
+    if(any(tmp$hits > 1)) warning("There are some LSOA or DZ areas which map to more than one output area. This will result in double counting of the total population.")
+    else if(any(tmp$hits == 0)) warning("There are some LSOA areas which are missing in the output areas, the output does not cover the whole population area.")
+    else message("Deomgraphic mapping: A one to one mapping between input and output exists!")
+    
+    if (isTRUE(combineGenders)) {
+      out = demog %>% 
+        dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
+        dplyr::select(-code) %>% 
+        dplyr::mutate(count = count*tmp_frac) %>% 
+        dplyr::group_by(ageCat,!!toCodeVar)  %>% 
+        dplyr::summarise(count = sum(count)) %>%
+        dplyr::ungroup()
+    } else {
+      out = demog %>% 
+        dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
+        dplyr::select(-code) %>% 
+        dplyr::mutate(count = count*tmp_frac) %>% 
+        dplyr::group_by(ageCat,gender,!!toCodeVar) %>% 
+        dplyr::summarise(count = sum(count)) %>%
+        dplyr::ungroup()
+    }
+    
+    return(out)
   }
   
 ))
 
 # library(tidyverse)
 # library(sf)
-# usp = UKStatisticsProvider$new("~/Data/maps")
+ugp = UKGeographyProvider$new("~/Data/maps")
+#upp = UKPostcodeProvider$new("~/Data/maps")
+#ump = UKCodeMappingProvider$new(upp)
+udp = UKDemographicsProvider$new(ugp,ump)
+# udp$debug = TRUE
+tmp = udp$getDemographicsForCodeTypes(codeTypes=c("HB","LHB","CCG"))
+
+tmp = udp$getDemographicsForCodeTypes(codeTypes=c("PHEC"))
 # usp$loadAllMaps()
 # # dm = usp$getPHEDashboardMap()
 # # #usp$saveShapefile("DASH_LTLA", dm)
-# # tmp = usp$getDemographics("DASH_LTLA", dm %>% group_by(code,name), combineGenders = FALSE)
+# # tmp = usp$getDemographics("DASH_LTLA", dm %>% dplyr::group_by(code,name), combineGenders = FALSE)
 # 
 # # sf = usp$getDemographicsMap()
 # # d = usp$getDetailedDemographics()
@@ -152,8 +250,8 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
 # 
 # tmp = usp$getHospitals(icuBeds>0 & sector=="NHS Sector")
 # catch = usp$createCatchment(
-#   supplyId = "ICUBEDS", supplyShape = tmp %>% rename(hospId = code, hospName = name) %>% group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
+#   supplyId = "ICUBEDS", supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
 #   demandId = "DEMOG", demandShape = usp$getDemographicsMap(), demandVar = count, demandIdVar = code
 # )
 # 
-# usp$preview(shape=catch$map %>% mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)
+# usp$preview(shape=catch$map %>% dplyr::mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)

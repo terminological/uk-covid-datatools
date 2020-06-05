@@ -12,7 +12,7 @@ NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=PassthroughFile
   initialize = function(geographyProvider, postcodeProvider) {
     self$geog = geographyProvider
     self$pcode = postcodeProvider
-    super$initialise(geographyProvider$wd)
+    super$initialize(geographyProvider$wd)
   },
   
   getHospitals = function(...) {

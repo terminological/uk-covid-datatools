@@ -4,7 +4,7 @@
 #' @keywords omop
 #' @import dplyr
 #' @export
-UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFilesystemCache, public = list(
+UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFilesystemCache, public = list(
   
   #### Fields ----
   sources = list(
@@ -28,7 +28,7 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
         altCodeCol = NA,
         simplify = FALSE
       ),
-      SGDZ11 = list(
+      DZ11 = list(
         # 
         url = "http://sedsh127.sedsh.gov.uk/Atom_data/ScotGov/ZippedShapefiles/SG_DataZoneBdry_2011.zip",
         mapName = "SG_DataZone_Bdry_2011",
@@ -37,7 +37,7 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
         altCodeCol = NA,
         simplify = FALSE
       ),
-      SHB19 = list(
+      HB19 = list(
         # https://www.spatialdata.gov.scot/geonetwork/srv/api/records/f12c3826-4b4b-40e6-bf4f-77b9ed01dc14
         url = "http://sedsh127.sedsh.gov.uk/Atom_data/ScotGov/ZippedShapefiles/SG_NHS_HealthBoards_2019.zip",
         mapName = "SG_NHS_HealthBoards_2019",
@@ -131,7 +131,7 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
     #### tweaks ----
     tweak = list(
       DEMOG = list(
-        # anglesea 1 & 3, thames river crossing 3
+        # anglesea 1 & 2, thames river crossing 3
         add = tibble::tibble(from = c("W01000015","W01000011","E01016012"), to=c("W01000103","W01000072","E01024172"))
         #TODO: islands in scotland
         #remove = tibble()
@@ -143,46 +143,48 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
   #### Methods ----
   #' @description get a map as an sf object
   #' @param codeType the map you want
-  getMap = function(mapId, debug=FALSE) {
+  getMap = function(mapId) {
     if (!(mapId %in% names(self$sources$maps))) stop("Unknown code type: ",mapId)
-    self$getSaved(mapId, orElse = function(loader) {
-      wardsZip = paste0(self$wd,"/",mapId,".zip")
-      unzipDir = paste0(self$wd,"/",mapId)
-      if(!file.exists(wardsZip)) {
-        download.file(loader$url,wardsZip)
-        wd = getwd()
-        if (!dir.exists(unzipDir)) dir.create(unzipDir)
-        setwd(unzipDir)
-        unzip(wardsZip, exdir=unzipDir, junkpaths = TRUE)
-        setwd(wd)
-      }
-      map = sf::st_read(paste0(unzipDir,"/",loader$mapName,".shp")) %>% sf::st_transform(crs=4326)# %>% nngeo::st_remove_holes()
-      if(debug) browser()
+    self$getSaved(mapId, loader = self$sources$maps[[mapId]], orElse = function(loader) {
+      # wardsZip = paste0(self$wd,"/",mapId,".zip")
+      # unzipDir = paste0(self$wd,"/",mapId)
+      # if(!file.exists(wardsZip)) {
+      #   download.file(loader$url,wardsZip)
+      #   wd = getwd()
+      #   if (!dir.exists(unzipDir)) dir.create(unzipDir)
+      #   setwd(unzipDir)
+      #   unzip(wardsZip, exdir=unzipDir, junkpaths = TRUE)
+      #   setwd(wd)
+      # }
+      pattern = paste0(ifelse(is.na(loader$mapName),"",loader$mapName),"\\.shp$")
+      mapFile = self$downloadAndUnzip(id=mapId,url=loader$url,pattern=pattern)
+      map = sf::st_read(mapFile) %>% sf::st_transform(crs=4326)# %>% nngeo::st_remove_holes()
+      browser(expr=self$debug)
       if(loader$simplify) map = suppressWarnings(map %>% sf::st_simplify(dTolerance=0.001))
       map = self$standardiseMap(map, loader$codeCol, loader$nameCol, loader$altCodeCol, mapId)
-      return(map %>% group_by(code,name))
-    }, loader = self$sources$maps[[mapId]])
+      return(map %>% dplyr::group_by(code,name))
+    })
   },
   
   #' @description LSOA & Scottish Data Zones
   getDemographicsMap = function() {
     tmp = self$getDetailedDemographics()
-    tmp = tmp %>% group_by(code) %>% summarise(count = sum(count))
+    tmp = tmp %>% dplyr::group_by(code) %>% dplyr::summarise(count = sum(count))
     self$getSaved("DEMOG",orElse = function() {return(
       rbind(
         self$getMap("LSOA11"),
         self$getMap("SGDZ11")
-      ) %>% group_by(code,name))}) %>% left_join(tmp, by="code")
+      ) %>% dplyr::group_by(code,name))}) %>% dplyr::left_join(tmp, by="code")
   },
   
   #' @description England LADs, Scotland Health Board, Wales Health Board
   getPHEDashboardMap = function() {
     self$getSaved("DASH_LTLA",orElse = function() {return(
       rbind(
-        self$getMap("LAD19") %>% filter(code %>% stringr::str_starts("E")),
+        self$getMap("LAD19") %>% dplyr::filter(code %>% stringr::str_starts("E")),
         self$getMap("SHB19"), 
         self$getMap("LHB19")
-      ) %>% group_by(code,name))
+      ) %>% dplyr::group_by(code,name))
   })},
   
   
@@ -194,7 +196,7 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
         # browser()
         message("calculating intersection ....")
         inputShape = inputShape %>% sf::st_cast(to="POLYGON")
-        inputShape = inputShape %>% rename_all(function(x) paste0(x,".src"))
+        inputShape = inputShape %>% dplyr::rename_all(function(x) paste0(x,".src"))
         outputShape = outputShape %>% sf::st_cast(to="POLYGON")
         tmp = inputShape %>% sf::st_intersection(inputShape)
         message("calculating intersection areas....")
@@ -216,15 +218,15 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
   interpolateByArea = function(inputDf, 
       inputMapId, inputShape = self$getMap(inputMapId), inputIdVar = "code", 
       interpolateVar, 
-      outputMapId, outputShape = self$getMap(outputMapId) %>% group_by(codeType,code,name), outputVars = outputShape %>% groups(),
+      outputMapId, outputShape = self$getMap(outputMapId) %>% dplyr::group_by(codeType,code,name), outputVars = outputShape %>% dplyr::groups(),
       aggregateFn = sum
     ) {
     
     inputIdVar = ensym(inputIdVar)
     interpolateVar = ensym(interpolateVar)
-    grps = inputDf %>% groups()
+    grps = inputDf %>% dplyr::groups()
     grps = grps[sapply(grps,as_label) != as_label(inputIdVar) & sapply(grps,as_label) != as_label(interpolateVar)]
-    inputDf = inputDf %>% ungroup()# %>% group_by(!!!grps)
+    inputDf = inputDf %>% dplyr::ungroup()# %>% dplyr::group_by(!!!grps)
     if(!(as_label(inputIdVar) %in% colnames(inputDf))) 
       stop("Join id column missing from inputDf: ",as_label(inputIdVar))
     if(!(as_label(inputIdVar) %in% colnames(inputShape))) 
@@ -240,17 +242,17 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
     
     inputIdVar2 = sym(paste0(as_label(inputIdVar),".src"))
     
-    intersection = intersection %>% tibble::as_tibble() %>% mutate(
+    intersection = intersection %>% tibble::as_tibble() %>% dplyr::mutate(
       fracInput = intersectionArea/area.src
     ) 
     
-    mapping = intersection %>% tibble::as_tibble() %>% select(!!inputIdVar2, fracInput, !!!outputVars)
-    tmpInput = inputDf %>% rename(!!inputIdVar2 := !!inputIdVar)
-    mapping = suppressWarnings(mapping %>% inner_join(tmpInput, by=as_label(inputIdVar2)))
-    mapping = mapping %>% mutate(intersectionValue = !!interpolateVar * fracInput)
-    mapping = mapping %>% group_by(!!!grps, !!!outputVars) %>% group_modify(function(d,g,...) {
+    mapping = intersection %>% tibble::as_tibble() %>% dplyr::select(!!inputIdVar2, fracInput, !!!outputVars)
+    tmpInput = inputDf %>% dplyr::rename(!!inputIdVar2 := !!inputIdVar)
+    mapping = suppressWarnings(mapping %>% dplyr::inner_join(tmpInput, by=as_label(inputIdVar2)))
+    mapping = mapping %>% dplyr::mutate(intersectionValue = !!interpolateVar * fracInput)
+    mapping = mapping %>% dplyr::group_by(!!!grps, !!!outputVars) %>% dplyr::group_modify(function(d,g,...) {
       return(
-        tibble::tibble(agg = do.call(aggregateFn, list(x=d$intersectionValue))) %>% rename(!!interpolateVar := agg)
+        tibble::tibble(agg = do.call(aggregateFn, list(x=d$intersectionValue))) %>% dplyr::rename(!!interpolateVar := agg)
       )
     })
     
@@ -264,20 +266,20 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
   #' @import dplyr
   #' @return an edge list of ids with from and to columns
   #' @export
-  createNeighbourNetwork = function(mapId, shape = self$getMap(mapId) %>% group_by(code,name), idVar="code") {
+  createNeighbourNetwork = function(mapId, shape = self$getMap(mapId) %>% dplyr::group_by(code,name), idVar="code") {
     idVar = ensym(idVar)
     self$getSaved(paste0("NN_",mapId), orElse=function() {
-      shape = shape %>% mutate(tmp_id = row_number())
+      shape = shape %>% dplyr::mutate(tmp_id = row_number())
       graph = shape %>% sf::st_intersects()
       edges = tibble::tibble(
         from_tmp_id = rep(1:length(graph),sapply( graph, length)),
         to_tmp_id = unlist(graph %>% purrr::flatten())
       )
       edges = edges %>% 
-        left_join(shape %>% tibble::as_tibble() %>% select(from_tmp_id = tmp_id, from = !!idVar), by="from_tmp_id") %>%
-        left_join(shape %>% tibble::as_tibble() %>% select(to_tmp_id = tmp_id, to = !!idVar), by="to_tmp_id") %>%
-        filter(from != to) %>%
-        select(-from_tmp_id, -to_tmp_id)
+        dplyr::left_join(shape %>% tibble::as_tibble() %>% dplyr::select(from_tmp_id = tmp_id, from = !!idVar), by="from_tmp_id") %>%
+        dplyr::left_join(shape %>% tibble::as_tibble() %>% dplyr::select(to_tmp_id = tmp_id, to = !!idVar), by="to_tmp_id") %>%
+        dplyr::filter(from != to) %>%
+        dplyr::select(-from_tmp_id, -to_tmp_id)
       return(edges)
     })
   },
@@ -298,23 +300,25 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
   # },
   
   #' @description standardise all maps to a minimal set of attributes with consistent naming
+  #' @import dplyr
+  #' @export
   standardiseMap = function(sf, codeCol, nameCol, altCodeCol, codeType) {
     
-    sf = sf %>% mutate(tmp_code = as.character(!!codeCol))
+    sf = sf %>% dplyr::mutate(tmp_code = as.character(!!codeCol))
     if(!is.na(nameCol)) {
-      sf = sf %>% mutate(tmp_name = as.character(!!nameCol))
-      sf = sf %>% select(-!!nameCol)
+      sf = sf %>% dplyr::mutate(tmp_name = as.character(!!nameCol))
+      sf = sf %>% dplyr::select(-!!nameCol)
     } else {
-      sf = sf %>% mutate(tmp_name = as.character(!!codeCol))
+      sf = sf %>% dplyr::mutate(tmp_name = as.character(!!codeCol))
     }
-    sf = sf %>% select(-!!codeCol) %>% rename(code = tmp_code,name = tmp_name)
+    sf = sf %>% dplyr::select(-!!codeCol) %>% dplyr::rename(code = tmp_code,name = tmp_name)
     
     if(!is.na(altCodeCol)) {
-      sf = sf %>% rename(altCode = !!altCodeCol) %>% mutate(altCode = as.character(altCode))
+      sf = sf %>% dplyr::rename(altCode = !!altCodeCol) %>% dplyr::mutate(altCode = as.character(altCode))
     } else {
-      sf = sf %>% mutate(altCode = as.character(NA))
+      sf = sf %>% dplyr::mutate(altCode = as.character(NA))
     }
-    sf = sf %>% mutate(codeType = codeType) %>% select(codeType, code, name, altCode)
+    sf = sf %>% dplyr::mutate(codeType = codeType) %>% dplyr::select(codeType, code, name, altCode)
     sf$area = sf %>% sf::st_area() %>% as.numeric()
     return(sf)
   },
@@ -348,15 +352,8 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
     self$getMap("LGD12")
   },
   
-  getHospitals = function(...) {
-    self$getSaved("HOSPITALS",orElse = function() {
-      gbHospitals <- read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=128715098&single=true&output=csv","&nocache=",sample(1:1000000,1)))
-      hospSf = sf::st_as_sf(gbHospitals %>% rename(code = hospitalId) %>% select(-nation), coords=c("long","lat"), crs=4326)
-    }) %>% filter(...)
-  },
-  
   createCatchment = function(
-      supplyId, supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% groups(),
+      supplyId, supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% dplyr::groups(),
       demandId = "DEMOG", demandShape = self$getDemographicsMap(), demandVar = "count", demandIdVar = "code", 
       growthRates = function(capacityPerDemand, multiplier = 1.1) {return( rank(capacityPerDemand) / length(capacityPerDemand) * multiplier )},
       distanceModifier = function(distanceToSupply) {return(2/(1+distanceToSupply/min(0.1,mean(distanceToSupply))))},
@@ -370,12 +367,12 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
       demandIdVar = ensym(demandIdVar)
       demandVar = ensym(demandVar)
       
-      demandShape = demandShape %>% ungroup() %>% rename(demandCode = !!demandIdVar, demand = !!demandVar) %>% mutate(tmp_demand_id = row_number())
+      demandShape = demandShape %>% dplyr::ungroup() %>% dplyr::rename(demandCode = !!demandIdVar, demand = !!demandVar) %>% dplyr::mutate(tmp_demand_id = row_number())
       # preserve the features we want to output
-      supplyFeatures = supplyShape %>% ungroup() %>% tibble::as_tibble() %>% select(!!supplyIdVar, !!!supplyOutputVars, !!supplyVar) %>% distinct()
-      supplyPoints = supplyShape %>% ungroup()
+      supplyFeatures = supplyShape %>% dplyr::ungroup() %>% tibble::as_tibble() %>% dplyr::select(!!supplyIdVar, !!!supplyOutputVars, !!supplyVar) %>% dplyr::distinct()
+      supplyPoints = supplyShape %>% dplyr::ungroup()
       
-      supplyShape = supplyShape %>% ungroup() %>% rename(supplyCode = !!supplyIdVar, supply = !!supplyVar) %>% mutate(tmp_supply_id = row_number()) 
+      supplyShape = supplyShape %>% dplyr::ungroup() %>% dplyr::rename(supplyCode = !!supplyIdVar, supply = !!supplyVar) %>% dplyr::mutate(tmp_supply_id = row_number()) 
       
       
       # create an edgelist of supplyIdVar, demandIdVar
@@ -384,36 +381,36 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
       supplyMapping = tibble::tibble(
         tmp_demand_id = rep(1:length(containment),sapply(containment, length)),
         tmp_supply_id = unlist(containment %>% purrr::flatten()) 
-      ) %>% distinct()
+      ) %>% dplyr::distinct()
       resourceProvider = supplyMapping %>%
-        left_join(demandShape %>% tibble::as_tibble() %>% select(tmp_demand_id, demandCode), by="tmp_demand_id") %>%
-        left_join(supplyShape %>% tibble::as_tibble() %>% select(tmp_supply_id, supplyCode, supply), by="tmp_supply_id") %>%
-        select(-tmp_demand_id, -tmp_supply_id)
+        dplyr::left_join(demandShape %>% tibble::as_tibble() %>% dplyr::select(tmp_demand_id, demandCode), by="tmp_demand_id") %>%
+        dplyr::left_join(supplyShape %>% tibble::as_tibble() %>% dplyr::select(tmp_supply_id, supplyCode, supply), by="tmp_supply_id") %>%
+        dplyr::select(-tmp_demand_id, -tmp_supply_id)
       # if there are multiple providers in one area we merge them (creating a new supplier id).
       mergedSuppliers = NULL
-      if(any(resourceProvider %>% group_by(demandCode) %>% count() %>% pull(n)>1)) {
+      if(any(resourceProvider %>% dplyr::group_by(demandCode) %>% dplyr::count() %>% dplyr::pull(n)>1)) {
         warning("More than one supplier was found in a single region. These the first value will be picked, and the total capacity combined, but as a result the catchment map will be missing some values from the supplier list.")
-        mergedSuppliers = resourceProvider %>% group_by(demandCode) %>% filter(n()>1)
+        mergedSuppliers = resourceProvider %>% dplyr::group_by(demandCode) %>% dplyr::filter(n()>1)
       }
-      resourceProvider = resourceProvider %>% group_by(demandCode) %>% summarise(supplyCode := first(supplyCode), supply=sum(supply))%>% rename(areaId = demandCode)
+      resourceProvider = resourceProvider %>% dplyr::group_by(demandCode) %>% dplyr::summarise(supplyCode := first(supplyCode), supply=sum(supply))%>% dplyr::rename(areaId = demandCode)
       
       areaNetwork = self$createNeighbourNetwork(demandId, demandShape, demandCode) 
-      if(exists("add",where = tweakNetwork)) areaNetwork = areaNetwork %>% union(tweakNetwork$add) %>% union(tweakNetwork$add %>% rename(tmp = from) %>% rename(from=to,to=tmp)) 
-      if(exists("remove",where = tweakNetwork)) areaNetwork = areaNetwork %>% setdiff(tweakNetwork$remove) %>% setdiff(tweakNetwork$remove %>% rename(tmp = from) %>% rename(from=to,to=tmp)) 
-      areaNetwork = areaNetwork %>% rename(fromAreaId = from, toAreaId = to)
+      if(exists("add",where = tweakNetwork)) areaNetwork = areaNetwork %>% dplyr::union(tweakNetwork$add) %>% dplyr::union(tweakNetwork$add %>% dplyr::rename(tmp = from) %>% dplyr::rename(from=to,to=tmp)) 
+      if(exists("remove",where = tweakNetwork)) areaNetwork = areaNetwork %>% dplyr::setdiff(tweakNetwork$remove) %>% dplyr::setdiff(tweakNetwork$remove %>% dplyr::rename(tmp = from) %>% dplyr::rename(from=to,to=tmp)) 
+      areaNetwork = areaNetwork %>% dplyr::rename(fromAreaId = from, toAreaId = to)
       
-      entireArea = demandShape %>% ungroup() %>% select(areaId = demandCode, areaSize = area, areaDemand = demand) %>% 
+      entireArea = demandShape %>% dplyr::ungroup() %>% dplyr::select(areaId = demandCode, areaSize = area, areaDemand = demand) %>% 
           semi_join(
-            areaNetwork %>% select(areaId=toAreaId) %>% union(resourceProvider %>% select(areaId)), 
+            areaNetwork %>% dplyr::select(areaId=toAreaId) %>% dplyr::union(resourceProvider %>% dplyr::select(areaId)), 
             by="areaId") %>% tibble::as_tibble() 
         
       # ensure entire area is connected - otherwise we get problems with islands
       
       areasWithResource = entireArea %>% 
-        inner_join(resourceProvider, by="areaId") %>% 
-        rename(supplierId = supplyCode, supplyCapacity = supply) %>% tibble::as_tibble()
+        dplyr::inner_join(resourceProvider, by="areaId") %>% 
+        dplyr::rename(supplierId = supplyCode, supplyCapacity = supply) %>% tibble::as_tibble()
         
-      suppliedArea = areasWithResource %>% mutate(
+      suppliedArea = areasWithResource %>% dplyr::mutate(
         distanceToSupply = 0,
         demandDistanceToSupply = 0,
         accumulatedGrowth = 0,
@@ -423,12 +420,12 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
       remaining = NULL
       # loop?
       repeat {
-        suppliedArea = suppliedArea %>% group_by(supplierId) %>% mutate(
+        suppliedArea = suppliedArea %>% dplyr::group_by(supplierId) %>% dplyr::mutate(
           totalDemand = sum(areaDemand),
           capacityPerDemand = supplyCapacity/totalDemand
-        ) %>% ungroup() 
+        ) %>% dplyr::ungroup() 
         
-        unSuppliedArea = entireArea %>% anti_join(suppliedArea, by="areaId")
+        unSuppliedArea = entireArea %>% dplyr::anti_join(suppliedArea, by="areaId")
         message("areas remaining: ",nrow(unSuppliedArea))
         
         if(nrow(unSuppliedArea) == 0) break
@@ -440,60 +437,60 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
         # stop if unsupplied area is empty
         
         # growing areas are - A) adjoin unsupplied areas B) have accumulated enough to grow
-        unSuppliedNeighbourAreas = areaNetwork %>% semi_join(suppliedArea, by=c("fromAreaId"="areaId")) %>% inner_join(unSuppliedArea, by=c("toAreaId"="areaId")) %>% rename(areaId = toAreaId)
-        intoUnsupplied = unSuppliedNeighbourAreas %>% group_by(fromAreaId) %>% summarise(newAreas = n(), newAreaDemand = sum(areaDemand))
+        unSuppliedNeighbourAreas = areaNetwork %>% dplyr::semi_join(suppliedArea, by=c("fromAreaId"="areaId")) %>% dplyr::inner_join(unSuppliedArea, by=c("toAreaId"="areaId")) %>% dplyr::rename(areaId = toAreaId)
+        intoUnsupplied = unSuppliedNeighbourAreas %>% dplyr::group_by(fromAreaId) %>% dplyr::summarise(newAreas = n(), newAreaDemand = sum(areaDemand))
         
         # TODO: this definintion only allows growth into areas that are not already supplied
-        growingArea = suppliedArea %>% rename(fromAreaId = areaId) %>% 
-          inner_join(intoUnsupplied, by=c("fromAreaId"), suffix=c(".old","")) %>% 
-          mutate( 
+        growingArea = suppliedArea %>% dplyr::rename(fromAreaId = areaId) %>% 
+          dplyr::inner_join(intoUnsupplied, by=c("fromAreaId"), suffix=c(".old","")) %>% 
+          dplyr::mutate( 
             newTotalDemand = totalDemand+newAreaDemand,
             newCapacityPerDemand = supplyCapacity/newTotalDemand
           ) %>%
-          mutate(
+          dplyr::mutate(
             accumulatedGrowth = accumulatedGrowth + growthRates(newCapacityPerDemand) #*distanceModifier(distanceToSupply) #TODO: make this work
           )
         # browser()
-        suppliedArea = suppliedArea %>% left_join(
-          growingArea %>% select(areaId = fromAreaId, newAccumulated = accumulatedGrowth), by="areaId") %>% 
-          mutate(accumulatedGrowth = ifelse(!is.na(newAccumulated), newAccumulated, accumulatedGrowth)) %>%
-          select(-newAccumulated)
+        suppliedArea = suppliedArea %>% dplyr::left_join(
+          growingArea %>% dplyr::select(areaId = fromAreaId, newAccumulated = accumulatedGrowth), by="areaId") %>% 
+          dplyr::mutate(accumulatedGrowth = ifelse(!is.na(newAccumulated), newAccumulated, accumulatedGrowth)) %>%
+          dplyr::select(-newAccumulated)
         
         
-        newlySuppliedArea = growingArea %>% filter(accumulatedGrowth > 1) %>% inner_join(unSuppliedNeighbourAreas, by="fromAreaId", suffix=c(".from",""))
+        newlySuppliedArea = growingArea %>% dplyr::filter(accumulatedGrowth > 1) %>% dplyr::inner_join(unSuppliedNeighbourAreas, by="fromAreaId", suffix=c(".from",""))
         newlySuppliedArea = newlySuppliedArea %>%
-          mutate(
+          dplyr::mutate(
             distanceToSupply = distanceToSupply + sqrt(areaSize.from),
             demandDistanceToSupply = demandDistanceToSupply + areaDemand.from,
             accumulatedGrowth = accumulatedGrowth - 1,
             iteration = iteration + 1
           ) %>%
-          select(-ends_with(".from"), -fromAreaId)
+          dplyr::select(-ends_with(".from"), -fromAreaId)
         
         # ensure only one supplier gets the target area
-        newlySuppliedArea = newlySuppliedArea %>% group_by(areaId) %>% arrange(desc(capacityPerDemand),desc(distanceToSupply)) %>% filter(row_number() <=1) %>% ensurer::ensure_that(length(unique(.$areaId)) == length(.$areaId))
+        newlySuppliedArea = newlySuppliedArea %>% dplyr::group_by(areaId) %>% dplyr::arrange(desc(capacityPerDemand),desc(distanceToSupply)) %>% dplyr::filter(row_number() <=1) %>% ensurer::ensure_that(length(unique(.$areaId)) == length(.$areaId))
         
         #browser()
         
         suppliedArea = suppressWarnings(bind_rows(suppliedArea, newlySuppliedArea)) %>% ensurer::ensure_that(length(unique(.$areaId)) == length(.$areaId))
-        suppliedArea = suppliedArea %>% select(areaId,areaSize,areaDemand,supplierId, supplyCapacity, distanceToSupply, demandDistanceToSupply, iteration, accumulatedGrowth, geometry)
+        suppliedArea = suppliedArea %>% dplyr::select(areaId,areaSize,areaDemand,supplierId, supplyCapacity, distanceToSupply, demandDistanceToSupply, iteration, accumulatedGrowth, geometry)
       }
-      suppliedArea = suppliedArea %>% select(-accumulatedGrowth) %>% sf::st_as_sf()
+      suppliedArea = suppliedArea %>% dplyr::select(-accumulatedGrowth) %>% sf::st_as_sf()
       
       # reassemble features preserved from original supply dataframe
       message("assembling catchment area map...")
       #browser()
       
-      suppliedMap = suppliedArea %>% sf::st_buffer(0) %>% group_by(supplierId) %>% summarise(
+      suppliedMap = suppliedArea %>% sf::st_buffer(0) %>% dplyr::group_by(supplierId) %>% dplyr::summarise(
         area=sum(areaSize),
         !!demandVar:=sum(areaDemand),
         !!supplyVar:=first(supplyCapacity)
-      ) %>% rename(!!supplyIdVar := supplierId) %>% nngeo::st_remove_holes()
-      suppliedMap = supplyFeatures %>% inner_join(suppliedMap %>% tibble::as_tibble(), by=as_label(supplyIdVar), suffix=c(".original",""))%>% sf::st_as_sf(crs=4326)
+      ) %>% dplyr::rename(!!supplyIdVar := supplierId) %>% nngeo::st_remove_holes()
+      suppliedMap = supplyFeatures %>% dplyr::inner_join(suppliedMap %>% tibble::as_tibble(), by=as_label(supplyIdVar), suffix=c(".original",""))%>% sf::st_as_sf(crs=4326)
       
       # mapping of demandIdVar to supplyIdVar - this will miss any merged ids.
-      crossMapping = suppliedArea %>% tibble::as_tibble() %>% select(!!demandIdVar := areaId, !!supplyIdVar := supplierId)
-      # crossMapping = crossMapping %>% separate_rows(originalId, sep = "\\|")
+      crossMapping = suppliedArea %>% tibble::as_tibble() %>% dplyr::select(!!demandIdVar := areaId, !!supplyIdVar := supplierId)
+      # crossMapping = crossMapping %>% dplyr::separate_rows(originalId, sep = "\\|")
       
       
       
@@ -514,27 +511,32 @@ UKStatisticsProvider = R6::R6Class("UKStatisticsProvider", inherit=PassthroughFi
     codeVar = ensym(codeVar)
     poiNameVar = ensym(poiNameVar)
     poiCodeVar = ensym(poiCodeVar)
-    tmp = shape %>% rename(name = !!nameVar, code = !!codeVar)
+    tmp = shape %>% dplyr::rename(name = !!nameVar, code = !!codeVar)
     leaf = leaflet::leaflet(tmp) %>% 
       leaflet::addTiles() %>% 
       leaflet::addPolygons(label = as.character(tmp$name), popup = as.character(tmp$code))
     if(!identical(poi,NULL)) {
-      poi = poi %>%  rename(name = !!poiNameVar, code = !!poiCodeVar)
+      poi = poi %>%  dplyr::rename(name = !!poiNameVar, code = !!poiCodeVar)
       leaf = leaf %>% leaflet::addCircleMarkers(data=poi, color="#FF0000", label= as.character(poi$name), popup = as.character(poi$code))
     }
     return(leaf)
-  }
+  },
+ 
+ plot = function(mapId = NA, shape=self$getMap(mapId)) {
+   ggplot(shape)+geom_sf()
+ }
   
 ))
 
-library(tidyverse)
-library(sf)
-usp = UKStatisticsProvider$new("~/Data/maps")
-tmp = usp$getMap("OUTCODE", debug=TRUE)
+# library(tidyverse)
+# library(sf)
+# usp = UKGeographyProvider$new("~/Data/maps")
+# # usp$nocache = TRUE
+# tmp = usp$getMap("HB19")
 # usp$loadAllMaps()
 # # dm = usp$getPHEDashboardMap()
 # # #usp$saveShapefile("DASH_LTLA", dm)
-# # tmp = usp$getDemographics("DASH_LTLA", dm %>% group_by(code,name), combineGenders = FALSE)
+# # tmp = usp$getDemographics("DASH_LTLA", dm %>% dplyr::group_by(code,name), combineGenders = FALSE)
 # 
 # # sf = usp$getDemographicsMap()
 # # d = usp$getDetailedDemographics()
@@ -554,8 +556,8 @@ tmp = usp$getMap("OUTCODE", debug=TRUE)
 # 
 # tmp = usp$getHospitals(icuBeds>0 & sector=="NHS Sector")
 # catch = usp$createCatchment(
-#   supplyId = "ICUBEDS", supplyShape = tmp %>% rename(hospId = code, hospName = name) %>% group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
+#   supplyId = "ICUBEDS", supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
 #   demandId = "DEMOG", demandShape = usp$getDemographicsMap(), demandVar = count, demandIdVar = code
 # )
 # 
-# usp$preview(shape=catch$map %>% mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)
+# usp$preview(shape=catch$map %>% dplyr::mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)

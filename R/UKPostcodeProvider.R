@@ -9,7 +9,7 @@ UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesy
   getFullONS = function() {
     self$getSaved("ONSPD",orElse = function() {
       csvfile = self$downloadAndUnzip("ONSPD", "https://www.arcgis.com/sharing/rest/content/items/fb894c51e72748ec8004cc582bf27e83/data", pattern = "ONSPD.*UK\\.csv")
-      ONSPD = read_csv(csvfile[1], col_types = cols(
+      ONSPD = readr::read_csv(csvfile[1], col_types = cols(
         pcd = col_character(), pcd2 = col_character(), pcds = col_character(), dointr = col_character(),
         doterm = col_character(), oscty = col_character(), ced = col_character(), oslaua = col_character(),
         osward = col_character(), parish = col_character(), usertype = col_character(), oseast1m = col_character(), osnrth1m = col_character(),
@@ -21,27 +21,29 @@ UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesy
         bua11 = col_character(), buasd11 = col_character(), ru11ind = col_character(), oac11 = col_character(), lat = col_double(),
         long = col_double(), lep1 = col_character(), lep2 = col_character(), pfa = col_character(), imd = col_character(), calncv = col_character(),
         stp = col_character()
-      ))
+      )) %>% dplyr::mutate(
+        outcode = pcd2 %>% stringr::str_sub(1,4) %>% stringr::str_trim()
+      )
       return(ONSPD)
     })
   },
   
   getOutcodeCentroids = function() {
     self$getSaved("ONSPD_OUTCODES",orElse = function() {
-      self$getFullONS() %>% mutate(outcode = pcd2 %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% group_by(outcode) %>% summarise(lat = mean(lat), long = mean(long))
+      self$getFullONS() %>% dplyr::mutate(outcode = pcd2 %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% dplyr::group_by(outcode) %>% dplyr::summarise(lat = mean(lat), long = mean(long))
     })
   },
   
-  # OUT_CODE_TO_LSOA = ONSPD_NOV_2019_UK %>% mutate(outcode = pcd %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% select(outcode,lsoa11) %>% distinct()
-  # LSOA_TO_IMD = ONSPD_NOV_2019_UK %>% select(lsoa11,imd) %>% distinct()
-  # LSOA_TO_CCG = ONSPD_NOV_2019_UK %>% select(lsoa11,ccg) %>% distinct()
-  # LSOA_TO_NHSER = ONSPD_NOV_2019_UK %>% select(lsoa11,nhser) %>% distinct()
+  # OUT_CODE_TO_LSOA = ONSPD_NOV_2019_UK %>% dplyr::mutate(outcode = pcd %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% dplyr::select(outcode,lsoa11) %>% dplyr::distinct()
+  # LSOA_TO_IMD = ONSPD_NOV_2019_UK %>% dplyr::select(lsoa11,imd) %>% dplyr::distinct()
+  # LSOA_TO_CCG = ONSPD_NOV_2019_UK %>% dplyr::select(lsoa11,ccg) %>% dplyr::distinct()
+  # LSOA_TO_NHSER = ONSPD_NOV_2019_UK %>% dplyr::select(lsoa11,nhser) %>% dplyr::distinct()
   
   lookupFeatures = function(df, postcodeVar = "pcd", onspdVars) {
     postcodeVar = ensym(postcodeVar)
     tmp = self$getFullONS()
-    df = df %>% mutate(tmp_pcd = stringr::str_replace(!!postcodeVar, " ", strrep(" ",8-length(!!postcodeVar))))
-    df = df %>% left_join(tmp %>% select(tmp_pcd = pcd, !!!onspdVars), by="tmp_pcd", suffix=c(".original","")) %>% select(-tmp_pcd)
+    df = df %>% dplyr::mutate(tmp_pcd = stringr::str_replace(!!postcodeVar, " ", strrep(" ",8-stringr::str_length(!!postcodeVar))))
+    df = df %>% dplyr::left_join(tmp %>% dplyr::select(tmp_pcd = pcd, !!!onspdVars), by="tmp_pcd", suffix=c(".original","")) %>% dplyr::select(-tmp_pcd)
     return(df)
   },
   
@@ -50,3 +52,7 @@ UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesy
   }
   
 ))
+
+
+# pcds = UKPostcodeProvider$new("~/Data/maps")
+# tmp = pcds$getFullONS()
