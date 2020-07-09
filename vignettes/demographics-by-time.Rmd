@@ -4,16 +4,12 @@ output:
   pdf_document:
     fig_caption: yes
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-rt") })
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age")})
 fig_width: 7
 fig_height: 5
 out.width: "100%"
 bibliography: current-rt.bib
 csl: current-rt.csl
-vignette: >
-  %\VignetteIndexEntry{Estimating R(t) from NHS 111 data}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}

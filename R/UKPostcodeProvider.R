@@ -1,26 +1,22 @@
-#' Get a provider of UK stats
+#' Get a provider of UK postcodes
 #'
-#' This function sets up a connection to the omop databse.
-#' @keywords omop
-#' @import dplyr
-#' @export
 UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesystemCache, public = list(
   
-  getFullONS = function() {
-    self$getSaved("ONSPD",orElse = function() {
+  getFullONS = function(...) {
+    self$getSaved("ONSPD",...,orElse = function() {
       csvfile = self$downloadAndUnzip("ONSPD", "https://www.arcgis.com/sharing/rest/content/items/fb894c51e72748ec8004cc582bf27e83/data", pattern = "ONSPD.*UK\\.csv")
-      ONSPD = readr::read_csv(csvfile[1], col_types = cols(
-        pcd = col_character(), pcd2 = col_character(), pcds = col_character(), dointr = col_character(),
-        doterm = col_character(), oscty = col_character(), ced = col_character(), oslaua = col_character(),
-        osward = col_character(), parish = col_character(), usertype = col_character(), oseast1m = col_character(), osnrth1m = col_character(),
-        osgrdind = col_character(), oshlthau = col_character(), nhser = col_character(), ctry = col_character(), rgn = col_character(),
-        streg = col_character(), pcon = col_character(), eer = col_character(), teclec = col_character(), ttwa = col_character(),
-        pct = col_character(), nuts = col_character(), statsward = col_character(), oa01 = col_character(), casward = col_character(),
-        park = col_character(), lsoa01 = col_character(), msoa01 = col_character(), ur01ind = col_character(),oac01 = col_character(),
-        oa11 = col_character(), lsoa11 = col_character(), msoa11 = col_character(), wz11 = col_character(), ccg = col_character(),
-        bua11 = col_character(), buasd11 = col_character(), ru11ind = col_character(), oac11 = col_character(), lat = col_double(),
-        long = col_double(), lep1 = col_character(), lep2 = col_character(), pfa = col_character(), imd = col_character(), calncv = col_character(),
-        stp = col_character()
+      ONSPD = readr::read_csv(csvfile[1], col_types = readr::cols(
+        pcd = readr::col_character(), pcd2 = readr::col_character(), pcds = readr::col_character(), dointr = readr::col_character(),
+        doterm = readr::col_character(), oscty = readr::col_character(), ced = readr::col_character(), oslaua = readr::col_character(),
+        osward = readr::col_character(), parish = readr::col_character(), usertype = readr::col_character(), oseast1m = readr::col_character(), osnrth1m = readr::col_character(),
+        osgrdind = readr::col_character(), oshlthau = readr::col_character(), nhser = readr::col_character(), ctry = readr::col_character(), rgn = readr::col_character(),
+        streg = readr::col_character(), pcon = readr::col_character(), eer = readr::col_character(), teclec = readr::col_character(), ttwa = readr::col_character(),
+        pct = readr::col_character(), nuts = readr::col_character(), statsward = readr::col_character(), oa01 = readr::col_character(), casward = readr::col_character(),
+        park = readr::col_character(), lsoa01 = readr::col_character(), msoa01 = readr::col_character(), ur01ind = readr::col_character(),oac01 = readr::col_character(),
+        oa11 = readr::col_character(), lsoa11 = readr::col_character(), msoa11 = readr::col_character(), wz11 = readr::col_character(), ccg = readr::col_character(),
+        bua11 = readr::col_character(), buasd11 = readr::col_character(), ru11ind = readr::col_character(), oac11 = readr::col_character(), lat = readr::col_double(),
+        long = readr::col_double(), lep1 = readr::col_character(), lep2 = readr::col_character(), pfa = readr::col_character(), imd = readr::col_character(), calncv = readr::col_character(),
+        stp = readr::col_character()
       )) %>% dplyr::mutate(
         outcode = pcd2 %>% stringr::str_sub(1,4) %>% stringr::str_trim()
       )
@@ -28,8 +24,8 @@ UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesy
     })
   },
   
-  getOutcodeCentroids = function() {
-    self$getSaved("ONSPD_OUTCODES",orElse = function() {
+  getOutcodeCentroids = function(...) {
+    self$getSaved("ONSPD_OUTCODES",.__C__.Other,orElse = function() {
       self$getFullONS() %>% dplyr::mutate(outcode = pcd2 %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% dplyr::group_by(outcode) %>% dplyr::summarise(lat = mean(lat), long = mean(long))
     })
   },
@@ -47,8 +43,32 @@ UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesy
     return(df)
   },
   
+  #TODO: weighted map LSOA -> CCG
+  
+  lookupWeightedFeatureByOutcode = function(df, outcodeVar = "outcode", onspdVar) {
+    outcodeVar = ensym(outcodeVar)
+    onspdVar = ensym(onspdVar)
+    
+    df = df %>% dplyr::mutate(tmp_outcode = !!outcodeVar)
+    tmp = self$getFullONS()
+    tmp = tmp %>% 
+      dplyr::select(tmp_outcode = outcode, pcd, !!onspdVar) %>% 
+      dplyr::semi_join(df, by="tmp_outcode") %>% 
+      dplyr::group_by(tmp_outcode, !!onspdVar) %>% 
+      dplyr::count() %>% 
+      dplyr::group_by(tmp_outcode) %>% 
+      dplyr::mutate(weight = n/sum(n)) %>%
+      dplyr::ungroup() %>%
+      dplyr::select(-n)
+    
+    df = df %>% 
+      dplyr::left_join(tmp, by="tmp_outcode", suffix=c(".original","")) %>% 
+      dplyr::select(-tmp_outcode)
+    return(df)
+  },
+  
   lookupLocation = function(df, postcodeVar = "pcd") {
-    self$lookupFeatures(df, postcodeVar, vars(lat,long))
+    self$lookupFeatures(df, postcodeVar, vars(lat,long)) %>% sf::st_as_sf(coords=c("long","lat"), crs=4326)
   }
   
 ))

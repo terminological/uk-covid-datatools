@@ -1,0 +1,225 @@
+---
+title: "Detection of outliers in trends of SARS-CoV-2 transmission using epidemiological data"
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}    
+
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/outbreak-trends", output_file=paste0('outbreak-trends-',Sys.Date(),'.pdf')) })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+dpc = DataProviderController$setup("~/Data/maps/", "~/Dstl/dstl/")
+proc = dpc$timeseriesProcessor()
+```
+
+```{r}
+ll_incid = dpc$datasets$getLineListIncidence(ageBreaks = c(15,25,50,75))
+
+ll_incid2 = ll_incid %>% filter(codeType == "LAD") %>%
+  proc$aggregateGeography(targetCodeTypes = "CTRY", keepOriginal = FALSE) %>%
+  proc$aggregateGender() %>%
+  dpc$demog$findDemographics() %>%
+  dplyr::mutate(valuePer100K = value/population*100000) %>%
+  proc$logIncidenceStats(valuePer100K)
+
+
+ll_incid4 = ll_incid2 %>% filter(subgroup=="Pillar 1") %>% proc$imputeAndWeeklyAverage() %>% proc$estimateRt()
+
+```
+
+
+Robert Challen ^1,2^; Leon Danon ^3,4^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+Report date: `r Sys.Date()`
+
+
+```{r fig1, fig.cap="The timeseries of R(t) estimates in the whole UK based on either cases reported by PHE and NHS labs, or deaths, or on the headline figures from the PHE coronavirus tracker which includes cases from private labs not included in the national totals"}
+
+dates = dpc$datasets$getSignificantDates()
+
+p = ggplot(ll_incid2 %>% filter(ageCat != "unknown"), aes(x=date, y=Est.Quantile.0.5)) + 
+  
+  geom_ribbon(aes(ymin=Est.Quantile.0.025, ymax=Est.Quantile.0.975, fill=subgroup),alpha=0.2) + 
+  geom_ribbon(aes(ymin=Est.Quantile.0.25, ymax=Est.Quantile.0.75, fill=subgroup),alpha=0.4) + 
+  geom_line(aes(colour=subgroup)) +
+  geom_point(aes(y=valuePer100K,colour=subgroup),size=0.5, alpha=0.5, shape=16)+
+  geom_vline(data = dates,mapping = aes(xintercept=date, linetype=event),colour="grey70")+
+  scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
+  facet_wrap(vars(ageCat))
+
+p2 = ggplot(ll_incid2 %>% filter(ageCat != "unknown"), aes(x=date,y=`Est.log(valuePer100K + 1)`, 
+                        ymin=`Est.log(valuePer100K + 1)`-1.96*`Est.SE.log(valuePer100K + 1)`,
+                        ymax=`Est.log(valuePer100K + 1)`+1.96*`Est.SE.log(valuePer100K + 1)`
+  )) + geom_ribbon(aes(fill=subgroup),alpha=0.2) + 
+  geom_line(aes(colour=subgroup)) +
+  geom_point(aes(y=log(valuePer100K+1),colour=subgroup),size=0.5, alpha=0.5, shape=16)+
+  geom_vline(data = dates,mapping = aes(xintercept=date, linetype=label),colour="grey70")+
+  scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
+  facet_wrap(vars(ageCat))+scale_y_continuous(breaks = log(c(0,1,2,5,10,20)+1), labels=as.character(c(0,1,2,5,10,20)))
+
+p %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/outbreak-trends/Fig1_incidenceByAge")
+
+p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/outbreak-trends/Fig2_logIncidenceByAge")
+
+```
+
+```{r}
+
+p2 = ll_incid4 %>% filter(ageCat != "unknown") %>% proc$plotRt(facets = vars(ageCat))
+p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/outbreak-trends/Fig3_rtByAge")
+
+```
+
+```{r}
+
+ll_pillar1 = ll_incid2 %>% filter(ageCat != "unknown" & subgroup=="Pillar 1")
+
+ll_linear = ll_pillar1 %>% filter(date>="2020-05-01" & date<"2020-05-08") %>% group_by(ageCat) %>% summarise(
+  date = mean(date),
+  value = mean(`Est.log(valuePer100K + 1)`),
+  slope = mean(`Slope.log(valuePer100K + 1)`),
+) %>% mutate(
+  intercept = value-slope*as.numeric(date)
+)
+
+p4 = ggplot(ll_incid2 %>% filter(ageCat != "unknown" & subgroup=="Pillar 1"), aes(x=date,y=`Est.log(valuePer100K + 1)`,
+        ymin=`Est.log(valuePer100K + 1)`-1.96*`Est.SE.log(valuePer100K + 1)`,
+        ymax=`Est.log(valuePer100K + 1)`+1.96*`Est.SE.log(valuePer100K + 1)`
+  )) + 
+  geom_abline(data=ll_linear, aes(intercept=intercept,slope=slope,group=ageCat),colour="grey70")+
+  geom_vline(data = dates,mapping = aes(xintercept=date, linetype=event),colour="blue",alpha=0.3)+
+  geom_ribbon(aes(fill=ageCat),alpha=0.2) + 
+  geom_line(aes(colour=ageCat)) +
+  scale_y_continuous(breaks = log(c(0,1,2.5,5,10,25)+1), labels=as.character(c(0,1,2.5,5,10,25)))+
+  scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
+  coord_cartesian(xlim=c(as.Date("2020-03-01"),Sys.Date()))+ylab("cases per 100K per day")
+
+p4 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/outbreak-trends/Fig4_logIncidenceByAge")
+
+```
+
+```{r}
+
+ggplot(ll_pillar1, aes(x=date,y=interceptDate, colour=ageCat)) + geom_line() + 
+  scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
+  scale_y_date(date_breaks = "2 week", date_labels = "%d-%m")+
+  coord_cartesian(
+    xlim=c(as.Date("2020-03-01"),Sys.Date()),
+    ylim=as.Date(c("2020-03-01","2021-01-01"))
+  )+
+  ylab("zero day")
+
+```
+
+# Methods and assumptions
+
+* This report uses EpiEstim library [@Cori2013-xe; @Cori_undated-bn; @Thompson2019-pq] on case and mortality data
+* The data is aggregated from Public Health England [@Public_Health_England_undated-mm], Wales [@Public_Health_Wales_undated-xg] and Scotland's [@Scotland_undated-tg] sites, and from Northern Ireland's HSC site [@HSE_undated-xu]. The data was retrieved from Tom White's aggregated COVID 19 UK data github site [@White_undated-ha] for Scotland, Wales and Northern Ireland data and the Public Health England site [@Public_Health_England_undated-mm] for England data.
+* The PHE coronavirus tracker[@Public_Health_England_undated-mm] published a overall figure for the UK. It also produces a regional breakdown of the 4 nations, which do not include a regional breakdown of tests performed in private laboratories. Cumulative case counts from both the PHE tracker headline UK figure (tracker cases) and the combined sum of the 4 nations (cases) are used to produce different estimates. The "tracker cases" estimates is essentially using a slightly different population than the sum of the 4 nations cases, but may be more prone to bias due to increasing test numbers.
+* Data is cleaned to account for historical alterations within the data by ensuring there are no negative incidence figures based on cumulative counts. Missing data is imputed from a linear interpolation of the logarithm of cumulative figures.
+
+* The R(t) is calculated using a 7 day rolling window.
+* Unless mentioned otherwise the R(t) is calculated using confirmed cases. This is a biased estimate and is influenced by volumes of tests conducted and testing policy. It is also affected by the change of reporting cases to the sample date as this is incomplete until the tests are finished.
+* R(t) calculated by deaths is also biased where the methodology for reporting the deaths is changing, e.g. inclusion of care homes. Similarly it will tend to underestimate when full case data is not yet available or complete. It is therefore a biased low estimate in the last few days. Deaths are smoothed using a 7 day rolling mean before further analysis performed because of the weekend reporting delay. This introduces more delay.
+* As described previously [@Challen2020-qc] we assume an uncertain parametric serial interval with the following parameters:
+  + Serial interval mean plus 95% credible interval: `r tdp(wtSIs$mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si)`
+  + Serial interval standard deviation plus 95% credible interval: `r tdp(wtSIs$std_si, wtSIs$min_std_si, wtSIs$max_std_si)`
+* Rate of change estimates are calculated using previously described methods [@Challen2020-qc].
+* The figures here are essentially spot observations of historical R(t) based on published data. They are not estimates of the underlying value of R(t), or projections of R(t).
+
+# Results
+
+## UK Overview
+
+The most recent median observation of R(t) based on cases reported in England, Wales, Scotland and Northern Ireland is `r est1` from the `r latestDate`. This is `r ifelse(tmp$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp$slope), tmp$slopeLowerCi, tmp$slopeUpperCi)` per day. Based on the overall number of cases reported on the PHE coronavirus tracker, which includes results from private labs, the estimate is `r est2` and is `r ifelse(tmp2$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp2$slope), tmp2$slopeLowerCi, tmp2$slopeUpperCi)` per day.
+
+
+The most recent median observation of R(t) based on deaths is `r est3` from the `r latestDate`. This is `r ifelse(tmp3$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp3$slope), tmp3$slopeLowerCi, tmp3$slopeUpperCi)` per day.
+
+```{r fig1, fig.cap="The timeseries of R(t) estimates in the whole UK based on either cases reported by PHE and NHS labs, or deaths, or on the headline figures from the PHE coronavirus tracker which includes cases from private labs not included in the national totals"}
+
+plotRt = function(df) {
+  latestDate = as.Date(max(df$date))
+  out = ggplot(df)+
+    geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill=statistic, linetype=version), alpha=0.1)+
+    geom_line(mapping = aes(x=date, y=`Median(R)`, colour=statistic, linetype=version))+
+    #geom_point(mapping = aes(x=date, y=`Median(R)`, colour=statistic, shape=version), size=1)+
+    
+    geom_hline(yintercept = 1, colour="grey50")+
+    coord_cartesian(ylim=c(0.5, 1.5), xlim=c(as.Date("2020-04-06"),latestDate))+
+    scale_x_date(date_breaks="2 week", date_labels = "%d-%b")+
+    labs(colour="", fill="", linetype="", shape="")+
+    theme(axis.text.x=element_text(angle=60, vjust=1))+
+    facet_wrap(vars(name), ncol=2)
+  return(out)
+}
+
+r0UK = rtTs %>% filter(codeType == "UK") %>% ungroup() %>% mutate(version = stringr::str_to_lower(version))
+r0ukplot = plotRt(r0UK)
+r0ukplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+
+# testing = ggplot(ts$tidyUK, aes(x=date,y=daily_tested/1000))+geom_bar(stat="identity",fill="grey75",width=0.7)+
+#   coord_cartesian(xlim=c(latestDate-31,latestDate))+
+#   scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+#   theme(axis.text.x=element_text(angle = 90, vjust =0.5))+ylab("Tests (1000s)")
+# 
+# ((r0ukplot+ theme(axis.text.x=element_blank(), axis.title.x = element_blank())) + testing + patchwork::plot_layout(ncol=1, heights = c(0.8,0.2))) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+```
+
+## R(t) by UK nations
+
+The R(t) in the different countries of the UK, based on cases and deaths. The observed value will tend to lag behind reality by a considerable period. This estimate does not include cases from private labs, for which we have no national breakdown.
+
+
+The estimate for each nation of the UK show a similar trend. Death rates show a weekly variation due to delays in reporting deaths over the weekend. The oscillations in the observations are therefore an artifact of the death data, and seems more pronounced in Scotland. It does unfortunately result in quite a lot of variation in the headline number depending on what day of the week.
+
+
+
+
+# References

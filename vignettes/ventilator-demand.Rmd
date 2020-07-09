@@ -1,10 +1,15 @@
 ---
 title: "A spatiotemporal model of ventilator demand in the NHS due to COVID-19"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{A spatiotemporal model of ventilator demand in the NHS due to COVID-19}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+output: 
+  pdf_document:
+    fig_caption: yes
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand") })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
 ---
 
 ```{r, include = FALSE}

@@ -1,6 +1,6 @@
 Package: ukcovidtools
-Title: Functions for sourcing, cleaning and calculating Rt for uk covid timeseris data
-Version: 0.0.0.9000
+Title: Functions for sourcing, cleaning and calculating Rt for uk covid timeseries data
+Version: 0.0.1
 Authors@R: 
   person(given = "Robert",
     family = "Challen",
@@ -13,8 +13,10 @@ Encoding: UTF-8
 LazyData: true
 Imports:
     dplyr,
-    tidyverse,
-    EpiEstim
+    EpiEstim,
+    msm,
+    forecast,
+    ggplot2
 Suggests: 
     knitr,
     rmarkdown,

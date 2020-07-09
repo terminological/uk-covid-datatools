@@ -1,34 +1,48 @@
 ---
 title: "length of stay in hospital parameterisation"
 author: "Rob Challen"
-date: "14 April 2020"
-output: html_document
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge")})
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
 ---
 
 ```{r setup, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
-devtools::load_all("~/Git/uk-covid-datatools/")
-devtools::load_all("~/Git/standard-print-output/")
-source("~/Git/uk-covid-datatools/data-raw/rawDataFunctions.R")
 library(survival)
 library(patchwork)
-
-paths=findDatafile()
+devtools::load_all("~/Git/standard-print-output/")
 standardPrintOutput::setDefaults()
+devtools::load_all("~/Git/uk-covid-datatools/")
+dpc = DataProviderController$setup("~/Data/maps")
+dpc$loadSpimSources("~/S3/encrypted/")
+tsp = dpc$timeseriesProcessor()
+chp = dpc$chessProcessor()
+srv = dpc$survivalProcessor()
 ```
 
 ```{r}
-CHESS = getCHESS(paths$chess)
-cq = CHESS %>% chessQuality()
+
+CHESS = dpc$spim$getCHESS()
+cq = CHESS %>% chp$chessQuality()
 # ggplot(cq, aes(x=trustcode, y=records))+geom_bar(stat="identity")+standardPrintOutput::narrowAndTall()
 p = ggplot(cq, aes(x=knownOutcomePercent, y=knownAdmittedItuPercent, label=trustcode, colour=updatedRecords/records))+geom_point()+geom_vline(xintercept=0.1)+geom_hline(yintercept=0.5)+scale_color_gradient(low="red",high="green")+
   standardPrintOutput::narrowAndTall()
 p2 = ggExtra::ggMarginal(p, type="histogram")
 p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/chessDataQuality")
-
-CHESSClean = CHESS %>% chessAdmissionSubset()
+CHESSClean = CHESS %>% chp$chessAdmissionSubset()
 ```
 
 ## Survival model - Admission to outcome
@@ -42,7 +56,7 @@ CHESSClean = CHESS %>% chessAdmissionSubset()
 * multiple admissions: just use first admission
 
 ```{r}
-admissionToDischargeOrDeath = CHESSClean %>% filter(age>10) %>% generateSurvivalData(
+admissionToDischargeOrDeath = CHESSClean %>% filter(age>10) %>% srv$generateSurvivalData(
   idVar = caseid,
   startDateVar = hospitaladmissiondate, 
   endDateExpr = finaloutcomedate, 
@@ -75,7 +89,7 @@ summary %>% group_by(category) %>% standardPrintOutput::saveTable("~/Dropbox/cov
 
 
 ```{r}
-tmpSurv= admissionToDischargeOrDeath %>% rename(age = ageCat) %>% mutate(status = as.integer(status)-1)
+tmpSurv = admissionToDischargeOrDeath %>% rename(age = ageCat) %>% mutate(status = as.integer(status)-1)
 fitByAgeCat = survfit(Surv(time,status) ~ age, tmpSurv)
 plot = survminer::ggsurvplot(
   fitByAgeCat, conf.int = TRUE
@@ -100,7 +114,7 @@ Interpretation is that a high HR => discharge or death is more likely - i.e. an 
 Uses different age bands
 
 ```{r}
-censoredAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% generateSurvivalData(
+censoredAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% srv$generateSurvivalData(
   idVar=caseid,
   startDateVar = hospitaladmissiondate, 
   endDateExpr = finaloutcomedate, 
@@ -116,7 +130,7 @@ censoredAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% generate
 Look at 40-45 year old men for checking distribution fit visually
 
 ```{r}
-models = standardModels()
+models = srv$standardModels()
   
 subGroup = censoredAdmissionToDischargeOrDeath %>% filter(ageCat=="40-44") %>% mutate(
     left=time,
@@ -137,7 +151,7 @@ p2 = fitdistrplus::ppcompcens(dists, plotstyle = "ggplot") +standardPrintOutput:
 Log norms seem to fit best for all age groups
 
 ```{r}
-out = censoredAdmissionToDischargeOrDeath %>% fitModelsByAge()
+out = censoredAdmissionToDischargeOrDeath %>% srv$fitModelsByAge()
 
 out %>% mutate(value = sprintf("%1.4f [%1.4f; %1.4f]", value, low_ci, ifelse(high_ci>100,Inf,high_ci))) %>% select(ageCat,n,model,aic,bic,loglik,param, value) %>% 
   group_by(ageCat,n,model,aic,bic,loglik) %>% standardPrintOutput::saveTableLandscape("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/SuppTable1_fullBreakdownFittedModels")
@@ -160,8 +174,8 @@ out %>% filter(model=="gamma") %>% ungroup() %>% mutate(value = sprintf("%1.4f [
 * C - high CrI estimate
 
 ```{r}
-survSurf = out %>% createSurvivalSurfaces()
-surf = plotSurvivalSurface(survSurf, "gamma")
+survSurf = out %>% srv$createSurvivalSurfaces()
+surf = srv$plotSurvivalSurface(survSurf, "gamma")
 surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig4_losDensity")
 
 ```
@@ -179,16 +193,16 @@ surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-d
 more important for other transitions where we are looking at 
 
 ```{r}
-surf2 = plotIncidenceSurface(survSurf, "gamma")
+surf2 = srv$plotIncidenceSurface(survSurf, "gamma")
 surf2
 ```
 
 ```{r}
-survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 0:30)
+survSurfcsv = out %>% srv$createSurvivalSurfaces(timepoints = 0:30)
 write.csv(
   survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf),
   file="~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/admission-to-discharge.csv")        
-plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/daily_probability_by_age")
+srv$plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/daily_probability_by_age")
 
 ```
 
@@ -198,9 +212,9 @@ plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("
 Do a set of Kolmogorov-Smirnov tests on different combinations of parameters and log normal distributions
 
 ```{r}
-bri = getBristolData("~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv")
-bri2 = bri %>% bristolSurvivalSubset() 
-bri3 = bri2 %>% generateSurvivalData(
+bri = dpc$spim$getBristolData("~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv")
+bri2 = bri %>% dpc$spim$bristolSurvivalSubset() 
+bri3 = bri2 %>% srv$generateSurvivalData(
   idVar = record_number,
   startDateVar = admission_date,
   endDateExpr = discharge_date,

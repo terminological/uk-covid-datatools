@@ -1,8 +1,20 @@
 ---
-title: "length of stay in hospital parameterisation"
+title: "length of stay in hospital icu parameterisation"
 author: "Rob Challen"
-date: "14 April 2020"
-output: html_document
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge" })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
 ---
 
 ```{r setup, message=FALSE}

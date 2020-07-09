@@ -1,0 +1,449 @@
+---
+title: "COVID-19 Serial Intervals"
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}    
+
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/serial-interval/", output_file='serial-intervals.pdf') })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{COVID-19 Serial Intervals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+# devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+devtools::load_all("~/Git/standard-print-output/")
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+tsp = dpc$timeseriesProcessor()
+tsp$printSerialInterval()
+```
+
+Robert Challen ^1,2^; Leon Danon ^3,4^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+Report date: `r Sys.Date()`
+
+# Background
+
+* Estimates of R(t) depend on a knowledge of the time between infected infectee pairs. 
+* Previous work in many different countries / settings
+* Literature review conducted
+* Assessment of serial intervals in the UK
+* Aggregate of serial intervals estimate in literature
+
+```{r}
+
+# serialIntervals2 = serialIntervals %>% bind_rows(tibble(
+#   mean_si_estimate = calcGammaMean("est")[["mean"]],
+#   mean_si_estimate_low_ci = calcGammaMean("CIlow")[["mean"]],
+#   mean_si_estimate_high_ci = calcGammaMean("CIhigh")[["mean"]],
+#   std_si_estimate = calcGammaMean("est")[["sd"]],
+#   std_si_estimate_low_ci = calcGammaMean("CIlow")[["sd"]],
+#   std_si_estimate_high_ci = calcGammaMean("CIhigh")[["sd"]],
+#   sample_size = 50L,
+#   population = "UK",
+#   assumed_distribution = "gamma",
+#   estimate_type = "serial interval",
+#   source = "Current analysis",
+#   note = "none"
+# ))
+
+defaultSI = tsp$defaultSerialInterval(confint = c(0.1,0.90))
+
+defaultSI$sources %>% tsp$printSerialIntervalSources() %>%
+  group_by(`Reference`) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/serial-intervals/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
+
+```
+
+# Methods
+
+* EpiEstim
+* FF100 data source - description
+* Fitting gamma to FF100 using epiestim MCMC
+* Fitting gamma to resampled from literature distributions (distrfitplus)
+* 
+
+# Results
+
+## Serial intervals in the UK
+
+* Figure 1 - Panel A -In the UK most commonly infections occur 2 days after individual infected person begins to show symptoms, but significant range. 
+* Some negative values observed (citation here)
+* Gamma fitted in panel B
+
+```{r fig1, fig.cap="Days between infected infectee disease onset"}
+
+ff100 = dpc$spim$getFF100()
+
+tmp = ff100 %>% inner_join(ff100, by=c("ContactOf_FF100_ID"="FF100_ID"),suffix=c(".infectee",".infector"))
+tmp = tmp %>% select(FF100_ID,ContactOf_FF100_ID,contains("date"))
+tmp2 = tmp %>% mutate(
+  EL = 0L, ER = 1L,
+  SL = as.integer(date_onset.infectee - date_onset.infector),
+  SR = as.integer(date_onset.infectee - date_onset.infector +1),
+  type=0L) %>% select(EL,ER,SL,SR,type)
+
+panel1 = ggplot(tmp2, aes(x=SL)) + geom_bar(width=0.7) +xlab("days")
+
+# tmp2 = ff100 %>% mutate(
+#   EL = 0L, 
+#   ER = as.integer(date_exposure_last - date_exposure_first),
+#   SL = as.integer(date_onset - date_exposure_first),
+#   SR = as.integer(date_onset - date_exposure_first+1),
+#   type=0L) %>% mutate(ER = ifelse(ER>SL,SL,ER)) %>% select(EL,ER,SL,SR,type) %>% filter(SL>0)
+# tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
+
+tmp2 = tmp2 %>% filter(SL>0)
+tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
+
+MCMC_seed <- 1
+overall_seed <- 2
+mcmc_control <- EpiEstim::make_mcmc_control(seed = MCMC_seed, 
+                                  burnin = 1000)
+dist <- "G" # fitting a Gamma dsitribution for the SI
+config <- EpiEstim::make_config(list(si_parametric_distr = dist,
+                           mcmc_control = mcmc_control,
+                           seed = overall_seed, 
+                           n1 = 50, 
+                           n2 = 50))
+
+# rm(`%in%`) = function(x,y) {
+#   return(sapply(x, function(x1) {any(y == x1)}))
+# }
+
+## first estimate the SI distribution using function dic.fit.mcmc fron 
+## coarseDataTools package:
+n_mcmc_samples <- config$n1*mcmc_control$thin
+SI_fit <- coarseDataTools::dic.fit.mcmc(dat = tmp3,
+                  dist = "G",#off1G",
+                  init.pars = EpiEstim::init_mcmc_params(tmp2, dist),
+                  burnin = mcmc_control$burnin,
+                  n.samples = n_mcmc_samples,
+                  seed = mcmc_control$seed)
+
+si_sample <- EpiEstim::coarse2estim(SI_fit, thin = mcmc_control$thin)$si_sample
+
+calcGammaMean = function(x) {
+  shape = SI_fit@ests["shape",x]
+  scale = SI_fit@ests["scale",x]
+  out = list()
+  out$mean = shape*scale
+  out$sd = sqrt(shape*scale^2)
+  return(out)
+}
+
+UKSIConfig = EpiEstim::make_config(
+  mean_si = calcGammaMean("est")[["mean"]],
+  std_si = calcGammaMean("est")[["sd"]],
+  min_mean_si = calcGammaMean("CIlow")[["mean"]],
+  min_std_si = calcGammaMean("CIlow")[["sd"]],
+  max_mean_si = calcGammaMean("CIhigh")[["mean"]],
+  max_std_si = calcGammaMean("CIhigh")[["sd"]],
+  #TODO: the following are not going to be used unless we apply this
+  std_mean_si = (calcGammaMean("CIhigh")[["mean"]]-calcGammaMean("CIlow")[["mean"]])/3.96, 
+  std_std_si = (calcGammaMean("CIhigh")[["sd"]]-calcGammaMean("CIlow")[["sd"]])/3.96,
+  method = "uncertain_si"
+)
+
+gammaMean = sprintf("%1.2f (%1.2f-%1.2f)",
+  calcGammaMean("est")[["mean"]],
+  calcGammaMean("CIlow")[["mean"]],
+  calcGammaMean("CIhigh")[["mean"]]
+)
+
+gammaShape = sprintf("%1.2f (%1.2f-%1.2f)",
+  SI_fit@ests["shape","est"],
+  SI_fit@ests["shape","CIlow"],
+  SI_fit@ests["shape","CIhigh"]
+)
+
+gammaScale = sprintf("%1.2f (%1.2f-%1.2f)",
+  SI_fit@ests["scale","est"],
+  SI_fit@ests["scale","CIlow"],
+  SI_fit@ests["scale","CIhigh"]
+)
+
+gammaSd = sprintf("%1.2f (%1.2f-%1.2f)",
+  calcGammaMean("est")[["sd"]],
+  calcGammaMean("CIlow")[["sd"]],
+  calcGammaMean("CIhigh")[["sd"]]
+)
+
+panel2 = (ggplot(tmp2, aes(x=SL)) + geom_histogram(aes(y=..density..),fill=NA,colour = "black", binwidth=1)+ #,width=0.7) +
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","est"], scale = SI_fit@ests["scale","est"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue")+
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIlow"], scale = SI_fit@ests["scale","CIlow"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
+    geom_line(data = tibble(
+      x=seq(0,10,length.out = 101),
+      y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIhigh"], scale = SI_fit@ests["scale","CIhigh"])
+    ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
+    annotate("text", x = 10, y = 0.5, label = paste0("Mean: ",gammaMean,"\nSD: ",gammaSd,"\nShape: ",gammaShape,"\nScale: ",gammaScale),hjust="inward",vjust="inward")+
+    xlab("days")
+) 
+
+fig1 = panel1+panel2+ patchwork::plot_annotation(tag_levels = "A")+plot_layout(ncol=2)
+
+fig1 %>% saveThirdPageFigure("~/Dropbox/covid19/serial-intervals/Fig1_UKSerialInterval")
+
+```
+## Resampling serial interval estimates
+
+* distributions from table 1. 
+* Random samples from those specifying a probability distribution - number of samples based on sample size of original study
+* Sample means drawn from normal distribution (central limit theorem). Sample SD chisqd distributed (assumes underlying distributions are normal as approximation). 
+* Sampled distributions, gamma log normal or truncated normal instead of normal distribution. Empirical not sampled.
+* Fitted gamma distribution to weighted samples - samples truncated to be > 0
+* Bootstrapped 250 times to generate mean, sd and quantiles/credible interval of gamma mean, sd, shape and rate parameters
+
+```{r}
+defaultSI = tsp$defaultSerialInterval(confint = c(0.1,0.90))
+tmp = tsp$printSerialInterval(si = defaultSI$config)
+
+```
+The resulting mean and sd with credible intervals:
+
+* `r tmp[[1]]`
+* `r tmp[[2]]`
+
+Figure 2 shows the distribution of the parameters for the gamma distribution in the bootstrapped sample and the resulting mean and sd distributions.
+
+```{r fig2, fig.cap="Estimates of serial interval from weighted resampling of the literature"}
+
+
+quants = defaultSI$estimates %>% crossing(tibble(q=c(0.025,0.1,0.5,0.9,0.975))) %>% group_by(q) %>% summarise(
+  q_mean = quantile(mean,first(q)),
+  q_sd = quantile(sd,first(q)),
+  q_shape = quantile(shape,first(q)),
+  q_rate = quantile(rate,first(q)),
+)
+
+
+
+p1 = ggplot(defaultSI$estimates,aes(x=mean))+geom_density(colour="blue")+geom_vline(data=quants,mapping=aes(xintercept = q_mean))+geom_text(data=quants,mapping=aes(x = q_mean,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90)
+p2 = ggplot(defaultSI$estimates,aes(x=sd))+geom_density(colour="green")+geom_vline(data=quants,mapping=aes(xintercept = q_sd))+geom_text(data=quants,mapping=aes(x = q_sd,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90)
+p3 = ggplot(defaultSI$estimates,aes(x=rate))+geom_density(colour="red")+geom_vline(data=quants,mapping=aes(xintercept = q_rate))+geom_text(data=quants,mapping=aes(x = q_rate,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90)
+p4 = ggplot(defaultSI$estimates,aes(x=shape))+geom_density(colour="orange")+geom_vline(data=quants,mapping=aes(xintercept = q_shape))+geom_text(data=quants,mapping=aes(x = q_shape,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90)
+
+(p1+p2+p3+p4 + plot_annotation(tag_levels="A") + plot_layout(ncol=2)) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/serial-intervals/Fig2_ResampledSerialInterval")
+
+```
+
+
+
+## Impact of serial interval estimates on R(t)
+
+Investigate impact of varying the serial interval on estimates of R
+
+* methodology of estimating R 
+* Figure shows the epidemic curve for the UK based on publicly published cases and 4 time points 
+
+```{r fig3, fig.cap="Epidemic curve for cases in the UK. Red lines show significant dates..."}
+
+ends = as.Date(c("2020-03-21","2020-04-05","2020-04-30","2020-06-10"))
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+tsp = dpc$timeseriesProcessor()
+
+ukts = dpc$datasets$getPHEDashboard() %>% 
+  filter(name=="England" & type=="incidence") %>%
+  tsp$smoothAndSlopeTimeseries(smoothExpr = value, window=14) 
+
+(ggplot(ukts,aes(x=date,y=Est.value))+geom_line()+geom_point(aes(y=value))+geom_vline(xintercept = ends,colour="red")) %>% saveSixthPageFigure("~/Dropbox/covid19/serial-intervals/Fig3_EpidemicCurve")
+```
+
+
+```{r}
+I = ukts %>% filter(!is.na(Est.value)) %>% pull(Est.value)
+dates = ukts %>% filter(!is.na(Est.value)) %>% pull(date)
+
+
+
+out = NULL
+
+for(endDate in ends) {
+
+  start = match(endDate,dates) - 7
+  end = match(endDate,dates)
+  
+  for (siMean in seq(2,10,0.25)) {
+    #siMean = 4
+    for (siSd in seq(0.25,10,0.25)) {
+    #siSd = 4  
+      
+      cfg_tmp = EpiEstim::make_config(mean_si = siMean, std_si = siSd, t_end = end, t_start = start, method="parametric_si")
+      rEst = EpiEstim::estimate_R(I, method="parametric_si", config = cfg_tmp)
+      out = bind_rows(
+        out,
+        tibble(
+          startDate = as.Date(endDate-7,"1970-01-01"),
+          endDate = as.Date(endDate,"1970-01-01"),
+          siMean = siMean,
+          siSd = siSd,
+          medianR = rEst$R$`Median(R)`
+        )                    
+      )
+    }
+  }
+  
+}
+
+```
+
+Figure 4 shows the impact of altering the assumptions made about the serial interval to the predictions of R(t) at the 4 time points in Fig 3.
+
+* Larger Mean SI pushes estimates of R(t) away from 1 whether it be high or low - high values of SI => more extreme predictions
+* Larger SD serial interval tends to include more historical information = > will react to sudden changes much more slowly.
+
+
+```{r fig4, fig.cap="Time varying replication number for various assumptions on the serial interval"}
+
+# SIs from the literature
+wtSIs = tibble(
+  name = names(unlist(defaultSI$config)),
+  value = unlist(defaultSI$config)
+) %>% pivot_wider(names_from = name, values_from = value)
+
+# SIs from UK data
+ukSIs = tibble(
+  name = names(unlist(UKSIConfig)),
+  value = unlist(UKSIConfig)
+) %>% pivot_wider(names_from = name, values_from = value)
+
+
+MMSIConfig = tsp$midmarketSerialInterval()$config
+mmSIs = tibble(
+  name = names(unlist(MMSIConfig)),
+  value = unlist(MMSIConfig)
+) %>% pivot_wider(names_from = name, values_from = value)
+
+plotSiVariability = function(d, contours) {
+  ggplot(out %>% filter(endDate == d), aes(x=siMean, y=siSd, z=medianR, fill=medianR))+geom_tile()+
+    metR::geom_contour2(colour="black", breaks=contours)+
+    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.2)+
+    scale_fill_gradient2(high="red",mid="white",low="green", midpoint=1, guide="none")+
+    
+    geom_linerange(data=defaultSI$sources, aes(
+      xmin=mean_si_estimate_low_ci,xmax=mean_si_estimate_high_ci,
+      y=std_si_estimate),inherit.aes = FALSE,colour="grey50")+
+    geom_linerange(data=defaultSI$sources,aes(
+      x=mean_si_estimate,ymin=std_si_estimate_low_ci,ymax=std_si_estimate_high_ci),inherit.aes = FALSE,colour="grey50")+
+    geom_point(data=defaultSI$sources,aes(x=mean_si_estimate,y=std_si_estimate, size=sample_size),inherit.aes = FALSE,colour="black")+
+    
+    geom_linerange(data=wtSIs,aes(
+      xmin=min_mean_si, xmax=max_mean_si,
+      y=std_si),inherit.aes = FALSE,colour="blue")+
+    geom_linerange(data=wtSIs,aes(
+      x=mean_si,
+      ymin=min_std_si, ymax=max_std_si),inherit.aes = FALSE,colour="blue")+
+    geom_point(data=wtSIs,aes(x=mean_si,y=std_si),inherit.aes = FALSE,colour="blue")+
+    
+    geom_linerange(data=ukSIs,aes(
+      xmin=min_mean_si, xmax=max_mean_si,
+      y=std_si),inherit.aes = FALSE,colour="red")+
+    geom_linerange(data=ukSIs,aes(
+      x=mean_si,
+      ymin=min_std_si, ymax=max_std_si),inherit.aes = FALSE,colour="red")+
+    geom_point(data=ukSIs,aes(x=mean_si,y=std_si,size=43),inherit.aes = FALSE,colour="red",show.legend = FALSE)+
+    
+    geom_linerange(data=mmSIs,aes(
+      xmin=min_mean_si, xmax=max_mean_si,
+      y=std_si),inherit.aes = FALSE,colour="magenta")+
+    geom_linerange(data=mmSIs,aes(
+      x=mean_si,
+      ymin=min_std_si, ymax=max_std_si),inherit.aes = FALSE,colour="magenta")+
+    geom_point(data=mmSIs,aes(x=mean_si,y=std_si,size=43),inherit.aes = FALSE,colour="magenta",show.legend = FALSE)+
+    
+    coord_cartesian(xlim=c(2,10),ylim=c(0.25,10))+
+    scale_size(range=c(0.1,2),name = "Samples")+
+    labs(subtitle = d,x="SI Mean",y="SI Std Dev")
+}
+
+contours = list(
+  seq(1,5,0.4),
+  seq(0.9,1.6,0.05),
+  seq(0.7,1,0.02),
+  seq(0.7,1,0.04)
+)
+
+plts = sapply(1:length(ends), FUN = function(i) {plotSiVariability(ends[[i]], contours[[i]])}, simplify = FALSE)
+
+patchwork::wrap_plots(plts, ncol=2, guides = "collect") %>% saveHalfPageFigure("~/Dropbox/covid19/serial-intervals/Fig4_EstimatesOfRtForSIAssumptions")
+
+```
+
+## Serial interval standard deviation assuming delay to presentation
+
+* Serial intervals are a convolution of generation intervals, with a delay depending on time to presentation
+* In theory 
+* Linton et al estimates time to presentation / time to death etc
+* What effect does the serial interval of death-death or test-test events considered
+* simulate delay process using a gamma distribution
+* assume a known generation interval and simulate effects
+
+# Discussion
+
+
+* Serial interval estimated from UK data and resampled from literature produces widely differing answers 
+* R(t) as calculated by epiestim affected by assumptions about the serial interval
+* Larger serial interval mean tends to take R(t) estimates away from 1 
+* Larger serial interval SD tends to take you further back into history.
+* EpiEstim assumes a truncated normal distribution for SD for bootstrapping. In fact the SD is going to be heavily skewed to the left (chi squared). Sampling process for epiestim will tend to produce estimates 
+
+# Limitations
+
+* Serial interval is not a fixed quantity - affected by behavioural changes, e.g. case isolation, level of asymptomatics, settings also define serial interval - e.g. care homes,  
+* Assumption that serial interval can be gamma distributed. Baked into current method of estimating R(t) using EpiEstim. Needs truncation of negative SI's whereas best evidence suggests negative serial intervals commonplace. As a workaround best practice suggests devolving cases to infections and using generation interval. Both alternatives could introduce bias.
+* No information about progression of Serial interval over course of epidemic - component of SI to do with fundamental biology of infection, other part is behavioural. As self isolation adherance improves we can expect serial interval to become shorter but more dispersed. Assumption that is it static is flawed.
+
+# Conclusions
+
+* High degree of asymptomatic spread and less detected => true serial interval larger than UK estimates from known transmission chains.
+* Onset of symptoms -> onset of symptoms somewhat shorter that positive test ->? positive test. Serial interval estimates SD should vary depending on what event we use to estimate. 
+* Estimates of R(t) based on different events, e.g admission, 

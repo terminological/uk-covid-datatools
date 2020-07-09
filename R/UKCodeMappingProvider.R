@@ -1,17 +1,6 @@
-#' Get a provider of UK stats
-#'
-#' This function sets up a connection to the omop databse.
-#' @keywords omop
-#' @import dplyr
+#' Process UK ONS code maps
 #' @export
 UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=PassthroughFilesystemCache, public = list(
-  
-  pcd = NULL,
-  
-  initialize = function(postcodeProvider, ...) {
-    super$initialize(workingDirectory = postcodeProvider$wd, ...)
-    self$pcd = postcodeProvider
-  },
   
   #### code mapping ----
   mapping = list(
@@ -24,13 +13,31 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       rel="synonym"
     ),
     LAD19CD_PHEC19CD = list(
-      note="path from NHS trust postcode to LSOA to LAD to PHEC",
+      note="path from NHS trust postcode to LSOA to LAD to PHEC. LAD is the same as LTLA produced on PHE coronavirus dashboard",
       url="https://opendata.arcgis.com/datasets/4da177ab2ab34edaba9d2696c3a6da64_0.csv",
       fromCode="LAD19CD", 
       fromCodeType="LAD",
       toCode="PHEC19CD",
       toCodeType = "PHEC",
       rel="parent"
+    ),
+    LAD19CD_CCG19CD = list(
+      note="LAD to CCGs in England only, uses LAD20...",
+      url="https://opendata.arcgis.com/datasets/3f891ff7933f464dbf3c8095fc3b2547_0.csv",
+      fromCode = "LAD19CD",
+      toCode = "CCG19CD",
+      fromCodeType = "LAD",
+      toCodeType = "CCG",
+      rel = "parent"
+    ),
+    CCG19CD_NHSER19CD = list(
+      note="CCGs to NHS regions in England only",
+      url = "https://opendata.arcgis.com/datasets/40f816a75fb14dfaaa6db375e6c3d5e6_0.csv",
+      fromCode = "CCG19CD",
+      toCode = "NHSER19CD",
+      fromCodeType = "CCG",
+      toCodeType = "NHSER",
+      rel = "parent"
     ),
     LSOA11CD_LAD19CD = list(
       note="path from postcode to LSOA to LAD to PHEC",
@@ -46,7 +53,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       url="https://opendata.arcgis.com/datasets/bfb87228cf9e4c44bad0cffa353d0fc8_0.csv",
       fromCode="CCG20CDH",
       toCode="CCG20CD",
-      toCodeType = "CCG",
+      toCodeType = "CCG20",
       rel="synonym"
     ),
     NHSER19CDH_NHSER19CD = list(
@@ -62,7 +69,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       url = "https://opendata.arcgis.com/datasets/888dc5cc66ba4ad9b4d935871dcce251_0.csv",
       fromCode = "CCG20CD",
       toCode = "NHSER20CD",
-      fromCodeType = "CCG",
+      fromCodeType = "CCG20",
       toCodeType = "NHSER",
       rel = "parent"
     ),
@@ -72,7 +79,16 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       fromCode = "LSOA11CD",
       toCode = "CCG20CD",
       fromCodeType = "LSOA",
-      toCodeType = "CCG",
+      toCodeType = "CCG20",
+      rel = "parent"
+    ),
+    LAD20CD_CCG20CD = list(
+      note="LAD to CCGs in England only, uses LAD20...",
+      url="https://opendata.arcgis.com/datasets/1631beea57ff4e9fb90d75f9c764ce26_0.csv",
+      fromCode = "LAD20CD",
+      toCode = "CCG20CD",
+      fromCodeType = "LAD20",
+      toCodeType = "CCG20",
       rel = "parent"
     ),
     UA19CD_LHB19CD = list(
@@ -93,6 +109,24 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       toCodeType = "HB",
       rel = "parent"
     ),
+    DZ11CD_CTRY = list(
+      note="scot equivalent to LSOA to CCG, DZ to HB, this file also includes CA (council areas), HSCP (health social care)",
+      url="https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/395476ab-0720-4740-be07-ff4467141352/download/dz2011_codes_and_labels_21042020.csv",
+      fromCode = "DataZone",
+      toCode = "Country",
+      fromCodeType = "DZ",
+      toCodeType = "CTRY",
+      rel = "parent"
+    ),
+    DZ11CD_CA = list(
+      note="scot equivalent to LSOA to CCG, DZ to HB, this file also includes CA (council areas), HSCP (health social care)",
+      url="https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/395476ab-0720-4740-be07-ff4467141352/download/dz2011_codes_and_labels_21042020.csv",
+      fromCode = "DataZone",
+      toCode = "CA",
+      fromCodeType = "DZ",
+      toCodeType = "CA",
+      rel = "parent"
+    ),
     LSOA11CD_UTLA19CD = list(
       note="mapping from LSOA to UTLA inclues UA codes needed for mapping to Welsh LHBs",
       url="https://opendata.arcgis.com/datasets/4c6f3314565e43c5ac7885fd71347548_0.csv",
@@ -111,8 +145,8 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
   # 
   # NHS trusts  with postcodes
   
-  getONSMappings = function() {
-    self$getSaved("ONS_MAPPINGS",orElse = function() {
+  getONSMappings = function(...) {
+    self$getSaved("ONS_MAPPINGS",...,orElse = function(...) {
       out = NULL
       for (mapName in names(self$mapping)) {
         item = self$mapping[[mapName]]
@@ -137,18 +171,37 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
           tmp2 %>% dplyr::select(toCode = code, toCodeType = codeType),
           by = "toCode"
         ) %>%
-        dplyr::mutate(rel = "parent")
+        dplyr::mutate(rel = "parent", weight=1)
+      
       out = out %>% dplyr::bind_rows(tmp3) %>% dplyr::distinct()
+      
+      # out = out %>% bind_rows(
+      #   tibble(
+      #     fromCode = c("E92000001","W92000004","S92000003","N92000002"),
+      #     fromCodeType = "CTRY",
+      #     toCode = "K02000001",
+      #     toCodeType = "UK",
+      #     rel = "parent",
+      #     weight=1
+      #   )
+      # )
+      
       browser(expr=self$debug)
       return(out)
     })
   },
   
   
-  # idMapping <- read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=1853095988&single=true&output=csv","&nocache=",sample(1:1000000,1)))
-  
-  getONSRegister = function() {
-    self$getSaved("CODE_REGISTER",orElse = function() {
+  getONSRegister = function(...) {
+    #TODO: Pseudocodes:
+    # E99999999 (pseudo) = England (UA);
+    # W99999999 (pseudo) = Wales;
+    # S99999999 (pseudo) = Scotland;
+    # N99999999 (pseudo) = Northern Ireland;
+    # L99999999 (pseudo) = Channel Islands;
+    # M99999999 (pseudo) = Isle of Man; 
+    
+    self$getSaved("CODE_REGISTER",...,orElse = function(...) {
       register = self$downloadAndUnzip("ONS_REGISTER", url="https://www.arcgis.com/sharing/rest/content/items/56a91921e10d4fb4b367ef592ceb0bab/data", pattern = "xlsx")
       sheets = readxl::excel_sheets(register)
       sheets = sheets[sheets %>% stringr::str_detect("[A-Z][0-9][0-9]_.*")]
@@ -177,6 +230,19 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
         )
         out = dplyr::bind_rows(out,tmp)
       }
+      
+      out = out %>% bind_rows(
+        tibble(
+          code = c("E99999999","W99999999","S99999999","N99999999","L99999999","M99999999"),
+          name = c("Unknown (England)","Unknown (Wales)","Unknown (Scotland)","Unknown (Northern Ireland)","Unknown (Channel Islands)","Unknown (Isle of Man)"),
+          start = as.Date("1970-01-01"),
+          end = as.Date(NA),
+          parent = c("E92000001","W92000004","S92000003","N92000001",NA,NA),
+          entity = c("PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO"),
+          codeType = c("PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO"),
+          status = "live"
+        )
+      )
       
       scot_register = self$download("SCOT_REGISTER",url="https://www2.gov.scot/Resource/0054/00547737.xlsx",type="xlsx")
       sheets = readxl::excel_sheets(scot_register)
@@ -209,41 +275,76 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
     
   },
   
-  getODSMappings = function() {
-    self$getSaved("ODS_MAPPINGS",orElse = function() {
+  getManualMappings = function(...) {
+    self$getSaved("MANUAL_CODE_MAPPINGS",...,orElse = function(...) {
+      idMapping <- read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=1853095988&single=true&output=csv","&nocache=",sample(1:1000000,1)))
+      idMapping = idMapping %>% 
+        dplyr::rename(fromCode = fromId, toCode=toId, fromCodeType = fromType, toCodeType = toType) %>% 
+        #dplyr::mutate(rel="synonym") %>%
+        dplyr::select(fromCode,fromCodeType,toCode,toCodeType,rel)
+      
+      tmp = self$getManualCodes()
+      mapping = tmp %>% 
+        dplyr::select(fromCodeType = codeType, fromCode = code, toCode=parent, toCodeType = parentCodeType) %>% 
+        dplyr::mutate(rel="parent")
+      tmp2 = tmp %>% 
+        dplyr::filter(
+          !is.na(pcds) & codeType %in% c("NHS trust","Independent hospital group")
+        ) %>% self$postcodes$lookupFeatures(pcds, dplyr::vars(ccg,lsoa11))
+      tmp3 = tmp2 %>% dplyr::mutate(toCodeType = "CCG",rel="located_in") %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=ccg, toCodeType, rel)
+      tmp4 = tmp2 %>% dplyr::mutate(toCodeType = "LSOA",rel="located_in") %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=lsoa11, toCodeType, rel)
+      
+      out = dplyr::bind_rows(idMapping,mapping,tmp3,tmp4) %>% 
+        dplyr::distinct() %>% 
+        dplyr::filter(!is.na(fromCodeType) & !is.na(toCodeType)) %>%
+        dplyr::mutate(weight=1)
+      browser(expr=self$debug)
+      return(out)
+    })
+  },
+  
+  getODSMappings = function(...) {
+    self$getSaved("ODS_MAPPINGS",...,orElse = function(...) {
       tmp = self$getODSCodes()
       
       mapping = tmp %>% 
         dplyr::select(fromCodeType = codeType, fromCode = code, toCode=parent) %>% 
         dplyr::inner_join(tmp %>% dplyr::select(toCodeType=codeType, toCode=code), by="toCode") %>% 
-        dplyr::mutate(rel="parent") %>% 
+        dplyr::mutate(rel="parent", weight=1) %>% 
         dplyr::filter(!is.na(fromCodeType) & !is.na(toCodeType))
-      idMapping <- read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=1853095988&single=true&output=csv","&nocache=",sample(1:1000000,1)))
-      idMapping = idMapping %>% dplyr::rename(fromCode = fromId, toCode=toId, fromCodeType = fromType, toCodeType = toType) %>% dplyr::mutate(rel="synonym") %>%
-        dplyr::select(fromCode,fromCodeType,toCode,toCodeType,rel)
       
-      tmp2 = tmp %>% dplyr::filter(!is.na(pcds) & codeType=="NHS trust") %>% self$pcd$lookupFeatures(pcds, dplyr::vars(ccg,lsoa11))
-      tmp3 = tmp2 %>% dplyr::mutate(toCodeType = "CCG",rel="located_in") %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=ccg, toCodeType, rel)
-      tmp4 = tmp2 %>% dplyr::mutate(toCodeType = "LSOA",rel="located_in") %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=lsoa11, toCodeType, rel)
+      tmp2 = tmp %>% dplyr::filter(!is.na(pcds) & codeType=="NHS trust") %>% self$postcodes$lookupFeatures(pcds, dplyr::vars(ccg,lsoa11))
+      tmp3 = tmp2 %>% dplyr::mutate(toCodeType = "CCG",rel="located_in", weight=NA) %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=ccg, toCodeType, rel)
+      tmp4 = tmp2 %>% dplyr::mutate(toCodeType = "LSOA",rel="located_in", weight=NA) %>% dplyr::select(fromCodeType = codeType, fromCode = code, toCode=lsoa11, toCodeType, rel)
       
-      out = dplyr::bind_rows(mapping,idMapping,tmp3,tmp4) %>% dplyr::distinct()
+      out = dplyr::bind_rows(mapping,tmp3,tmp4)  %>% dplyr::distinct()
       browser(expr=self$debug)
       return(out)
     })
   },
   
   # Codes from the ONS website
-  getODSCodes = function() {
-    self$getSaved("NHS_ODS",orElse = function() {
+  getODSCodes = function(...) {
+    self$getSaved("NHS_ODS",...,orElse = function(...) {
     
       standardFormat = c( "Organisation Code",  "Name",  "National Grouping",  "High Level Health Geography",  "Address Line 1",  "Address Line 2",  "Address Line 3",  "Address Line 4",
                           "Address Line 5",  "Postcode",  "Open Date",  "Close Date",  "Null 1",  "Organisation SubType Code",  "Parent Organisation Code",  "Null 2",  "Null 3",  "Contact Telephone Number",
                           "Null 4",  "Null 5",  "Null 6",  "Amended Record Indicator",  "Null 7",  "GOR Code",  "Null 8",  "Null 9",  "Null 10")
       
-      etr = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% dplyr::select(-starts_with("Null"))
-      ets =  readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/ets.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% dplyr::select(-starts_with("Null"))
-      eccg = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% dplyr::select(-starts_with("Null"))
-      eauth = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",col_names = standardFormat,col_types = cols(.default=col_character())) %>% dplyr::select(-starts_with("Null"))
+      etr = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",
+                            col_names = standardFormat,
+                            col_types = readr::cols(.default=readr::col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
+      ets =  readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/ets.csv",
+                             col_names = standardFormat,
+                             col_types = readr::cols(.default=readr::col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
+      eccg = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",
+                             col_names = standardFormat,col_types = readr::cols(.default=col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
+      eauth = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
+                              col_names = standardFormat,col_types = readr::cols(.default=col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
       
       combined = dplyr::bind_rows(
         etr %>% dplyr::mutate(codeType="NHS trust"),
@@ -279,21 +380,84 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
     })
   },
   
-  getMappings = function() {
-    self$getSaved("CODE_MAPPINGS", orElse = function() {
+  getManualCodes = function(...) {
+    tmp = self$getSaved("MANUAL_CODE_LIST",..., orElse = function(...) {
+      gbHospitals <- readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=128715098&single=true&output=csv","&nocache=",sample(1:1000000,1)))
+      tmp = gbHospitals %>% dplyr::mutate(
+        start = as.Date("2019-01-01"),
+        end = NA,
+        status = "live",
+        entity = NA_character_,
+        codeType = case_when(
+          sector == "NHS Sector" ~ "NHS site",
+          sector == "Independent Sector" ~ "Independent hospital site",
+          TRUE ~ NA_character_
+        ), 
+        parentCodeType = case_when(
+          nation == "Wales" ~ "LHB19CDH",
+          nation == "Scotland" ~ "HB",
+          sector == "NHS Sector" ~ "NHS trust",
+          sector == "Independent Sector" ~ "Independent hospital group",
+          TRUE ~ NA_character_
+        )
+      ) %>% dplyr::select(
+        code = `hospitalId`,
+        name = `name`,
+        pcds = `pcds`,
+        parent = trustId,
+        start,end,status,entity,codeType, parentCodeType
+      ) 
+     
+      tmp2 = gbHospitals %>% dplyr::mutate(
+        start = as.Date("2019-01-01"),
+        parent = NA,
+        end = NA,
+        pcds = NA,
+        status = "live",
+        entity = NA_character_,
+        codeType = case_when(
+          nation == "Wales" ~ "LHB19CDH",
+          nation == "Scotland" ~ "HB",
+          sector == "NHS Sector" ~ "NHS trust",
+          sector == "Independent Sector" ~ "Independent hospital group",
+          TRUE ~ NA_character_
+        ),
+        parentCodeType = NA_character_,
+      ) %>% dplyr::select(
+          code = `trustId`,
+          name = `trustName`,
+          start,end,status,entity,codeType, parentCodeType
+      )  %>% dplyr::distinct()
+      
+      
+      out = dplyr::bind_rows(tmp,tmp2)
+      browser(expr=self$debug)
+      return(out)
+    })
+  },
+  getMappings = function(...) {
+    self$getSaved("CODE_MAPPINGS",..., orElse = function(...) {
       tmp_mappings = dplyr::bind_rows(
         self$getODSMappings(),
-        self$getONSMappings()
+        self$getONSMappings(),
+        self$getManualMappings(),
       ) %>% dplyr::distinct()
       browser(expr=self$debug)
       return(tmp_mappings)
     })
   },
   
-  getTransitiveClosure = function() {
-    self$getSaved("TRANSITIVE_CLOSURE", orElse = function() {
-      mappings = self$getMappings() %>% dplyr::select(-rel) %>% dplyr::semi_join(self$getCodes(), by=c("toCode"="code"))
-      out = mappings %>% dplyr::mutate(distance = 0, path = paste0(fromCodeType,"-",toCodeType)) 
+  getTransitiveClosure = function(...) {
+    self$getSaved("TRANSITIVE_CLOSURE", ..., orElse = function(...) {
+      out = self$getCodes() %>% 
+        dplyr::select(fromCode = code, fromCodeType = codeType) %>% 
+        dplyr::mutate(toCode = fromCode, toCodeType = fromCodeType, distance=0, path=paste0(fromCodeType,"-",fromCodeType))
+      mappings = self$getMappings() %>% 
+        dplyr::select(-rel, -weight) %>% 
+        dplyr::semi_join(self$getCodes(), by=c("toCode"="code"))
+      out = out %>% dplyr::bind_rows(
+        mappings %>% dplyr::mutate(distance = 0, path = paste0(fromCodeType,"-",toCodeType))
+      ) 
       tmp = out
       while(nrow(tmp) > 0) {
         message("building transitive closure; rows in this iteration: ",nrow(tmp))
@@ -317,54 +481,118 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
     })
   },
   
-  getCodes = function() {
-    self$getSaved("CODE_LIST", orElse = function() {
-      tmp_codes = dplyr::bind_rows(self$getONSRegister(), self$getODSCodes()) %>% dplyr::select(-pcds)
+  getCodes = function(...) {
+    tmp = self$getSaved("CODE_LIST",..., orElse = function(...) {
+      tmp2 = self$getDescriptions()
+      tmp2 = tmp2 %>% 
+        dplyr::group_by(code) %>% 
+        dplyr::mutate(priority = priority+ifelse(status=="live",2,0)) %>%
+        dplyr::arrange(desc(priority),desc(start),codeType) %>% 
+        dplyr::filter(row_number() == 1) %>% 
+        dplyr::ungroup() %>%
+        dplyr::select(code,codeType,name,status) %>%
+        dplyr::mutate(name = name %>% stringr::str_to_title() %>% 
+                        stringr::str_replace_all("Nhs","NHS") %>% 
+                        stringr::str_replace_all("Ccg","CCG") %>%
+                        stringr::str_replace_all("And","and") %>%
+                        stringr::str_replace_all("Of","of")
+        ) %>% 
+        dplyr::distinct() 
+      #tmp2 %>% ensurer::ensure_that(!any(duplicated(.$code)))
+      return(tmp2)
+    })
+    return(tmp)
+  },
+  
+  getDescriptions = function(...) {
+    out = self$getSaved("DESCRIPTION_LIST",..., orElse = function(...) {
+      tmp_codes = dplyr::bind_rows(
+        self$getONSRegister() %>% mutate(source = "ONS", priority = 10), 
+        self$getODSCodes() %>% mutate(source = "Spine", priority = 5),
+        self$getManualCodes() %>% mutate(source = "Manual", priority = 2)
+      ) %>% dplyr::select(-pcds, -parentCodeType)
       synonyms = tmp_codes %>% dplyr::rename(fromCode = code) %>% dplyr::select(-codeType) %>% dplyr::inner_join(
         self$getMappings() %>% dplyr::filter(rel=="synonym") %>% dplyr::rename(code = toCode, codeType = toCodeType),
         by = "fromCode"
-      )  %>% dplyr::select(-fromCode,-fromCodeType,-rel)
+      )  %>% dplyr::select(-fromCode,-fromCodeType,-rel,-weight) %>% dplyr::mutate(priority = 0)
       synonyms2 = tmp_codes %>% dplyr::rename(toCode = code) %>% dplyr::select(-codeType) %>% dplyr::inner_join(
         self$getMappings() %>% dplyr::filter(rel=="synonym") %>% dplyr::rename(code = fromCode, codeType = fromCodeType),
         by = "toCode"
-      )  %>% dplyr::select(-toCode,-toCodeType,-rel)
+      )  %>% dplyr::select(-toCode,-toCodeType,-rel,-weight) %>% dplyr::mutate(priority = 0)
       return(dplyr::bind_rows(tmp_codes,synonyms,synonyms2) %>% 
-               dplyr::filter(status=="live" & !is.na(name)) %>% 
-               dplyr::select(-end, -parent, -entity, -status) %>%
-               dplyr::mutate(name = name %>% stringr::str_to_title() %>% stringr::str_replace_all("Nhs","NHS")) %>%
+               dplyr::filter(!is.na(name)) %>% 
                dplyr::distinct())
     })
+    return(out)
   },
   
-  findCodesByName = function(df, nameVar = "name", outputCodeVar = "code", codeTypes = c("LSOA","CCG","HB","LHB","NHSER","PHEC","LAD","UA","NHS site","NHS trust")) {
+  #' @description Get codes from name
+  #' @param df a dataframe containing at least a nameVar column
+  #' @param nameVar the column name of the name to lookup (default "name")
+  #' @param outputCodeVar the column name of the code to return (default "code")
+  #' @param outputCodeTypeVar the column name of the codeType to return (default "codeType") or NULL for no codeType column
+  #' @param codeTypes - a list of codeTypes to constrain the search (or NULL for no restriction)
+  #' @return a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
+  findCodesByName = function(df, nameVar = "name", outputCodeVar = "code", outputCodeTypeVar = "codeType", codeTypes = c("LSOA","CCG","HB","LHB","NHSER","PHEC","LAD","UA","NHS site","NHS trust","CTRY","UK")) {
     nameVar = ensym(nameVar)
     outputCodeVar = ensym(outputCodeVar)
-    tmp = self$getCodes()
+    outputCodeTypeVar = tryCatch(ensym(outputCodeTypeVar),error = function(e) NULL)
+    
+    tmp = self$getDescriptions()
+    if(!identical(codeTypes,NULL)) tmp = tmp %>% dplyr::filter(codeType %in% codeTypes)
     # browser(expr=self$debug)
-    tmp2 = tmp %>% dplyr::mutate(tmp_name = name %>% stringr::str_to_lower() %>% stringr::str_remove_all("[^a-z0-9]")) %>% dplyr::rename(!!nameVar := name, !!outputCodeVar := code) %>% dplyr::select(-start) 
-    tmp3 = tmp2 %>% dplyr::inner_join(
-      df %>% dplyr::mutate(tmp_name = !!nameVar %>% stringr::str_to_lower() %>% stringr::str_remove_all("[^a-z0-9]")),
-      by="tmp_name", suffix = c("",".original")) 
-    return(tmp3 %>% dplyr::select(-tmp_name) %>% dplyr::filter(codeType %in% codeTypes))
+    tmp2 = tmp %>% dplyr::mutate(tmp_name = name %>% stringr::str_to_lower() %>% stringr::str_remove_all("[^a-z0-9]")) 
+    tmp3 = df %>% dplyr::mutate(tmp_name = !!nameVar %>% stringr::str_to_lower() %>% stringr::str_remove_all("[^a-z0-9]"))
+    
+    tmp4 = tmp2 %>% 
+      dplyr::semi_join(tmp3, by="tmp_name") %>% 
+      dplyr::select(code,codeType,tmp_name) %>% 
+      dplyr::distinct() %>%
+      dplyr::inner_join(self$getCodes(live=TRUE),by=c("code","codeType")) %>%
+      dplyr::select(code,codeType,name,tmp_name) %>% 
+      dplyr::rename(!!nameVar := name, !!outputCodeVar := code)
+    if(identical(outputCodeTypeVar,NULL)) {
+      tmp4 = tmp4 %>% dplyr::select(-codeType)
+    } else {
+      tmp4 = tmp4 %>% dplyr::rename(!!outputCodeTypeVar := codeType)
+    }
+    out = tmp3 %>% dplyr::rename(name.original = !!nameVar) %>% dplyr::left_join(
+      tmp4,
+      by="tmp_name", suffix = c(".original","")) %>% 
+      dplyr::select(-tmp_name) %>%
+      dplyr::mutate(!!nameVar := ifelse(is.na(!!nameVar),name.original,!!nameVar))
+
+    unmatched = out %>% filter(is.na(!!outputCodeVar)) %>% pull(!!nameVar) 
+    if (length(unmatched) > 0) warning("Couldn't match the following names: ",paste0(unique(unmatched),collapse = ", "))
+    return(out)
+  },
+  
+  #' @description Get canonical names from code
+  #' @param df a dataframe containing at least a nameVar column
+  #' @param codeVar the column name of the code to lookup (default "code")
+  #' @param outputNameVar the column name of the code to return (default "name")
+  #' @param outputCodeTypeVar the column name of the name to lookup (default "codeType") or NULL for no codeType column
+  #' @param codeTypes - a list of codeTypes to constrain the search (or NULL for no restriction)
+  #' @return a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
+  findNamesByCode = function(df, codeVar = "code", outputNameVar = "name", outputCodeTypeVar = "codeType", codeTypes = NULL) {
+    codeVar = ensym(codeVar)
+    outputNameVar = ensym(outputNameVar)
+    outputCodeTypeVar = tryCatch(ensym(outputCodeTypeVar),error = function(e) NULL)
+    
+    tmp = self$getCodes()
+    if (!identical(codeTypes,NULL)) tmp = tmp %>% filter(codeType %in% codeTypes)
+    
+    if (!identical(outputCodeTypeVar,NULL))
+      tmp = tmp %>% dplyr::select(tmp_code = code, !!outputNameVar := name, !!outputCodeTypeVar := codeType)
+    else 
+      tmp = tmp %>% dplyr::select(tmp_code = code, !!outputNameVar := name)
+    
+    tmp2 = df %>% 
+      dplyr::mutate(tmp_code = !!codeVar) %>% 
+      dplyr::left_join(tmp,by="tmp_code", suffix = c(".original","")) %>%
+      dplyr::select(-tmp_code)
+    return(tmp2)
   }
   
 ))
 
-#upp = UKPostcodeProvider$new("~/Data/maps")
-ump = UKCodeMappingProvider$new(upp)
-odsCodes = ump$getODSCodes()
-onsCodes = ump$getONSRegister()
-onsMaps = ump$getONSMappings()
-odsMaps = ump$getODSMappings()
-codes = ump$getCodes()
-maps = ump$getMappings()
-
-# ump$debug = TRUE
-#ump$getODSMappings()
-#tmp = ump$getODSCodes()
-#tmp = ump$getMappings()
-#ump$findCodesByName(tibble(x="Musgrove Park Hospital"),nameVar = x)
-tc = ump$getTransitiveClosure()
-View(tc %>% group_by(fromCodeType, toCodeType) %>% count())
-View(tc %>% filter(fromCodeType == "NHS site" & toCodeType=="CCG"))
-View(tc %>% filter(fromCodeType == "NHS site" & toCodeType=="PHEC"))

@@ -1,5 +1,6 @@
 ---
-title: "Current estimates of R(t) for SARS-CoV-2 in the UK"
+title: "Estimates of regional infectivity of COVID-19 in the United Kingdom following imposition of social distancing measures"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
 output: 
   pdf_document :
     fig_caption: yes
@@ -33,7 +34,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(tidyverse)
 
-devtools::load_all("~/Git/uk-covid-datatools/")
+
 # devtools::install_github("terminological/uk-covid-datatools")
 # library(ukcovidtools)
 devtools::load_all("~/Git/standard-print-output/")
@@ -46,222 +47,388 @@ library(lubridate)
 library(patchwork)
 library(sp)
 
-ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
-source("./covid-serial-interval.R")
-source("./lockdown-impact-data.R")
+standardPrintOutput::setDefaults()
+
+source("~/Git/uk-covid-datatools/vignettes/cron-estimate-rt.R")
+
 ```
 
-Robert Challen ^1,2^; Leon Danon ^3,4^
+# Estimates of regional infectivity of COVID-19 in the United Kingdom following imposition of social distancing measures
 
-1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
-2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
-3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
-4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+Robert Challen^1,2^; Krasimira Tsaneva-Atanasova^1,3^; Martin Pitt^4^;
+Tom Edwards^2^; Luke Gompels^2^; Lucas Lacasa^5^; Ellen
+Brooks-Pollock^6^; Chris Martin^7^; Gareth Griffith^6,8^; Leon
+Danon^3,9^
+
+1)  EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2)  Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3)  The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4)  NIHR CLAHRC for the South West Peninsula, St Luke’s Campus, University of Exeter Medical School, Exeter, UK.
+5)  School of Mathematical Sciences, Queen Mary University of London, London E1 4NS, UK
+6)  Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+7)  Crystallise Ltd, Basildon, Essex, UK SS15 6SS
+8)  MRC Integrative Epidemiology Unit, University of Bristol, United Kingdom;
+9)  Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
 
 Report date: `r Sys.Date()`
 
+## Abstract
+
+***We describe regional variation in the reproduction number of
+SARS-CoV-2 infections observed using publicly reported data in the UK,
+with a view to understanding both if there are clear hot spots in viral
+spread in the country, or other spatial patterns. 
+#TODO update
+There are long and
+variable time delays between infection and detection of cases, and thus
+it remains unclear whether the reduction in the reproduction number is a
+result of social distancing measures. If we are to prevent further
+outbreaks, it is critical that we both reduce the time taken for
+detection and improve our ability to predict the regional spread of
+outbreaks.***
+
+Keywords : COVID-19; SARS-CoV-2; reproduction number; regional
+variation;
+
+Competing interests: Support for RC and KTA’s research is provided by
+the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of
+the NHS Global Digital Exemplar programme (GDE); no financial
+relationships with any organisations that might have an interest in the
+submitted work in the previous three years, no other relationships or
+activities that could appear to have influenced the submitted work.
+
+Funding: RCh and KTA gratefully acknowledges the financial support of
+the EPSRC via grant EP/N014391/1 and NHS England, Global Digital
+Exemplar programme. LD and KTA gratefully acknowledges the financial
+support of The Alan Turing Institute under the EPSRC grant EP/N510129/1.
+LL acknowledges the financial support of the EPSRC via Early Career
+Fellowship EP/P01660X/1.
+
+Authors contributions: All authors discussed the concept of the article
+and RC wrote the initial draft. KTA, TE, LG, LL, EB-P, CM, GG and LD
+commented and made revisions. All authors read and approved the final
+manuscript. RC is the guarantor. The views presented here are those of
+the authors and should not be attributed to TSFT or the GDE.
+
+# Background
+
+In late 2019 an outbreak of a novel infectious disease was detected. It 
+manifested principally with severe acute respiratory distress, and
+pneumonia,[@huangClinicalFeaturesPatients2020]
+although many cases followed a mild course[@wuCharacteristicsImportantLessons2020].
+The pathogen was rapidly identified as a new species of coronavirus
+(severe acute respiratory syndrome coronavirus 2 - SARS-CoV-2), and the
+disease named COVID-19[@NamingCoronavirusDisease].
+Global transmission of the virus followed and major outbreaks have been
+observed in Europe, beginning with Italy[@ceredaEarlyPhaseCOVID192020].
+On the 31st Jan 2020 the first cases were identified in the UK[@mossLessonsManagingHighconsequence2020].
+This was initially managed using testing of suspected individuals in the
+community, contact tracing and isolation of affected cases. However this
+was successful only in delaying the spread of the disease and on 13th
+March 2020 the UK government moved towards a mitigation strategy
+reserving testing for hospital inpatients only[@publichealthenglandCOVID19InvestigationInitial2020].
+Following this, a stepwise implementation of social distancing measures
+were mandated by the government including voluntary self isolation of
+any symptoms & vulnerable people[
+[@publichealthenglandCOVID19GuidanceSocial2020],
+a ban on non essential travel worldwide[@foreignTravelAdviceCoronavirus2020]
+and school closures[@departmentforeducationClosureEducationalSettings2020].
+Finally on 23rd March 2020 the government mandated that everyone apart
+from essential workers should stay at home and away from others[@cabinetofficeFullGuidanceStaying2020]
+
+Epidemiological studies conducted during the outbreak in China have
+provided us with a number of estimates of the parameters describing the
+virus’s spread through the population including a reproduction number
+between 2.24 and 3.58[@zhaoPreliminaryEstimationBasic2020]
+and a median incubation period of 5.1 days (credible interval 4.5 to
+5.8)[@lauerIncubationPeriodCoronavirus2020].
+It is estimated that fewer than 2.5% of people will show signs before
+2.2 days and 97.5% of people who will develop symptoms will have done so
+by 11.2 days after exposure[@lauerIncubationPeriodCoronavirus2020].
+
+As part of the University of Exeter's contribution to the work of the Scientific Pandemic Influenza Group on Modelling (SPI-M), we investigated the reproduction number of SARS-CoV-2 in the UK to determine whether there are any obvious spatial or temporal patterns beyond those resulting from the social distancing measures imposed, and to track their effectiveness. This article summarizes the methodology and interpretation of national and regional estimates of the time varying reproduction number ($R_t$) of the SARS-CoV-2 outbreak in the United Kingdom.
+
+# Methods
+
+This section covers the following aspects of the methodology
+
+* Data sources and processing applied
+* Combination of data sources
+* Estimation of the serial interval of SARS-CoV-2 infections
+* Calculation of $R_t$, growth rate and dispersion ($\kappa$) parameters
+
+## Data
+We integrate data from a variety of sources, both publicly available and provided to SPI-M by Public Health England (PHE) and the Defence Science and Technology Laboratory [dstl]. SPI-M requested that estimates of $R_t$ and the exponential growth rate is performed for the UK, for the 4 nations of the UK, (CTRY) and for the 7 NHS regions in England (NHSER). 
+
+At the UK level data is available on cases and deaths by the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19]. The PHE coronavirus tracker[@publichealthenglandTotalUKCOVID19] publishes a overall figure for the UK on a daily basis. It also produces a regional breakdown of the 4 nations, which exclude tests performed in private laboratories. A historical time series of the UK level data is not made available though the PHE site. However the data has been collected prospectively and curated by Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata]. Cumulative case counts from both the PHE headline UK figure and the combined sum of the 4 nations are compared as these numbers differ. 
+
+Hospital admission data is available from NHS trusts across the UK via the [dstl] provided data feeds, which in turn aggregate the situation reports (SitReps) provided by NHS hospital trusts. This data is aggregated to UK level. 
+
+For the 4 nations of the UK, we used data from the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19] for cases and deaths in England. For the other 4 nation states of the UK, as above, both historical cases and death data is aggregated from Public Health Wales [@PublicHealthWales] and Scotland's [@CoronavirusScotlandGov] sites, and from Northern Ireland's HSC site [@COVID19SurveillanceReports], using a time series retrieved from Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata] for Scotland, Wales and Northern Ireland data. Death data from the 4 nations is also provided by the [dstl], via the CHESS data set[@CoronavirusCOVID19Using]. Death data is subject to a weekly periodicity due to reporting delay over the weekend and wherever available the death data is gathered using date of death rather than date of report.
+
+At the level of the NHS England regions, we take the case data from SPI-M provided anonymised test result line listings. Mortality data for NHS England is provided to SPI-M by PHE in a canonical line list of deaths, and this is used alongside the CHESS dataset. Admissions data is available from [dstl] feeds, and ICU admissions from CHESS data sets.
+
+For England as a nation and for the NHS England regions we also have data available from triage telephone calls from NHS 111 and 999 services. The data on the calls made to 111 & 999 as well as the outcome of that call are provided to SPI-M via the [dstl]. These are used to produce additional estimates for SPI-M, and described in detail elsewhere, but in brief the number of 111 calls or 999 calls that go through the 111 or 999 coronavirus assessment pathway and result in an ambulance being dispatched or an urgent clinical review being scheduled are used as an indicator of a potential coronavirus case.
+
+For all data sources cumulative case figures are converted into daily incidence figures, and any data which is broken down by age, or by gender, are combined. In case and death data which may be subject to reporting delay the final 5 days of the time series is discarded. The resulting time series are analysed for outlying data points, which are more than 5 standard deviations away from the mean of the nearest 14 data points. Missing values are imputed using the R "forecast" library[@ForecastingFunctionsTime], the results of which are truncated ensuring no negative incidence figures. Outlying or missing data are imputed from a linear interpolation of the logarithm of incidence figures. Prior to calculation of $R_t$ a smoothing function (a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 7 day window. This is needed as all the data sources have some degree of weekly periodicity regardless of source. Prior to calculation of the growth rate a different smoothing function (also a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 14 day window, which is needed as the growth rates depend on an assessment of the instantaneous rate of change which tends to amplify data set noise[@loaderLocfitLocalRegression2020].
+
+## Combination of data sources
+
+Our final estimates supplied to SPI-M are based on an aggregation of the various data sources described above. The various data sources described above are aggregated to form final estimates of time series for triage calls, cases, hospital admission, icu admission, and deaths. This feeds 3 models used to estimate $R_t$, one based on deaths (EpiEstim/Deaths), one based on cases (EpiEstim/4NationsCases) and one based on telephone triage (EpiEstim/Triage), alongside additional models based on hospital and ICU admissions. The aggregation procedure is kept simple and we use a combined event statistic as the average of all component events (which may be deaths, admissions, cases, or triage calls). This potentially results in double counting of individual cases, but this is consistent throughout the time series so does not affect relative changes and hence either estimates of $R_t$ or of growth rates. The final source of the combined data sets and more information about the processing steps used is shown in table 1. 
+
 ```{r}
 
-keyDates = tibble(
-  date = as.Date(c(
-    "2020-03-16",
-    "2020-03-23",
-    "2020-04-06",
-    "2020-04-20"
-  )),
-  event = c(
-    "1 wk pre-lockdown",
-    "Lockdown",
-    "2 wks post-lockdown",
-    "4 wks post-lockdown")
-) %>% mutate(label = paste0(date,": \n",event))
-
-
-
-# markup the timeseries data with key dates:
-
-# r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
-# r0CombinedUK_LTLA = ts$r0CombinedUK_LTLA %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14") & date<(Sys.Date()-4)) %>% filter(!stringr::str_starts(code,"N"))
-
-r0EnglandPHE = ts$r0EnglandPHE %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-
-r0UK = ts$r0UK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-r0UKDeaths = ts$r0UKDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-r0UKTracker = ts$r0UKTracker %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-
-r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-r0UKRegionalDeaths = ts$r0UKRegionalDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09") & date<(Sys.Date()-4))
-
-latestDate = max(r0UK$date, na.rm=TRUE)
-tdp = function(x,y,z) sprintf("%1.2f (%1.2f; %1.2f)", x ,y, z)
+currentRt$rationale %>% select(`Resolution`=codeType, Measure = statistic, `Data source`=sources, `Processing` = processing) %>% group_by(Resolution,Measure) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table1_methodsDataSources")
 ```
 
-```{r export}
-exportSPIM = bind_rows(
-  r0UK %>% filter(!is.na(`Median(R)`)) %>%
-    #filter(date == max(date)) %>% 
-    convertRtToSPIM("United Kingdom",modelName = "EpiEstim/4NationsCases"),
-  r0UKDeaths %>% filter(!is.na(`Median(R)`)) %>%
-    #filter(date == max(date)) %>% 
-    convertRtToSPIM("United Kingdom",modelName = "EpiEstim/Deaths"),
-  # r0UKTracker %>% filter(!is.na(`Median(R)`)) %>%
-  #   #filter(date == max(date)) %>% 
-  #   convertRtToSPIM("United Kingdom",modelName = "EpiEstim/PHETrackerCases"),
-  r0UKRegional %>% filter(!is.na(`Median(R)`)) %>%
-    #group_by(uk_region) %>% filter(date == max(date)) %>% 
-    convertRtToSPIM(uk_region,modelName = "EpiEstim/4NationsCases"),
-  r0UKRegionalDeaths %>% filter(!is.na(`Median(R)`)) %>%
-    #group_by(uk_region) %>% filter(date == max(date)) %>% 
-    convertRtToSPIM(uk_region,modelName = "EpiEstim/Deaths"),
-  r0EnglandNHS %>% filter(!is.na(`Median(R)`)) %>%
-    #group_by(england_nhs_region) %>% filter(date == max(date)) %>% 
-    convertRtToSPIM(england_nhs_region,modelName = "EpiEstim/4NationsCases"),
-  cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases"),
-  cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths"),
-  # cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
-)
+## Estimation of the serial interval of SARS-CoV-2 infections
 
-excelOutput <- openxlsx::createWorkbook()
-  # Add some sheets to the workbook
-  openxlsx::addWorksheet(excelOutput, "Template")
-  openxlsx::writeData(excelOutput, sheet = "Template", x = exportSPIM)
-  
-openxlsx::saveWorkbook(excelOutput, paste0("~/Dropbox/covid19/current-rt/SPIMestimates-",Sys.Date(),".xlsx"), overwrite = TRUE)
-#write_excel_csv(exportSPIM, path="~/Dropbox/covid19/current-rt/SPIMestimates.csv")
-```
+The serial interval is a measure of the time taken for an infection to pass from one person (infector) to another (infectee) in established chains of transmission. It is closely related to the generation interval which is measured from the moment the infector is infected, to the moment the infectee is infected. The generation interval is impossible to observe directly as both infection events are only detectable once the virus has incubated and become active. The serial interval is a proxy measure based on 2 equivalent events in the clinical progression of the subsequent disease. These events could, for example, be development of symptoms, positive testing, hospitalization for severe disease, or death, in general though the serial interval is measured between positive test results in infector - infectee pairs.
 
-# Methods and assumptions
+Assumptions about the serial interval of SARS-CoV-2 have an impact on the absolute level of our estimates of $R_t$. We have used different approaches to estimate the serial interval. Firstly a UK specific serial interval was calculated from early case tracking data (the FF100 case data provided by [dstl]). Secondly a literature review was conducted and the serial intervals from a range of sources [@biEpidemiologyTransmissionCOVID192020; @ceredaEarlyPhaseCOVID192020; @ganyaniEstimatingGenerationInterval2020; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleTransmissionIntervalEstimates2020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimeVaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhanweiduSerialIntervalCOVID192020; @zhaoEstimatingSerialInterval2020] pooled. This pooling was conducted using both bootstrap re-sampling and a simpler weighted consensus approach. The detail of our pooling analysis will be available separately, but the conclusion is that we assume the serial interval is gamma distributed, with uncertain parameters (`r tsp$printSerialInterval()[1]` and `r tsp$printSerialInterval()[2]`). This range of serial intervals is used to generate a range of estimates for $R_t$ using bootstrapping, and this determines the confidence intervals in our estimates of $R_t$:
 
-* This report uses EpiEstim library [@Cori2013-xe; @Cori_undated-bn; @Thompson2019-pq] on case and mortality data
-* The data is aggregated from Public Health England [@Public_Health_England_undated-mm], Wales [@Public_Health_Wales_undated-xg] and Scotland's [@Scotland_undated-tg] sites, and from Northern Ireland's HSC site [@HSE_undated-xu]. The data was retrieved from Tom White's aggregated COVID 19 UK data github site [@White_undated-ha] for Scotland, Wales and Northern Ireland data and the Public Health England site [@Public_Health_England_undated-mm] for England data.
-* The PHE coronavirus tracker[@Public_Health_England_undated-mm] published a overall figure for the UK. It also produces a regional breakdown of the 4 nations, which do not include a regional breakdown of tests performed in private laboratories. Cumulative case counts from both the PHE tracker headline UK figure (tracker cases) and the combined sum of the 4 nations (cases) are used to produce different estimates. The "tracker cases" estimates is essentially using a slightly different population than the sum of the 4 nations cases, but may be more prone to bias due to increasing test numbers.
-* Data is cleaned to account for historical alterations within the data by ensuring there are no negative incidence figures based on cumulative counts. Missing data is imputed from a linear interpolation of the logarithm of cumulative figures.
+At present we do not alter the serial interval for data of different sources (e.g. triage versus cases versus deaths). In theory at least the mean serial interval between two events should be the same as the generation interval. However as events become more widely spaced in time the spread of the serial interval distribution should increase. However for these estimates we have concluded that our estimates of $R_t$ calculated from death data will be affected in the situation where the outbreak is accelerating rapidly, at this present point in time where the outbreak is stable the error is within our estimated confidence intervals.
 
-* The R(t) is calculated using a 7 day rolling window.
-* Unless mentioned otherwise the R(t) is calculated using confirmed cases. This is a biased estimate and is influenced by volumes of tests conducted and testing policy. It is also affected by the change of reporting cases to the sample date as this is incomplete until the tests are finished.
-* R(t) calculated by deaths is also biased where the methodology for reporting the deaths is changing, e.g. inclusion of care homes. Similarly it will tend to underestimate when full case data is not yet available or complete. It is therefore a biased low estimate in the last few days. Deaths are smoothed using a 7 day rolling mean before further analysis performed because of the weekend reporting delay. This introduces more delay.
-* As described previously [@Challen2020-qc] we assume an uncertain parametric serial interval with the following parameters:
-  + Serial interval mean plus 95% credible interval: `r tdp(wtSIs$mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si)`
-  + Serial interval standard deviation plus 95% credible interval: `r tdp(wtSIs$std_si, wtSIs$min_std_si, wtSIs$max_std_si)`
-* Rate of change estimates are calculated using previously described methods [@Challen2020-qc].
-* The figures here are essentially spot observations of historical R(t) based on published data. They are not estimates of the underlying value of R(t), or projections of R(t).
+## Calculation of $R_t$, growth rate and dispersion parameters
+
+Using the inferred serial interval distribution, we analysed the time
+series data using R[@rcoreteamLanguageEnvironmentStatistical2017]
+and the EpiEstim [@coriEstimateTimeVarying; @coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019] library to estimate the time varying reproduction numbers during the outbreak, with the underlying assumption that
+there is negligible mixing of populations between each geographical
+area. The validity of this assumption decreases as we consider smaller
+geographies, particularly in the early stages of the outbreak before
+unnecessary travel was restricted.
+
+Calculation of $R_t$ is performed using EpiEstim library on the different data streams described above. 
+The $R_t$ is calculated using a 7 day rolling window, and assumes a prior mean $R_0$ of 1 and standard deviation 0.5. This prior distribution is an assumption on the conditions following lockdown after which the $R_0$ described in the literature[@zhaoPreliminaryEstimationBasic2020] was felt to be inappropriate for the current situation in the UK.
+
+Essentially, $R_t$ is estimated by inferring connections between pairs of
+cases based on the difference in their dates of symptom onset and an
+assumed serial interval. The EpiEstim package[@thompsonImprovedInferenceTimevarying2019] 
+implements the method outlined by Cori et al. (2013)[@coriNewFrameworkSoftware2013],
+which is based on an original method from Wallinga and Teunis (2004) [@wallingaDifferentEpidemicCurves2004].
+The method uses a sliding time window during which the instantaneous
+reproduction number is assumed to be constant. We empirically decided on
+a 7 day sliding window for calculations of the time varying reproduction
+number, $R_t$, which aligns with the median incubation period of the
+virus, and offered a good trade off between noise and loss of detail.
+$R_t$ was visualised using ggplot and r-spatial libraries, using
+administrative maps from the UK Office for National Statistics[@CountiesUnitaryAuthorities].
+The $R_t$ calculation was performed for the various regions of the NHS in
+England and compared to the overall time series for England, using a two
+sided t-Test to detect the significance of regional differences between
+the observations.
+
+In the last part of our analysis we look at the rate of change in $R_t$
+estimated using a simple linear regression. We calculated a regional
+estimate of the current rate of change of $R_t$, by fitting a linear
+equation to the last 14 points, and extracting the derivative of $R_t$,
+associated confidence intervals and measures of goodness of fit.
+
+The resulting estimated figures here are essentially spot observations of historical $R_t$ based on published data. They are not estimates of the underlying "true" value of $R_t$, or projections of $R_t$.
+
+The serial interval is assumed to be gamma distributed and hence the dispersion parameter ($\kappa$) is calculated as $\kappa = 1/\alpha = (\mu/\sigma)^2$ where $\alpha$ is the shape parameter of the gamma distribution.
+
+For the growth rate ($r$) we directly estimate this as the slope of the logarithm of incidence at any given time point ($I_t$). 
+
+$$
+r = \frac{\delta}{\delta t} log(I_t+1)
+$$
+
+We have compared this to other methods of calculating growth rate and found this to be a valid approach. It does however require estimating the rate of change of a continuous curve based on noisy incidence data. Further detail is available in a supplementary paper.
 
 # Results
 
 ## UK Overview
 
 ```{r}
-tmp = r0UK %>% filter(date == max(date))
-est1 = tdp(tmp$`Median(R)`, tmp$`Quantile.0.025(R)`, tmp$`Quantile.0.975(R)`)
-
-tmp2 = r0UKTracker %>% filter(date == max(date))
-est2 = tdp(tmp2$`Median(R)`, tmp2$`Quantile.0.025(R)`, tmp2$`Quantile.0.975(R)`)
+tdp = function(...) sprintf("%1.2f (%1.2f; %1.2f)",...)
+currentRt$rt = currentRt$rt  %>% mutate(per1M = sprintf("%1.1f",Est.value/population*1000000))
+r0UK = currentRt$rt %>% filter(codeType=="UK")
+latestDate = as.Date(max(r0UK$date),"1970-01-01")
+events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Tracing stop","Lockdown","VE day","All shops reopen","Hotels and bars reopen"))
 ```
 
-The most recent median observation of R(t) based on cases reported in England, Wales, Scotland and Northern Ireland is `r est1` from the `r latestDate`. This is `r ifelse(tmp$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp$slope), tmp$slopeLowerCi, tmp$slopeUpperCi)` per day. Based on the overall number of cases reported on the PHE coronavirus tracker, which includes results from private labs, the estimate is `r est2` and is `r ifelse(tmp2$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp2$slope), tmp2$slopeLowerCi, tmp2$slopeUpperCi)` per day.
+Our most recent median estimate of $R_t$ based for the United Kingdom based on cases, deaths and hospital admissions is presented in table 2. 
 
 ```{r}
-tmp3 = r0UKDeaths %>% filter(date == max(date))
-est3 = tdp(tmp3$`Median(R)`, tmp3$`Quantile.0.025(R)`, tmp3$`Quantile.0.975(R)`)
+r0UK %>% group_by(statistic) %>% filter(date==max(date)) %>%ungroup() %>% mutate(`R(t) (95% CI)` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(`Date` = date,`Model`=source,`R(t) (95% CI)`, `incidence (per Million)` = per1M) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table2_ukRt")
 ```
 
-The most recent median observation of R(t) based on deaths is `r est3` from the `r latestDate`. This is `r ifelse(tmp3$slope > 0, "increasing","decreasing")` by `r tdp(abs(tmp3$slope), tmp3$slopeLowerCi, tmp3$slopeUpperCi)` per day.
+Figure 1, panel A, shows the incidence per million people of cases, deaths, and hospital admissions due to COVID-19 in the UK over the outbreak, on a logarithmic scale. Panel B shows the associated values for $R_t$. The initial value of $R_t$ ($R_0$) was within
+the estimates described in other countries[@huangClinicalFeaturesPatients2020].
 
-```{r fig1, fig.cap="The timeseries of R(t) estimates in the whole UK based on either cases reported by PHE and NHS labs, or deaths, or on the headline figures from the PHE coronavirus tracker which includes cases from private labs not included in the national totals"}
-r0ukplot = ggplot()+
-  
-  geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="by cases"), data=r0UK, alpha=0.2)+
-  geom_line(mapping = aes(x=date, y=`Median(R)`, colour="by cases"), data=r0UK)+
-  
-  geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="by deaths"), data=r0UKDeaths, alpha=0.2)+
-  geom_line(mapping = aes(x=date, y=`Median(R)`, colour="by deaths"), data=r0UKDeaths)+
-  
-  geom_ribbon(mapping = aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="by tracker cases"), data=r0UKTracker, alpha=0.2)+
-  geom_line(mapping = aes(x=date, y=`Median(R)`, colour="by tracker cases"), data=r0UKTracker)+
-  
-  geom_hline(yintercept = 1, colour="grey75")+
-  coord_cartesian(ylim=c(0.5, 2), xlim=c(latestDate-31,latestDate))+
-  #geom_vline(xintercept=latestDate,colour="red")+
-  #annotate("text", x=latestDate, y=1.1, colour="red", label="likely to change", hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
-  #         size=(10/ggplot2:::.pt/(96/72)))+
+#TODO: fix
+and is seen in all regions to be decreasing overall. $R_t$
+remains above or equal to 1 at all times and hence within the region of
+exponential growth of COVID-19 cases. Over the period from March 19th to
+March 25th it is notable that, whilst decreasing in England, the
+reproduction number rose in Northern Ireland, Scotland and Wales before
+falling again. On the 8th April the $R_t$ was close to one in all regions
+apart from England. Two significant dates are marked on the time series.
+Firstly, the recommendation for specific social isolation of the
+vulnerable on the 16th March, and secondly, the widespread order to
+remain at home on the 23rd March. These dates represent the initial and
+final dates of implementation of social restrictions. The date of one
+serial interval post-lockdown is also shown.
 
-  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
-  guides(colour="none")+labs(fill="")+
-  theme(axis.text.x=element_text(angle = 90, vjust =0.5))
+```{r fig1, fig.cap="Panel A is the incidence per million population and panel B the timeseries of $R_t$ estimates in the UK based on either cases reported by PHE and NHS labs, or deaths reported in NHS trusts, or on best available data for admissions. Red points are identified as outliers and discarded"}
 
-testing = ggplot(ts$tidyUK, aes(x=date,y=daily_tested/1000))+geom_bar(stat="identity",fill="grey75",width=0.7)+
-  coord_cartesian(xlim=c(latestDate-31,latestDate))+
-  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
-  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+ylab("Tests (1000s)")
+p1 = tsp$plotIncidenceQuantiles(
+    r0UK, 
+    denominatorExpr = population/1000000, 
+    events = events, 
+    dates = "2020-03-09", 
+    colour=statistic, 
+    ylim=c(0,150))+
+  #facet_wrap(vars(name),ncol=4)#+
+  theme(axis.title.x = element_blank(),axis.text.x = element_blank())+
+  scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
+p2 = tsp$plotRt(
+    r0UK, 
+    events = events, 
+    dates = "2020-03-09", 
+    colour=statistic, 
+    rtlim = c(0.5,3.5), ribbons=TRUE)
+  #facet_wrap(vars(name),ncol=4)+
+  #theme(legend.position = "bottom")
 
-((r0ukplot+ theme(axis.text.x=element_blank(), axis.title.x = element_blank())) + testing + patchwork::plot_layout(ncol=1, heights = c(0.8,0.2))) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+r0ukplot = p1+p2+patchwork::plot_annotation(tag_levels = "A") +patchwork::plot_layout(ncol=1,guides = "collect")
+r0ukplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+
 ```
 
-## R(t) by UK nations
 
-The R(t) in the different countries of the UK, based on cases and deaths. The observed value will tend to lag behind reality by a considerable period. This estimate does not include cases from private labs, for which we have no national breakdown.
+## $R_t$ by UK nations
+
+The $R_t$ in the different countries of the UK, based on cases and deaths, and triage calls is presented in table 3 and figure 2. 
+
+#TODO: 
+Over the period from March 19th to
+March 25th it is notable that, whilst decreasing in England, the
+reproduction number rose in Northern Ireland, Scotland and Wales before
+falling again. On the 8th April the $R_t$ was close to one in all regions
+apart from England.
+
+Triage figures based on 111 & 999 coronavirus pathway calls are included for England only. Cases and deaths in Northern Ireland have fallen to a level which makes any kind of accurate estimates impossible. With no information EpiEstim will revert its estimates of $R_t$ to the prior value of $R_0$ supplied which in this instance is set at 1. The estimate for each nation of the UK shows the median value of $R_t$ is below 1 for all 4 nations, using all data sources. 
 
 ```{r}
-r0UKRegionalDeaths %>% group_by(uk_region) %>% filter(date==max(date)) %>% mutate(Source = "deaths") %>% bind_rows(
-  r0UKRegional %>% group_by(uk_region) %>% filter(date==max(date)) %>% mutate(Source = "cases")
-) %>%
-  mutate(`R(t)  (95% CI)` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% 
-  select(`Country` = uk_region,`Date` = date,Source,`R(t)  (95% CI)`) %>% group_by(`Country`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table1_ukCountryRt")
+r0CTRY = currentRt$rt %>% filter(codeType == "CTRY")
+r0CTRY %>% 
+  group_by(name,source) %>% filter(date==max(date)) %>%ungroup() %>% 
+  mutate(`R(t) (95% CI)` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% 
+  select(`Date` = date,`Model`=source,`Nation` = name, `R(t) (95% CI)`, `incidence (per Million)` = per1M) %>% group_by(`Nation`) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_ukCountryRt")
 ```
 
-The estimate for each nation of the UK show a similar trend. Death rates show a weekly variation due to delays in reporting deaths over the weekend. The oscillations in the observations are therefore an artifact of the death data, and seems more pronounced in Scotland. It does unfortunately result in quite a lot of variation in the headline number depending on what day of the week.
+```{r fig2, fig.cap="The median value of $R_t$ and 95% confidence intervals for the individual countries in the United Kingdom, based on cases, deaths and hospital admissions."}
+r0nationsplot = tsp$plotRt(
+    r0CTRY, 
+    events = events, 
+    dates = "2020-03-16", 
+    colour=statistic, 
+    rtlim = c(0.5,1.5), 
+    ribbons=TRUE
+  )+
+  facet_wrap(vars(name),ncol=2)
+#r0ukplot = p1+p2+patchwork::plot_layout(ncol=1,guides = "collect")
+r0nationsplot %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/Fig2_ukRegionRtDeaths")
 
-```{r fig2, fig.cap="The timeseries of R(t) observations for the nations of the UK based on deaths"}
-r0ukregionalplotdeaths = ggplot()+
-  geom_ribbon(data = r0UKRegionalDeaths, aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="deaths"), alpha=0.2, )+
-  geom_line(data = r0UKRegionalDeaths, aes(x=date, y=`Median(R)`, colour="deaths"))+
-  geom_ribbon(data = r0UKRegional, aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill="cases"), alpha=0.2, )+
-  geom_line(data = r0UKRegional, aes(x=date, y=`Median(R)`, colour="cases"))+
-  geom_hline(yintercept = 1, colour="grey75")+
-  
-  coord_cartesian(ylim=c(0.5, 1.5), xlim=c(latestDate-31,latestDate))+
-  #geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
-  #geom_vline(xintercept=latestDate,colour="red")+
-  # ggrepel::geom_text_repel(
-  #         aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
-  #         size=(10/ggplot2:::.pt/(96/72)))+
-  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
-  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
-  guides(colour="none")+labs(fill="")+
-  facet_wrap(vars(uk_region))
 
-r0ukregionalplotdeaths %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig2_ukRegionRtDeaths")
 ```
 
-## R(t) by England NHS region
+## $R_t$ by England NHS region
 
-The same analysis as above but looking at NHS regions. These are case based observations and hence appear more "accurate" than the death based observations above. However there are other biases in these figures which make them also somewhat unreliable. As explained below, the confidence intervals here are for the calculation of this single observation of R(t), and not the confidence intervals for an underlying estimate of the true value of R(t).
+In Table 4 and Figure 3 the same analysis as above but looking at NHS regions is performed. As explained below, the confidence intervals here are for the calculation of this single observation of $R_t$, and not the confidence intervals for an underlying estimate of the true value of $R_t$. 
+
+#TODO: 
+
+The median values of $R_t$ are still all below 1 at present, however in some areas this is only just the case, and in the recent past at least one of the $R_t$ values became greater than 1, most notably in the Midlands, possibly due to the evolving situation in Leicester.
 
 ```{r}
-r0EnglandPHE %>% ungroup() %>% filter(date==latestDate) %>% mutate(`R(t) (95% CI of the observation)` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(`Date` = date,`PHE Region` = england_phe_region, `R(t) (95% CI of the observation)`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table2_NHSregionRt")
+r0NHSER = currentRt$rt %>% filter(codeType == "NHSER")
+r0NHSER %>% group_by(name,source) %>% filter(date==max(date)) %>%ungroup() %>% mutate(`R(t) (95% CI)` = tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(`Date` = date,`Model`=source,`Nation` = name, `R(t) (95% CI)`, `incidence (per 1M)` = per1M) %>% group_by(`Nation`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_ukCountryRt", colWidths = c(1,1,1,1,1))
 ```
 
-```{r fig3, fig.cap="The timeseries of R(t) observations for the sub-national regions of NHS England"}
+
+```{r fig3, fig.cap="The timeseries of $R_t$ observations for the sub-national regions of NHS England."}
+#p1=tsp$plotIncidencePer100K(r0UK,group = statistic,linetype=version,events=events,dates = "2020-03-21")+scale_y_continuous(trans="log1p")
+
+r0regionsplot=tsp$plotRt(
+    r0NHSER %>% filter(statistic != "icu admission"), 
+    events = events, 
+    dates = "2020-03-16", 
+    colour=statistic, 
+    rtlim = c(0.5,1.5), ribbons=TRUE)+
+  facet_wrap(vars(name),ncol=2)
+#r0ukplot = p1+p2+patchwork::plot_layout(ncol=1,guides = "collect")
+r0regionsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig3-NHSregionRt")
+```
+
+In Figure 2 we plot the absolute difference of $R_t$ in the 7 NHS England
+administrative regions, from the $R_t$ of England overall, as a baseline.
+This demonstrates the volatility described above and highlights the
+regional differences in $R_t$ over time. Prior to the imposition of
+social distancing the patterns observed are dominated by noise, as in
+the early phase of the outbreak the case numbers in individual regions
+were small. However from the 27th March onwards we can see a clearer
+trend emerging with the East of England, Midlands, South East and South
+Western regions approximately tracking the England baseline. London is
+consistently below this baseline and the North West, and less so North
+East & Yorkshire are consistently above the baseline. These trends of
+the differences between the 27th March to the 9th April were further
+analysed with a pairwise t-Test and presented in table 3 where we can
+see that the $R_t$ differences observed in London, the East, the North
+East and North West of England over this time period are statistically
+significant. The mean difference in $R_t$ between London and the North
+West could be about 0.35, which could have important consequences for
+the outbreak progression.
+
+```{r}
+
+tmp = ts$r0UKRegional %>% filter(uk_region == "England") %>% select(date,baseline=`Median(R)`)
+englandnhsFromBaseline = ts$r0EnglandNHS %>% left_join(tmp, by="date") %>% mutate(
+  `$R_t$ from baseline`=`Median(R)`-baseline, ymin=`Quantile.0.025(R)`-baseline, ymax=`Quantile.0.975(R)`-baseline
+)
 
 #glimpse(ts$tidyEnglandNHS)
-englandpheplot = ggplot(r0EnglandPHE, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
-  geom_ribbon(alpha=0.2)+geom_line()+
-  geom_hline(yintercept = 1, colour="grey50")+
-  facet_wrap(vars(england_phe_region)) + 
+englandnhsplot = ggplot(englandnhsFromBaseline, aes(x=date, y=`$R_t$ from baseline`, ymin=ymin, ymax=ymax))+
+  geom_ribbon(alpha=0.2)+geom_line(linetype="dotted")+
+  geom_hline(yintercept = 0, colour="grey75")+
+  facet_wrap(vars(england_nhs_region)) + 
   standardPrintOutput::narrowAndTall()+
-  coord_cartesian(ylim=c(0.5, 1.5), xlim=c(latestDate-31,latestDate))+
-  #geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
-  #geom_vline(xintercept=latestDate,colour="red")+
+  coord_cartesian(ylim=c(-1,1))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
   scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
   theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
 
-englandpheplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig3-NHSregionRt")
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig2-englandNHSRt")
 ```
 
-<!-- ## R(t) by Lower Tier Local Authority in England, and Local Health Boards in Wales and Scotland -->
+## $R_t$ differences from England baseline
 
-<!-- The following maps provide the most recent (from `r latestDate`) observation of the time varying reproduction number in all the different local authority districts in England, and health boards in Scotland and Wales. Full regional breakdown is not published on a daily basis in Northern Ireland. In panel A and D we see the low confidence interval estimate for R(t), in B and E, the median, and in C and F the high confidence interval. In panels G,H and I the relative frequency of the R(t) observation for all regions is plotted, a curve to the left of 1 implies the majority of regions implies case numbers are overall decreasing, a curve to the right of one implies case numbers are overall increasing. -->
+In Figure ? we plot the absolute difference of $R_t$ in the 7 NHS England
+administrative regions, from the $R_t$ of England overall, as a baseline.
+This demonstrates the volatility described above and highlights the
+regional differences in $R_t$ over time. Prior to the imposition of
+social distancing the patterns observed are dominated by noise, as in
+the early phase of the outbreak the case numbers in individual regions
+were small. However from the 27th March onwards we can see a clearer
+trend emerging with the East of England, Midlands, South East and South
+Western regions approximately tracking the England baseline. London is
+consistently below this baseline and the North West, and less so North
+East & Yorkshire are consistently above the baseline. These trends of
+the differences between the 27th March to the 9th April were further
+analysed with a pairwise t-Test and presented in table 3 where we can
+see that the $R_t$ differences observed in London, the East, the North
+East and North West of England over this time period are statistically
+significant. The mean difference in $R_t$ between London and the North
+West could be about 0.35, which could have important consequences for
+the outbreak progression.
+
+<!-- ## $R_t$ by Lower Tier Local Authority in England, and Local Health Boards in Wales and Scotland -->
+
+<!-- The following maps provide the most recent (from `r latestDate`) observation of the time varying reproduction number in all the different local authority districts in England, and health boards in Scotland and Wales. Full regional breakdown is not published on a daily basis in Northern Ireland. In panel A and D we see the low confidence interval estimate for $R_t$, in B and E, the median, and in C and F the high confidence interval. In panels G,H and I the relative frequency of the $R_t$ observation for all regions is plotted, a curve to the left of 1 implies the majority of regions implies case numbers are overall decreasing, a curve to the right of one implies case numbers are overall increasing. -->
 
 <!-- ```{r} -->
 <!-- data("UKCovidMaps") -->
@@ -306,8 +473,8 @@ englandpheplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/cu
 <!-- } -->
 <!-- ``` -->
 
-<!-- ```{r fig4, fig.cap="A geographical breakdown of R(t) observations in the UK based on cases. Left left column shows lower confidence limits, the central column is the median, and the right column the high confidence limit."} -->
-<!-- map1 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Median(R)` = ifelse(incidence < 2 , NA, `Median(R)`)), `Median(R)`)+guides(fill=guide_colourbar("Observed R(t)")) -->
+<!-- ```{r fig4, fig.cap="A geographical breakdown of $R_t$ observations in the UK based on cases. Left left column shows lower confidence limits, the central column is the median, and the right column the high confidence limit."} -->
+<!-- map1 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Median(R)` = ifelse(incidence < 2 , NA, `Median(R)`)), `Median(R)`)+guides(fill=guide_colourbar("Observed $R_t$")) -->
 <!-- map2 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Quantile.0.025(R)` = ifelse(incidence < 2 , NA, `Quantile.0.025(R)`)), `Quantile.0.025(R)`)+guides(fill="none") -->
 <!-- map3 = defaultR0Map(r0shapes %>% filter(date==latestDate) %>% mutate(`Quantile.0.975(R)` = ifelse(incidence < 2 , NA, `Quantile.0.975(R)`)), `Quantile.0.975(R)`)+guides(fill="none") -->
 
@@ -326,104 +493,623 @@ englandpheplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/cu
 <!-- ``` -->
 
 
-<!-- <!-- This analysis covers the last 4 days. There is quite a lot of missing data in recent days. --> -->
+<!-- This analysis covers the last 4 days. There is quite a lot of missing data in recent days. -->
 
-<!-- <!-- ```{r fig4, fig.cap="A map of R(t) estimates for the Unitary Authority and Local Health Boards of England, Scotland, and Wales"} --> -->
+<!-- ```{r fig4, fig.cap="A map of $R_t$ estimates for the Unitary Authority and Local Health Boards of England, Scotland, and Wales"} -->
 
-<!-- <!-- listAppend = function(list1,list2) { --> -->
-<!-- <!--   list1[[length(list1)+1]] <- list2 --> -->
-<!-- <!--   return(list1) --> -->
-<!-- <!-- } --> -->
+<!-- listAppend = function(list1,list2) { -->
+<!--   list1[[length(list1)+1]] <- list2 -->
+<!--   return(list1) -->
+<!-- } -->
 
-<!-- <!-- plotCols = list() --> -->
-<!-- <!-- plotDates = c(latestDate-3,latestDate-2,latestDate-1,latestDate) --> -->
+<!-- plotCols = list() -->
+<!-- plotDates = c(latestDate-3,latestDate-2,latestDate-1,latestDate) -->
 
-<!-- <!-- ukwide = lapply(plotDates, function(plotDate) { --> -->
-<!-- <!--   defaultR0Map(r0shapes %>% filter(date==plotDate))+guides(fill="none")+labs(subtitle = plotDate) --> -->
-<!-- <!-- }) --> -->
-<!-- <!-- plotCols = ukwide #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap") --> -->
+<!-- ukwide = lapply(plotDates, function(plotDate) { -->
+<!--   defaultR0Map(r0shapes %>% filter(date==plotDate))+guides(fill="none")+labs(subtitle = plotDate) -->
+<!-- }) -->
+<!-- plotCols = ukwide #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/lockdown-impact/Fig3_englandMap") -->
 
-<!-- <!-- london = lapply(plotDates, function(plotDate) { --> -->
-<!-- <!--   defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+ coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) --> -->
-<!-- <!-- }) --> -->
-<!-- <!-- plotCols = plotCols %>% append(london) --> -->
+<!-- london = lapply(plotDates, function(plotDate) { -->
+<!--   defaultR0Map(r0shapes %>% filter(date ==plotDate ))+guides(fill="none")+ coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) -->
+<!-- }) -->
+<!-- plotCols = plotCols %>% append(london) -->
 
-<!-- <!-- rtDensity = lapply(plotDates, function(plotDate) { --> -->
-<!-- <!--   ggplot(r0shapes %>% filter(date==plotDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,3))+ --> -->
-<!-- <!--     theme(axis.text.y=element_blank(),axis.title.y=element_blank()) --> -->
-<!-- <!-- }) --> -->
-<!-- <!-- plotCols = plotCols %>% append(rtDensity) --> -->
+<!-- rtDensity = lapply(plotDates, function(plotDate) { -->
+<!--   ggplot(r0shapes %>% filter(date==plotDate), aes(x=`Median(R)`))+geom_density()+geom_vline(xintercept = 1,colour="blue")+coord_cartesian(xlim = c(0,3))+ -->
+<!--     theme(axis.text.y=element_blank(),axis.title.y=element_blank()) -->
+<!-- }) -->
+<!-- plotCols = plotCols %>% append(rtDensity) -->
 
-<!-- <!-- tmp = patchwork::wrap_plots(plotCols,ncol=4,byrow = TRUE, tag_level = "new")+plot_annotation(tag_levels = "A")  --> -->
-<!-- <!-- tmp %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map") --> -->
+<!-- tmp = patchwork::wrap_plots(plotCols,ncol=4,byrow = TRUE, tag_level = "new")+plot_annotation(tag_levels = "A")  -->
+<!-- tmp %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4_Map") -->
 
-<!-- <!-- ``` --> -->
+<!-- ``` -->
 
 
 
-<!-- ### Regions with highest R(t) -->
+<!-- ### Regions with highest $R_t$ -->
 
-<!-- In the following table the unitary authority areas with the highest median time varying reproduction number are listed, based on case numbers. As some of these areas are quite small there is a good deal of uncertainty in these observations. This list has been restricted to areas which have had more than 200 cases altogether, as areas with very few cases trajectory is heavily influenced by single cases.  As this R(t) value is a single observation we expect this to vary significantly from day to day, and these numbers need to be interpreted with caution. -->
+<!-- In the following table the unitary authority areas with the highest median time varying reproduction number are listed, based on case numbers. As some of these areas are quite small there is a good deal of uncertainty in these observations. This list has been restricted to areas which have had more than 200 cases altogether, as areas with very few cases trajectory is heavily influenced by single cases.  As this $R_t$ value is a single observation we expect this to vary significantly from day to day, and these numbers need to be interpreted with caution. -->
 
-<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. An high R(t) which is worsening is worth monitoring.  -->
+<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate ($R_t$) are shown as well as an estimate of the rate of change. An high $R_t$ which is worsening is worth monitoring.  -->
 
 <!-- ```{r} -->
 
 <!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200 & incidence > 2) %>% arrange(desc(`Median(R)`)) %>% head(10) %>% mutate( -->
 
-<!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), -->
+<!--   `$R_t$ 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), -->
 <!--   `Worsening?` = if_else(slope>0,ifelse(`slopeLowerCi`>0,"yes","possibly"),""), -->
-<!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) -->
-<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Worsening?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_top10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
+<!--   `Delta $R_t$ 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) -->
+<!--   ) %>% select(Date = date, Region = name, `$R_t$ 95% CI`, `Worsening?`, `Delta $R_t$ 95% CI`) %>% group_by(Date) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_top10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
 
 <!-- ```  -->
 
-<!-- <!-- ### Regions with the fastest increase in R(t) --> -->
+<!-- ### Regions with the fastest increase in $R_t$ -->
 
-<!-- <!-- ```{r} --> -->
+<!-- ```{r} -->
 
-<!-- <!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(slope)) %>% head(10) %>% mutate( --> -->
-<!-- <!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), --> -->
-<!-- <!--   `Increasing?` = if_else(`Median(R)`>1,ifelse(`Quantile.0.025(R)`>1,"yes","possibly"),""), --> -->
-<!-- <!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) --> -->
-<!-- <!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Increasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  --> -->
-<!-- <!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_top10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) --> -->
+<!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(desc(slope)) %>% head(10) %>% mutate( -->
+<!--   `$R_t$ 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.025(R)`>1," **","")), -->
+<!--   `Increasing?` = if_else(`Median(R)`>1,ifelse(`Quantile.0.025(R)`>1,"yes","possibly"),""), -->
+<!--   `Delta $R_t$ 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeLowerCi`>0," **","")) -->
+<!--   ) %>% select(Date = date, Region = name, `$R_t$ 95% CI`, `Increasing?`, `Delta $R_t$ 95% CI`) %>% group_by(Date) %>%  -->
+<!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_top10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
 
-<!-- <!-- ```  --> -->
+<!-- ```  -->
 
-<!-- ### Regions with lowest R(t) -->
+<!-- ### Regions with lowest $R_t$ -->
 
 <!-- In the following table the unitary authority areas with the lowest median time varying reproduction number are listed, based on case numbers. As above this list has been restricted to areas which have had more than 200 cases altogether.  -->
 
-<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate (R(t)) are shown as well as an estimate of the rate of change. A low R(t) which continues to improve (which includes the majority of this table) is reassuring.  -->
+<!-- Observations which have a high confidence of being high or low are marked with a double asterisk. The observed time varying reproductive rate ($R_t$) are shown as well as an estimate of the rate of change. A low $R_t$ which continues to improve (which includes the majority of this table) is reassuring.  -->
 
 <!-- ```{r} -->
 
 <!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200 & incidence > 2) %>% arrange(`Median(R)`) %>% head(10) %>% mutate( -->
-<!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")), -->
+<!--   `$R_t$ 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")), -->
 <!--   `Improving?` = if_else(slope<0,ifelse(`slopeUpperCi`<0,"yes","possibly"),""), -->
-<!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **","")) -->
-<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Improving?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  -->
+<!--   `Delta $R_t$ 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **","")) -->
+<!--   ) %>% select(Date = date, Region = name, `$R_t$ 95% CI`, `Improving?`, `Delta $R_t$ 95% CI`) %>% group_by(Date) %>%  -->
 <!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table5_bottom10Rt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
 
 <!-- ```  -->
 
-<!-- ### Regions with the fastest decrease in R(t) -->
+<!-- ### Regions with the fastest decrease in $R_t$ -->
 
 <!-- ```{r} -->
 
 <!-- r0CombinedUK %>% filter(date == latestDate & cumulative_cases>200) %>% arrange(slope) %>% head(10) %>% mutate( -->
-<!--   `R(t) 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")), -->
+<!--   `$R_t$ 95% CI` = paste0( tdp(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), if_else(`Quantile.0.975(R)`<1," **","")), -->
 <!--   `Decreasing?` = if_else(`Median(R)`<1,ifelse(`Quantile.0.975(R)`<1,"yes","possibly"),""), -->
-<!--   `Delta R(t) 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **","")) -->
-<!--   ) %>% select(Date = date, Region = name, `R(t) 95% CI`, `Decreasing?`, `Delta R(t) 95% CI`) %>% group_by(Date) %>%  -->
+<!--   `Delta $R_t$ 95% CI` = paste0(tdp(`slope`,`slopeLowerCi`,`slopeUpperCi`),if_else(`slopeUpperCi`<0," **","")) -->
+<!--   ) %>% select(Date = date, Region = name, `$R_t$ 95% CI`, `Decreasing?`, `Delta $R_t$ 95% CI`) %>% group_by(Date) %>%  -->
 <!--   standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_bottom10DeltaRt", tableWidth = 1, defaultFontSize = 8, colWidths = c(0.7,1.5,1,0.8,1)) -->
 
 <!-- ```  -->
+In figures 3 and 4 we present the detailed regional breakdown of
+reproduction number in the 149 unitary authorities in England. These are
+illustrated at time points representing the start of the 2 social
+distancing measures implemented by the UK government and described
+above, and marked on figures 1 and 2. In the individual unitary
+authority regions case numbers may be quite small so the estimates of
+$R_t$ may have wide confidence intervals which are not shown. The full
+regional breakdown including confidence intervals is available as
+supplementary materials. In the vast majority of regions and time points
+the reproduction number is greater than 1, but the same decreasing trend
+is present.
+
+```{r}
+data("UKCovidMaps")
+
+# https://github.com/tidyverse/ggplot2/issues/3391
+# some issues joining tibble onto sf - which 
+
+r0shapes = UKCovidMaps$reportingRegions %>% 
+  # fill in missing dates to prevent the map having disappearing / reappearing regions
+  crossing(tibble(date=unique(ts$r0CombinedUK$date))) %>% 
+  left_join(keyDates, by="date") %>%
+  left_join(
+    ts$r0CombinedUK,
+    by=c("code","date"), suffix=c("",".dup")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+  sf::st_as_sf()
+
+defaultR0Map = function(data) {
+  return(
+    ggplot(data)+
+    geom_sf(aes(fill=`Median(R)`))+
+    scale_fill_gradient2(
+      low="green",
+      mid="white",
+      high="red",
+      midpoint=0,
+      trans="log",
+      na.value = "grey80", 
+      limits=c(0.2,5), 
+      breaks=c(0.2,0.5,1,2,5), 
+      labels=c("<0.2","0.5","1","2",">5"),
+      oob=scales::squish)+
+    standardPrintOutput::narrowAndTall()+
+    standardPrintOutput::mapTheme()
+  )
+}
+
+defaultDeltaR0Map = function(data) {
+  return(
+    ggplot(data)+
+    geom_sf(aes(fill=slope))+
+    scale_fill_gradient2(
+      low="cyan",
+      mid="white",
+      high="magenta",
+      midpoint=0,
+      na.value = "grey80",
+      limits=c(-0.5,0.5), 
+      breaks=c(-0.5,-0.25,0,0.25,0.5), 
+      labels=c("<-0.5","-0.25","0","0.25",">0.5"),
+      oob=scales::squish)+
+    standardPrintOutput::narrowAndTall()+
+    standardPrintOutput::mapTheme()
+  )
+}
+```
+
+*Figure 3 - the median value of $R_t$ at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England* *Unitary Authority regions. Not all regions provided time
+regional series data over the period under investigation and these areas
+are represented in grey.*
+
+```{r}
+ukwide = 
+  defaultR0Map(r0shapes %>% filter(!is.na(label)))+
+  facet_wrap(vars(label), nrow = 1)
+ukwide %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig3_englandMap")
+
+```
+*Figure 4 - the median value of $R_t$ at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England Unitary Authority region in London*
+
+```{r}
+london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + standardPrintOutput::mapTheme()
+london %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_londonMap")
+```
+```{r}
+# birmingham = ukwide + coord_sf(crs = 4326,xlim = c(-2.3, -1.5), ylim = c(52.25, 52.75), expand = FALSE) + standardPrintOutput::mapTheme()
+# birmingham %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_birminghamMap")
+```
+In figure 5 we present the regional analysis of the current rate of
+change of $R_t$. This aims to demonstrate the magnitude in change of $R_t$
+over time and hence give us a sense of whether social distancing
+measures are currently having the desired effect of reducing the overall
+velocity of infection. In this time series, if the rate of change of
+$R_t$ is positive, the infection is accelerating. Negative values, on the
+other hand, represent deceleration. We can see that in England, the
+viral infection has been decelerating from before the onset of the full
+social distancing policies of the 23rd March. In the other regions of
+the UK on the other hand we see a continued acceleration of the viral
+spread until approximately one serial interval after the 23rd March
+after which the infection begins to decelerate.
+
+
+*Figure 5 - the rate of change of $R_t$ per day in different regions of
+the UK.*
+
+In figures 6 and 7 we present a more detailed regional analysis of the
+rate of change of $R_t$ by Unitary Authority in England or Local Health
+Board in Scotland and Wales. We do not have complete data for this
+regional breakdown in Wales, but in the far right panel representing the
+most up to date time point, we see that in the vast majority of areas in
+England the rate of change is negative (cyan) representing a continued
+day on day fall in transmission. However there is seen to be regional
+variation in the preceding days and weeks, and that the widespread
+negative rate of change of $R_t$ is a relatively recent feature.
+
+
+*Figure 6 - the median value of $R_t$ at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England Unitary Authority regions (England), and Local Health Boards
+(Scotland and Wales). Not all regions provided time regional series data
+over the period under investigation and these areas are represented in
+grey.*
+
+
+
+```{r}
+ukwideDelta = 
+  defaultDeltaR0Map(r0shapes %>% filter(!is.na(label)))+
+  facet_wrap(vars(label), nrow = 1)
+ukwideDelta %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig6_englandMapDelta")
+```
+
+![](media/image8.png){width="6.770833333333333in"
+height="3.4444444444444446in"}*Figure 7 - the median value of $R_t$ at
+the time of announcement of different social interventions designed to
+prevent spread of SARS-CoV-2, by England Unitary Authority region in
+London*
+
+```{r}
+londonDelta = ukwideDelta + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + standardPrintOutput::mapTheme()
+londonDelta %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig7_londonMapDelta")
+```
+```{r}
+# birminghamDelta = ukwideDelta + coord_sf(crs = 4326,xlim = c(-2.3, -1.5), ylim = c(52.25, 52.75), expand = FALSE) + standardPrintOutput::mapTheme()
+# birminghamDelta %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig7_birminghamMapDelta")
+```
+
+
+# Discussion
+
+The results presented above demonstrate a regional and time based
+variation in the reproduction number of SARS-CoV-2. Currently the
+reproduction number is close to 1 in most regions and the rate of change
+is negative suggesting that we will see a peak to the infection shortly.
+
+There are several significant dates of both social distancing measures,
+and methodological changes, presented in this analysis. In interpreting
+the relationship between the dates and changes in the reproduction
+number we must remember that changes in reproduction number will lag the
+introduction of a social measure by at least the incubation period of
+SARS-CoV-2 (median 5.1 days - 95% IQR 2.2-11.2)[@lauerIncubationPeriodCoronavirus2020].
+Given the testing strategy that is currently in place, COVID-19 cases
+will not be identified until a patient is admitted to hospital with
+symptoms, the test is performed and results obtained. This introduces
+further time delays which may vary in length from individual to
+individual. The delay between onset of symptoms and admission has been
+estimated at 5 to 9 days[@lintonIncubationPeriodOther2020].
+The delay induced by the test processing is unknown. If we assume a 2
+day delay for testing, we would estimate that interventions begin to
+have an effect from 9 days after the intervention, have half of their
+impact in 14 days, and begin to have full impact after 22 days.
+
+In the accompanying supplementary materials we present an animation of
+the $R_t$ over time, and in the rate of change in $R_t$ over time. This
+animation raises the possibility of waves of increasing and decreasing
+$R_t$ spreading throughout the UK. If such waves can be identified and
+predicted we may be able to intercept them in the future, through a
+targeted application of community testing and a more localised social
+distancing intervention. For this to be an option however we will need
+much more granular data on the location of confirmed and suspected
+cases, and to as far as possible reduce the time delay between infection
+and detection.
+
+However, because of changes in test strategy, the step
+wise implementation of social distancing measures, and the variable lag
+introduced by the incubation period, it is difficult to get a picture of
+the causative influence of social distancing measures on the drop in
+$R_t$ rates over time[@pootsHowAttributeCausality2017].
+It is however possible to note that significant changes in both $R_t$,
+and the rate of change of $R_t$, predate the implementation of social
+distancing measures in the UK.
+
+Our analysis demonstrated significant regional variability exists, most
+notably at a country level, but it does not identify any single location
+that is a “hot spot” of viral infectivity within the UK, but rather that
+areas of increased viral reproduction migrates around the country over
+time. This migration does not seem entirely random, and is a focus of
+future investigation.
 
 # Limitations
 
-* In the regional data there are frequently confirmed cases reported in a higher level geography that are not properly assigned to any region in the lower level breakdown. As this proportion of unassigned cases varies from day to day it is a source of bias and has in the past been corrected by proportionately distributing the unassigned cases to each region [@Challen2020-qc]. However over the last few days there has been so much missing that this in itself was causing an issue. Any case based data estimates will likely be on the low side because of this.
-* EpiEstim provides a spot observation of the historical R(t) based on the existing case numbers at that point, and provides confidence intervals of that observation. The confidence intervals are not representative of the underlying R(t) and as we can see from the national breakdowns above this is heavily influenced by patterns in the data. If we wanted to estimate the underlying R(t) then additional confidence intervals could be calculated by fitting an assumed distribution to the time series of R(t) observations.
+Due to the fragmented nature of reporting of the outbreak across the 4
+main countries of the UK there is insufficient time series data
+available to perform a UK wide regional breakdown of $R_t$. The
+availability of time series data is particularly challenging in Northern
+Ireland and Wales where we only have a very limited data set.
+
+The time series data we have collected has data quality issues
+identified in the methods section, which has required some data
+cleansing. Furthermore we believe changes in the methodology, and
+clinical criteria for testing patients has created an artifactual
+decrease in the apparent $R_t$ in the days after the 13th March, which
+influences the overall ability to draw conclusions.
+
+There was a change in testing strategies that took place around the 13th
+March, before which there were attempts at community tracing, and after
+which testing was only performed on hospital admissions for suspected
+COVID-19. One possible source of regional variation that would influence
+the results of this analysis is that of potentially differing
+implementations of testing strategies, and differing processing times
+for test results, which anecdotally have had long turn around times in
+some centres. If either of these were observed then the comparisons
+between regions would be difficult. However we have no evidence that
+this is the case as until recently the tests for SARS-CoV-2 have been
+centrally controlled through a network of public health laboratories.
+
+There is an inherent assumption that limited travel has occurred during
+the period of estimation, we would however expect that some people are
+moving from denser centres such as London to more rural regions, which
+could inflate rural figures, and may explain the surge in $R_t$ in Wales
+and Scotland, following the 23rd March.
+
+$R_t$ calculated using confirmed cases is likely to be a biased estimate and is influenced by volumes of tests conducted and testing policy. $R_t$ calculated by deaths is also biased where the methodology for reporting the deaths is changing, e.g. inclusion of care homes, however our death counts includes all settings. Death rate estimates will tend to reflect the $R_t$ of the older population as they are more likely to die. Death rates (and to a lesser extent admission statistics) are subject to a reporting delay, which can make rates look lower than they should be, paritcularly when case numbers are small.  The precise date at which to attribute a particular value of $R_t$ is somewhat arbitrary as the observed event (cases, deaths, admissions) is distant in time to the underlying event of interest (infections).
+* In the regional data there are frequently confirmed cases reported in a higher level geography that are not properly assigned to any region in the lower level breakdown. 
+* EpiEstim provides a spot observation of the historical $R_t$ based on the existing case numbers at that point, and provides confidence intervals of that observation. The confidence intervals are not representative of the underlying $R_t$ and as we can see from the national breakdowns above this is heavily influenced by patterns in the data. Some estimates of $R_t$ are quite volatile based on underlying data.
+* $R_t$ is a relative measure and should not be presented without information about the incidence rate.
+
+# Conclusions
+
+The analysis presented above reflects the state of the ongoing crisis of
+COVID-19 in the UK, but with a sense that the effective reproduction
+number is slowly coming under control. The interpretation of the time
+series data presented is particularly challenging due to the extensive
+time delay in identifying positive cases. As such it is impossible to
+conclude whether social distancing is the cause of this improvement.
+
+The current trends in improvement are encouraging and we hope to see
+bigger changes in the near future, however we note that this improvement
+is not uniformly distributed across the UK and policy makers will have
+to be cautious until we can be certain that COVID-19 is under control in
+all regions. The difference in apparent $R_t$ between London and the
+North Western region of the UK is currently approximately 0.35. Until
+that gap has closed it will be difficult to ease the current country
+wide restrictions.
+
+As we move forward, assuming we get to a phase after the first peak of
+SARS-CoV-2 infections has passed we will be in a new phase where the
+early detection and prevention of spread of emerging clusters SARS-CoV-2
+infections is critical to prevent large scale outbreaks. This will be
+challenging as the long incubation period and high rate of asymptomatic
+individuals makes undetected rapid spread easy. If it is possible to
+predict at a more localised level where in the community infections will
+spread, then we can focus both community testing and more targeted
+social interventions on high risk areas in the future.
 
 # References
+
+
+## Create and save animated map
+
+Animated maps are viewable:
+
+* https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/UK_Rt_over_time.gif
+
+```{r eval=FALSE}
+dates = tibble(date1=as.Date(min(r0shapes$date):max(r0shapes$date),origin=as.Date("1970-01-01")))
+barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
+  geom_rect(ymin=0,ymax=1) + 
+  ylim(c(0,1))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates,size=4,show.legend = FALSE)+
+  # ggrepel::geom_text_repel(
+  #   aes(x=date, y=1.25, colour=event, label=event),data=keyDates, hjust=0.5,vjust=0, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+  #         size=(10/ggplot2:::.pt/(96/72)))+
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    panel.grid.minor.y = element_blank(), 
+    axis.title.x = element_blank()
+  )+
+  coord_cartesian(ylim = c(0, 1), clip = 'off')+
+  gganimate::transition_time(date1)
+
+timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60, nframes=200)
+
+
+ukwideAnim = 
+  defaultR0Map(r0shapes)+
+  guides(fill="none")+labs(subtitle="A")+
+  gganimate::transition_time(date)
+
+londonAnim = 
+  defaultR0Map(r0shapes)+
+  coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + 
+  standardPrintOutput::mapTheme()+labs(subtitle="C")+
+  gganimate::transition_time(date)
+
+ukwideDeltaAnim = 
+  defaultDeltaR0Map(r0shapes)+
+  guides(fill="none")+labs(subtitle="B")+
+  gganimate::transition_time(date)
+
+londonDeltaAnim = 
+  defaultDeltaR0Map(r0shapes)+
+  coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + 
+  standardPrintOutput::mapTheme()+labs(subtitle="D")+
+  gganimate::transition_time(date)
+
+ukWideGif = gganimate::animate(ukwideAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonGif = gganimate::animate(londonAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
+ukWideDeltaGif = gganimate::animate(ukwideDeltaAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonDeltaGif = gganimate::animate(londonDeltaAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
+
+captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+
+layoutGifs = function(i) {
+  magick::image_append(c(
+  magick::image_append(c(ukWideGif[i], ukWideDeltaGif[i])),
+  magick::image_append(c(londonGif[i], londonDeltaGif[i])),
+  timeGif[i], captionTif[1]), stack=TRUE)
+}
+
+new_gif <- layoutGifs(1)
+for(i in 2:200){
+  combined <- layoutGifs(i)
+  new_gif <- c(new_gif, combined)
+}
+
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif",new_gif)
+magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif")
+# ggplot(r0shapes, aes(x=date,y=`Median(R)`,colour=code))+geom_line(alpha=0.2,show.legend = FALSE)
+
+```
+
+```{r}
+
+UKCovidNeghbours = UKCovidMaps$reportingRegions %>% createNeighbourNetwork(code)
+write.csv(UKCovidNeghbours,"~/Git/uk-covid-datatools/vignettes/Rt_Timeseries_Neighbours.csv")
+
+```
+
+```{r}
+
+# captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+# manGif = magick::image_read(path = "~/Dropbox/covid19/regional-infectivity/eurosurveillanceSubmission/UK_Rt_over_time_no_label.gif")
+# 
+# new_gif <- magick::image_append(c(manGif[1], captionTif[1]), stack=TRUE)
+# for(i in 2:100){
+#   combined <- magick::image_append(c(manGif[i], captionTif[1]), stack=TRUE)
+#   new_gif <- c(new_gif, combined)
+# }
+# 
+# magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time_2.gif")
+
+
+# rateOfChangeDist = ggplot(rateOfChange, aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))
+# 
+# ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     #trans="log",
+#     na.value = "grey80",
+#     limits=c(-1,1), 
+#     breaks=c(-1,-0.5,0,0.5,1), 
+#     labels=c("<-1","-0.5","0","0.5",">1")
+#     ) + 
+#   geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)
+# 
+# (ukwideRateOfChange + londonRateofChange  + ukRateOfChange + rateOfChangeDist + plot_annotation(tag_levels = 'A')  + plot_layout(nrow = 2, guides="collect")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_RateOfChangeMap")
+# 
+
+```
+
+```{r}
+
+# rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table2_Top5UnitaryAuthoritiesByDeltaR_t")
+
+```
+
+```{r}
+
+# rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table3_Bottom5UnitaryAuthoritiesByDeltaR_t")
+
+```
+
+
+
+
+```{r}
+
+# tmpDeltaR0timeseries = 
+# 
+# rateOfChangeShapes = UKCovidMaps$reportingRegions %>%
+#   crossing(tibble(date=unique(tmpDeltaR0timeseries$date))) %>% 
+#   left_join(tmpDeltaR0timeseries, by=c("code","date")) %>%
+#   sf::st_as_sf() 
+# 
+# ukwideRateOfChange = ggplot(rateOfChangeShapes)+
+#   geom_sf(aes(fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     trans="pseudo_log",
+#     na.value = "grey80",
+#     limits=c(-1,1), 
+#     
+#     breaks=c(-1,-0.5,0,0.5,1), 
+#     labels=c("<-1","-0.5","0","0.5",">1")
+#     )+
+#   standardPrintOutput::mapTheme()
+# 
+# anim5 = ukwideRateOfChange + guides(fill="none")+#labs(title = 'Date: {frame_time}')+
+#   gganimate::transition_time(date)
+# gif5 = gganimate::animate(anim5, renderer=gganimate::magick_renderer(), width=400, height=800)
+# 
+# anim6 = ukwideRateOfChange + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)+
+#   gganimate::transition_time(date)
+# gif6 = gganimate::animate(anim6, renderer=gganimate::magick_renderer(), duration = 10, fps=10, width=400, height=300)
+
+```
+
+```{r}
+# dates = tibble(date1=as.Date(min(rateOfChangeShapes$date):max(rateOfChangeShapes$date),origin=as.Date("1970-01-01")))
+# barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
+#   geom_rect(ymin=0,ymax=1) + 
+#   ylim(c(0,1))+
+#   geom_vline(aes(xintercept=date,colour=event),data=keyDates,size=4,show.legend = FALSE)+
+#   # ggrepel::geom_text_repel(
+#   #   aes(x=date, y=1.25, colour=event, label=event),data=keyDates, hjust=0.5,vjust=0, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+#   #         size=(10/ggplot2:::.pt/(96/72)))+
+#   theme(
+#     axis.text.y = element_blank(),
+#     axis.ticks.y = element_blank(), 
+#     panel.grid.major.y = element_blank(), 
+#     panel.grid.minor.y = element_blank(), 
+#     axis.title.x = element_blank()
+#   )+
+#   coord_cartesian(ylim = c(0, 1), clip = 'off')+
+#   gganimate::transition_time(date1)
+# 
+# timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60)
+```
+
+```{r eval=FALSE}
+
+
+
+# ukRateOfChange = ggplot(deltaR0Regionaltimeseries, aes(x=uk_region,y=slope,fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     #trans="log",
+#     na.value = "grey80",
+#     limits=c(-0.5,0.5), 
+#     breaks=c(-0.5,-0.25,0,0.25,0.5), 
+#     labels=c("<-0.5","-0.25","0","0.25",">0.5")
+#     ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)+
+#   coord_cartesian(ylim=c(-0.25,0.25))#+
+#   #labs(title = 'Date: {frame_time}')
+# 
+# anim3 = ukRateOfChange+gganimate::transition_time(date)
+# gif3 = gganimate::animate(anim3, renderer=gganimate::magick_renderer(), width=400, height = 300)
+# #gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_by_uk_region_over_time.gif",gif)
+# 
+# rateOfChangeDist = ggplot(deltaR0timeseries %>% filter(!is.na(slope)), aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))+labs(title = " ")
+# anim4 = rateOfChangeDist+gganimate::transition_time(date)
+# gif4 = gganimate::animate(anim4, renderer=gganimate::magick_renderer(), width=400, height = 200)
+# 
+# new_gif <- magick::image_append(c(
+#       magick::image_append(c(
+#         gif5[1],
+#         magick::image_append(c(
+#           gif3[1], 
+#           gif4[1],
+#           gif6[1]
+#         ),stack=TRUE)
+#       )),
+#       timeGif[1]
+# ),stack=TRUE) 
+# for(i in 2:100){
+#   combined <- magick::image_append(c(
+#       magick::image_append(c(
+#         gif5[i],
+#         magick::image_append(c(
+#           gif3[i], 
+#           gif4[i],
+#           gif6[i]
+#         ),stack=TRUE)
+#       )),
+#       timeGif[i]
+# ),stack=TRUE)
+#     
+#   new_gif <- c(new_gif, combined)
+# }
+# 
+# magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif")
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif",new_gif)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_distribution_over_time.gif",gif)
+```
+
+
+```
+
+

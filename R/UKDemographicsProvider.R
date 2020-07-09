@@ -1,32 +1,10 @@
-#' Get a provider of UK stats
-#'
-#' This function sets up a connection to the omop databse.
-#' @keywords omop
-#' @import dplyr
+#' UK ONS demographics
 #' @export
 UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=PassthroughFilesystemCache, public = list(
   
-  #TODO:
-  # Gridded facebook UK population data
-  geog = NULL,
-  codes = NULL,
-  
-  initialize = function(geographyProvider, codeMappingProvider, ...) {
-    self$geog = geographyProvider
-    self$codes = codeMappingProvider
-    super$initialize(workingDirectory = geographyProvider$wd, ...)
-  },
-  
-  # TODO: Northern Ireland detailed demographics:
-  # shapes:
-  # https://www.opendatani.gov.uk/dataset/osni-open-data-50k-boundaries-local-government-districts-1993
-  # pop:
-  # https://www.opendatani.gov.uk/dataset/population-projections-for-areas-within-northern-ireland-2018-based/resource/5625f768-680b-4684-9d30-d9456dbe2681
-  # https://www.opendatani.gov.uk/dataset/3333626e-b96e-4b90-82fb-474c6c03b868/resource/5625f768-680b-4684-9d30-d9456dbe2681/download/mid-2018-based-population-projections-for-areas-within-northern-ireland-lgd92.csv
-  
   #' @description get the full range of demographics data at most detailed resolution
-  getDetailedDemographics = function() {
-    self$getSaved("DEMOG_DETAIL", orElse=function() {
+  getDetailedDemographics = function(...) {
+    self$getSaved("DEMOG_DETAIL",..., orElse=function(...) {
       # England and wales:
       # https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2flowersuperoutputareamidyearpopulationestimates%2fmid2018sape21dt1a/sape21dt2mid2018lsoasyoaestimatesunformatted.zip
       destfile = paste0(self$wd,"/demographicsUK.zip")
@@ -50,8 +28,8 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
         return(tmp)
       }
 
-      demogByLSOA_M <- readxl::read_excel(UKdemog, sheet="Mid-2018 Males", skip = 4) %>% convert() %>% dplyr::mutate(gender = "M") 
-      demogByLSOA_F <- readxl::read_excel(UKdemog, sheet="Mid-2018 Females", skip = 4) %>% convert() %>% dplyr::mutate(gender = "F") 
+      demogByLSOA_M <- readxl::read_excel(UKdemog, sheet="Mid-2018 Males", skip = 4) %>% convert() %>% dplyr::mutate(gender = "male") 
+      demogByLSOA_F <- readxl::read_excel(UKdemog, sheet="Mid-2018 Females", skip = 4) %>% convert() %>% dplyr::mutate(gender = "female") 
       
       scotDemogM = paste0(self$wd,"/demographicsScot_M.xlsx")
       scotDemogF = paste0(self$wd,"/demographicsScot_F.xlsx")
@@ -69,32 +47,55 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
       convert2 = function(demogBySGDZ) {
         demogBySGDZ = demogBySGDZ %>% dplyr::select(-...4,-...5)
         ageCols = colnames(demogBySGDZ)[!is.na(as.integer(stringr::str_remove(colnames(demogBySGDZ),"\\.+")))]
-        demogBySGDZ = demogBySGDZ %>% dplyr::pivot_longer(cols=all_of(ageCols),names_to="age",values_to="count")
-        demogBySGDZ = demogBySGDZ %>% dplyr::mutate(age = as.integer(stringr::str_remove(age,"\\.+"))-6, codeType="SGDZ11") %>% dplyr::rename(code = DataZone2011Code, name=DataZone2011Name) %>% dplyr::select(-CouncilArea2018Name)
+        demogBySGDZ = demogBySGDZ %>% 
+          tidyr::pivot_longer(cols=all_of(ageCols),names_to="age",values_to="count")
+        demogBySGDZ = demogBySGDZ %>% 
+          dplyr::mutate(age = as.integer(stringr::str_remove(age,"\\.+"))-6, codeType="SGDZ11") %>% dplyr::rename(code = DataZone2011Code, name=DataZone2011Name) %>% dplyr::select(-CouncilArea2018Name)
         return(demogBySGDZ)
       }
       
-      demogBySGDZ_M =  read_excel(scotDemogM, sheet = "Table 1b Males (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "M") 
-      demogBySGDZ_F =  read_excel(scotDemogF, sheet = "Table 1c Females (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "F") 
+      demogBySGDZ_M =  readxl::read_excel(scotDemogM, sheet = "Table 1b Males (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "male") 
+      demogBySGDZ_F =  readxl::read_excel(scotDemogF, sheet = "Table 1c Females (2018)", range = "A6:CR6982") %>% convert2() %>% dplyr::mutate(gender = "female") 
       
-      demographics = bind_rows(
+      demogNI = readr::read_csv("https://www.opendatani.gov.uk/dataset/3333626e-b96e-4b90-82fb-474c6c03b868/resource/64bd8dc4-935f-4bdd-9232-90ff33f24732/download/mid-2018-based-population-projections-for-areas-within-northern-ireland-lgd14.csv")
+      demogNI = demogNI %>% 
+        dplyr::mutate(gender = stringr::str_to_lower(Gender), codeType="LGD") %>%
+        dplyr::filter(Mid_Year_Ending==2020) %>%
+        dplyr::select(code =Geo_Code, name=Geo_Name, age=Age, count=Population_Projection, gender, codeType) %>%
+        dplyr::filter(gender %in% c("male","female"))
+      
+      demographics = dplyr::bind_rows(
         demogByLSOA_M,
         demogByLSOA_F,
         demogBySGDZ_M,
-        demogBySGDZ_F
+        demogBySGDZ_F,
+        demogNI
       )
       
       return(demographics)
     })
   },
   
+  
+  #' @description LSOA & Scottish Data Zones
+  getDemographicsMap = function(...) {
+    tmp = self$getDetailedDemographics()
+    tmp = tmp %>% dplyr::group_by(code) %>% dplyr::summarise(count = sum(count))
+    self$getSaved("DEMOG",...,orElse = function(...) {return(
+      rbind(
+        self$geog$getMap("LSOA11"),
+        self$geog$getMap("DZ11"),
+        self$geog$getMap("LGD12")
+      ) %>% dplyr::group_by(code,name))}) %>% dplyr::left_join(tmp, by="code")
+  },
+  
   #' @description get demographics interpolated to a specific shape file and aggregated to a given set of age bands, with optionally combining genders
   #' @param mapId = the mapId
   #' @param outputShape = the sf object containing the shapefile of the desired output which may be grouped by desired output
-  #' @param outputVars = the desired output columns from the output shapefile enclosed by vars(...) (defaults to grouping of outputShape)
+  #' @param outputVars = the desired output columns from the output shapefile enclosed by vars(...) (defaults to code and name)
   #' @param ageBreaks = where to cut age groups? e.g. c(15,65,80) (max 90)
   #' @param combineGenders = merge the genders
-  getDemographicsForShape = function(mapId, outputShape = self$getMap(mapId) %>% dplyr::group_by(code,name), outputVars = outputShape %>% dplyr::groups(), ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+  getDemographicsForShape = function(mapId, outputShape = self$geog$getMap(mapId), outputVars = vars(code,name), ageBreaks = seq(5,90,5), combineGenders=FALSE) {
     
     # Cut the detailed demographics into desired age bands
     ageLabels = c(
@@ -115,7 +116,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
     mapping = self$geog$interpolateByArea(
       inputDf = demog, 
       inputMapId = "DEMOG", 
-      inputShape = self$geog$getDemographicsMap(),
+      inputShape = self$getDemographicsMap(),
       interpolateVar = count,
       outputMapId = mapId,
       outputShape = outputShape,
@@ -127,131 +128,200 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
   },
   
   getDemographicsForCodeTypes = function(codeTypes, ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+    codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(fromCodeType %in% c("LSOA","DZ","LGD") & toCodeType %in% codeTypes)
+    out = self$getDemographicsFromWeightedMapping(codeMap, fromCode, toCode, weightExpr = 1, ageBreaks = ageBreaks, combineGenders = combineGenders)
+    
+    return(out)
+    
+  },
+  
+  getDemographicsFromWeightedMapping = function(mappingDf, fromCodeVar = "fromCode", toCodeVar = "toCode", outputCodeVar = "code", weightExpr = 1, ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+    # fromCodeWeightVar, toCodeWeightVar, intersectionWeightVar / weightVar (=intersectionArea / fromCodeArea)
+    fromCodeVar = ensym(fromCodeVar)
+    toCodeVar = ensym(toCodeVar)
+    outputCodeVar = ensym(outputCodeVar)
+    weightExpr = enexpr(weightExpr)
     # get demographics encoded to level of LSOA and DZ
-    ageLabels = c(
-      paste0("<",ageBreaks[1]),
-      paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
-      paste0(ageBreaks[length(ageBreaks)],"+"))
-    ageBreaks2 = c(-Inf,ageBreaks,Inf)
     
     demog = self$getDetailedDemographics() %>% 
-      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
+      dplyr::mutate(ageCat = self$cutByAge(age, ageBreaks)) %>%
       dplyr::select(-age) 
-    if (isTRUE(combineGenders)) {
-      demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
-    } else {
-      demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
-    }
+    
+    if (isTRUE(combineGenders)) demog = demog %>% dplyr::mutate(gender=NA)
+    demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
     
     browser(expr = self$debug)
     
-    codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(toCodeType %in% codeTypes)
-    tmp = demog %>% dplyr::ungroup() %>% dplyr::select(code) %>% dplyr::distinct() %>% dplyr::left_join(codeMap, by=c("code"="fromCode"))
-    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(toCode),0,1)))
+    #codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(toCodeType %in% codeTypes)
+    codeMap = mappingDf %>% dplyr::rename(tmp_fromCode = !!fromCodeVar, tmp_toCode = !!toCodeVar) %>% dplyr::mutate(tmp_frac = !!weightExpr) %>% dplyr::select(tmp_fromCode, tmp_toCode, tmp_frac)
+    tmp = demog %>% dplyr::ungroup() %>% dplyr::select(code) %>% dplyr::distinct() %>% dplyr::left_join(codeMap, by=c("code"="tmp_fromCode"))
+    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(tmp_toCode),0,1)))
     
     if(any(tmp$hits > 1)) warning("There are some LSOA or DZ areas which map to more than one output area. This will result in double counting of the total population.")
     else if(any(tmp$hits == 0)) warning("There are some LSOA areas which are missing in the output areas, the output does not cover the whole population area.")
-    else message("Deomgraphic mapping: A one to one mapping between input and output exists!")
+    else message("Demographic mapping: A one to one mapping between input and output exists!")
     
-    if (isTRUE(combineGenders)) {
-      out = demog %>% dplyr::left_join(codeMap, by=c("code"="fromCode")) %>% dplyr::select(-code) %>% dplyr::rename(code = toCode, codeType = toCodeType) %>% dplyr::group_by(ageCat,code)  %>% dplyr::summarise(count = sum(count))
-    } else {
-      out = demog %>% dplyr::left_join(codeMap, by=c("code"="fromCode")) %>% dplyr::select(-code) %>% dplyr::rename(code = toCode, codeType = toCodeType) %>% dplyr::group_by(ageCat,code,gender)  %>% dplyr::summarise(count = sum(count))
-    }
+    out = demog %>% 
+      dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
+      dplyr::select(-code) %>% 
+      dplyr::rename(!!outputCodeVar := tmp_toCode) %>%
+      dplyr::mutate(count = count*ifelse(is.na(tmp_frac),1,tmp_frac)) %>% 
+      dplyr::group_by(ageCat,gender,!!outputCodeVar) %>% 
+      dplyr::summarise(count = sum(count)) %>%
+      dplyr::ungroup()
     
     return(out)
   },
   
-  getDemographicsFromLSOAanDZMapping = function(mappingDf, fromCodeVar = "fromCode", toCodeVar = "toCode", fromCodeFracExpr = NULL, ageBreaks = seq(5,90,5), combineGenders=FALSE) {
+  
+  getSingleDigitDemographics = function(mappingDf, fromCodeVar = "fromCode", toCodeVar = "toCode", outputCodeVar = "code", weightExpr = 1, combineGenders=FALSE) {
     # fromCodeWeightVar, toCodeWeightVar, intersectionWeightVar / weightVar (=intersectionArea / fromCodeArea)
     fromCodeVar = ensym(fromCodeVar)
     toCodeVar = ensym(toCodeVar)
-    fromCodeFracExpr = tryCatch(enexpr(fromCodeFracExpr),error = function() expr(1))
-    # get demographics encoded to level of LSOA and DZ
-    ageLabels = c(
-      paste0("<",ageBreaks[1]),
-      paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
-      paste0(ageBreaks[length(ageBreaks)],"+"))
-    ageBreaks2 = c(-Inf,ageBreaks,Inf)
+    outputCodeVar = ensym(outputCodeVar)
+    weightExpr = enexpr(weightExpr)
     
-    demog = self$getDetailedDemographics() %>% 
-      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
-      dplyr::select(-age) 
+    demog = self$getDetailedDemographics()
     if (isTRUE(combineGenders)) {
-      demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
-    } else {
-      demog = demog %>% dplyr::group_by(ageCat,gender,code) %>% dplyr::summarise(count = sum(count))
+      demog = demog %>% 
+        dplyr::mutate(gender=NA) %>%
+        dplyr::group_by(age,gender,code) %>% 
+        dplyr::summarise(count = sum(count))
     }
     
     browser(expr = self$debug)
     
     #codeMap = self$codes$getTransitiveClosure() %>% dplyr::filter(toCodeType %in% codeTypes)
-    codeMap = mappingDf %>% dplyr::rename(tmp_fromCode = !!fromCodeVar, tmp_toCode = !!toCodeVar) %>% dplyr::mutate(tmp_frac = !!fromCodeFracExpr) %>% dplyr::select(tmp_fromCode, tmp_toCode, tmp_frac)
+    codeMap = mappingDf %>% 
+      dplyr::rename(tmp_fromCode = !!fromCodeVar, tmp_toCode = !!toCodeVar) %>% 
+      dplyr::mutate(tmp_frac = !!weightExpr) %>% 
+      dplyr::select(tmp_fromCode, tmp_toCode, tmp_frac)
     tmp = demog %>% dplyr::ungroup() %>% dplyr::select(code) %>% dplyr::distinct() %>% dplyr::left_join(codeMap, by=c("code"="tmp_fromCode"))
-    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(toCode),0,1)))
+    tmp = tmp %>% dplyr::group_by(code) %>%  dplyr::summarise(hits = sum(ifelse(is.na(tmp_toCode),0,1)))
     
     if(any(tmp$hits > 1)) warning("There are some LSOA or DZ areas which map to more than one output area. This will result in double counting of the total population.")
     else if(any(tmp$hits == 0)) warning("There are some LSOA areas which are missing in the output areas, the output does not cover the whole population area.")
-    else message("Deomgraphic mapping: A one to one mapping between input and output exists!")
+    else message("Demographic mapping: A one to one mapping between input and output exists!")
     
-    if (isTRUE(combineGenders)) {
-      out = demog %>% 
-        dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
-        dplyr::select(-code) %>% 
-        dplyr::mutate(count = count*tmp_frac) %>% 
-        dplyr::group_by(ageCat,!!toCodeVar)  %>% 
-        dplyr::summarise(count = sum(count)) %>%
-        dplyr::ungroup()
-    } else {
-      out = demog %>% 
-        dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
-        dplyr::select(-code) %>% 
-        dplyr::mutate(count = count*tmp_frac) %>% 
-        dplyr::group_by(ageCat,gender,!!toCodeVar) %>% 
-        dplyr::summarise(count = sum(count)) %>%
-        dplyr::ungroup()
-    }
+    out = demog %>% 
+      dplyr::left_join(codeMap, by=c("code"="tmp_fromCode")) %>% 
+      dplyr::select(-code) %>% 
+      dplyr::rename(!!outputCodeVar := tmp_toCode) %>%
+      dplyr::mutate(count = count*ifelse(is.na(tmp_frac),1,tmp_frac)) %>% 
+      dplyr::group_by(age,gender,!!outputCodeVar) %>% 
+      dplyr::summarise(count = sum(count)) %>%
+      dplyr::ungroup()
     
+    return(out)
+  },
+  
+  # demographicWeightedMap = function(mapId, shapefile = self$geog$getMap(mapId)) {
+  #   intersect = self$geog$getIntersection(
+  #     inputMapId = "DEMOG", inputShape = self$getDemographicsMap(),
+  #     outputMapId = mapId, outputShape = shapefile
+  #   )
+  #   
+  #   geoFile = self$downloadAndUnzip(
+  #     id = "FACEBOOK-MAP",
+  #     url = "https://data.humdata.org/dataset/b9a7b4a3-75a7-4de1-b741-27d78e8d0564/resource/9007503c-5bf3-450f-8f3f-ca06682f0192/download/population_gbr_2019-07-01_geotiff.zip",
+  #     pattern = "tif$"
+  #   )
+  #   
+  #   fbRaster = raster::raster(geoFile, crs=4326)
+  #   fbLowResRaster=raster::aggregate(fbRaster,5,fun=sum)
+  #   
+  #   # The following chunk computes the mean elevation value for each unique polygon in cont,
+  #   # cont.elev <- extract(elevation, cont, fun=mean, sp=TRUE) 
+  #   
+  #   types <- vapply(sf::st_geometry(intersect), function(x) {class(x)[2]}, "")
+  #   polys <- intersect[ grepl("*POLYGON", types), ]
+  #   intersectSP = as(polys, "Spatial")
+  #   
+  #   intersectSP2 = raster::extract(fbLowResRaster,intersectSP, fun=sum, sp=TRUE)
+  #   
+  #   
+  # },
+  
+  transitiveClosureWeightedMap = function(df, codeVar="code", codeTypeVar = "codeType", ...) {
+    codeVar = ensym(codeVar)
+    codeTypeVar = ensym(codeTypeVar)
+    df2 = df %>% select(toCode = !!codeVar, toCodeType = !!codeTypeVar) %>% distinct()
+    self$getHashCached(object = df2, operation = "WEIGHTED-MAP", orElse=function(df2) {
+      df3 = self$codes$getTransitiveClosure() %>% 
+        dplyr::filter(fromCodeType %in% c("LSOA","DZ","LGD")) %>% 
+        dplyr::select(-toCodeType) %>% 
+        dplyr::inner_join(df2, by="toCode") %>% 
+        dplyr::select(fromCode,toCode,toCodeType) %>% 
+        dplyr::distinct() %>%
+        dplyr::group_by(fromCode,toCodeType) %>%
+        dplyr::mutate(weight = 1/n()) %>%
+        dplyr::ungroup()
+      #browser()
+      return(df3)
+    }, ...)
+  },
+  
+  findDemographics = function(df, codeVar="code", codeTypeVar="codeType", ageCatVar="ageCat", genderVar="gender", ...) {
+    codeVar = ensym(codeVar)
+    codeTypeVar = ensym(codeTypeVar)
+    ageCatVar = ensym(ageCatVar)
+    genderVar = ensym(genderVar)
+    
+    # select just the demographic quantities needed from input
+    df2 = df %>% dplyr::ungroup() %>%
+      dplyr::select(code=!!codeVar, codeType=!!codeTypeVar, ageCat=!!ageCatVar, gender=!!genderVar)
+    
+    df6 = self$getHashCached(object = df2, operation = "FIND_DEMOGRAPHICS",..., orElse = function(df2,...) {
+    # normalise the age range representation and convert to upper and lower bound
+      df2 = df2 %>% 
+        dplyr::mutate(tmp_ageCat = ageCat %>% stringr::str_replace(">([0-9]+)","\\1-120") %>% stringr::str_replace("<([0-9]+)","0-\\1") %>% stringr::str_replace("([0-9]+)\\+","\\1-120")) %>%
+        dplyr::mutate(tmp_ageCat = ifelse(is.na(tmp_ageCat) | tmp_ageCat=="unknown","0-120",tmp_ageCat)) %>%
+        tidyr::separate(col = tmp_ageCat, into=c("tmp_ageMin","tmp_ageMax"), sep="[^0-9]+") %>% 
+        dplyr::mutate(tmp_ageMin = as.integer(tmp_ageMin),tmp_ageMax = as.integer(tmp_ageMax)) %>%
+        dplyr::mutate(
+          tmp_ageMax = ifelse(isTRUE(ageCat %>% stringr::str_detect("<([0-9]+)")), tmp_ageMax-1, tmp_ageMax),
+          tmp_ageMin = ifelse(isTRUE(ageCat %>% stringr::str_detect(">([0-9]+)")), tmp_ageMin+1, tmp_ageMin)
+        )
+      #browser()
+      
+      #TODO: check and fix: "Adding missing grouping variables: `source`, `type`, `statistic`"
+      
+      # convert age range into upper and lower bound and select only those categories represented in output
+      df2 = df2 %>% 
+        dplyr::select(code,codeType,gender,ageCat,tmp_ageMin,tmp_ageMax) %>% 
+        dplyr::distinct()
+      
+      # map codes from LSOA / DZ space to output space
+      df3 = self$transitiveClosureWeightedMap(df, !!codeVar, !!codeTypeVar, ...)
+      
+      # aggregate demographics from LSOA space to output space
+      df4 = self$getDetailedDemographics() %>% 
+        dplyr::inner_join(df3, by=c("code" = "fromCode")) %>%
+        dplyr::group_by(age,gender,toCode, toCodeType) %>% 
+        dplyr::summarise(count=sum(count*weight))
+  
+      # join demographics to output requirements and apply age and gender filters, then aggregate to output form.    
+      df5 = df4 %>% 
+        dplyr::rename(code = toCode, codeType = toCodeType, gender1 = gender) %>% 
+        dplyr::inner_join(df2, by=c("code","codeType")) %>%
+        dplyr::filter(age <= tmp_ageMax & age >= tmp_ageMin) %>% 
+        dplyr::filter(gender1 == gender | is.na(gender) | gender=="unknown") %>% 
+        dplyr::group_by(code,codeType,gender,ageCat)
+      
+      
+      df6 = df5 %>%
+        dplyr::summarise(population = sum(count))
+      return(df6)
+    })
+    browser(expr = self$debug)
+    # combine output with input
+    out = df %>% left_join(df6, by=c("code","gender","ageCat","codeType"))
     return(out)
   }
   
+  # assemble map from LSOA/DZ to codes in output set (CodeMappingProvider and NHSCapacityProvider)
+  # getSingleDigitDemographics for output set codes
+  # joinByCodeAndAgeCat to NHSDatasetProvider output
+  
 ))
 
-# library(tidyverse)
-# library(sf)
-ugp = UKGeographyProvider$new("~/Data/maps")
-#upp = UKPostcodeProvider$new("~/Data/maps")
-#ump = UKCodeMappingProvider$new(upp)
-udp = UKDemographicsProvider$new(ugp,ump)
-# udp$debug = TRUE
-tmp = udp$getDemographicsForCodeTypes(codeTypes=c("HB","LHB","CCG"))
-
-tmp = udp$getDemographicsForCodeTypes(codeTypes=c("PHEC"))
-# usp$loadAllMaps()
-# # dm = usp$getPHEDashboardMap()
-# # #usp$saveShapefile("DASH_LTLA", dm)
-# # tmp = usp$getDemographics("DASH_LTLA", dm %>% dplyr::group_by(code,name), combineGenders = FALSE)
-# 
-# # sf = usp$getDemographicsMap()
-# # d = usp$getDetailedDemographics()
-# # x = usp$getDemographics("CTRY19")
-# # sf = usp$getDemographics("WD11")
-# # # sf = usp$getDemographics("LSOA11")
-# # # sf = usp$getDemographics("SGDZ11")
-# # sf = usp$getDemographics("SHB19")
-# # usp$preview("LHB19")
-# # sf = usp$getDemographics("CTYUA19")
-# # sf = usp$getDemographics("LAD19")
-# # sf = usp$getDemographics("CCG20")
-# # sf = usp$getDemographics("NHSER20")
-# # sf = usp$getDemographics("PHEC16")
-# # sf = usp$getDemographics("LGD12")
-# # plot(sf)
-# 
-# tmp = usp$getHospitals(icuBeds>0 & sector=="NHS Sector")
-# catch = usp$createCatchment(
-#   supplyId = "ICUBEDS", supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
-#   demandId = "DEMOG", demandShape = usp$getDemographicsMap(), demandVar = count, demandIdVar = code
-# )
-# 
-# usp$preview(shape=catch$map %>% dplyr::mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)

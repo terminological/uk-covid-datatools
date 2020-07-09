@@ -1,8 +1,24 @@
 ---
-title: "length of stay in itu parameterisation"
+title: "Proportion and timing of Symptomatic to admission"
 author: "Rob Challen"
-date: "14 April 2020"
-output: html_document
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission", output_file="symptomatic-to-admission.pdf" })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{COVID-19 Serial Intervals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, message=FALSE}
@@ -11,23 +27,18 @@ library(tidyverse)
 library(lubridate)
 devtools::load_all("~/Git/uk-covid-datatools/")
 devtools::load_all("~/Git/standard-print-output/")
-source("~/Git/uk-covid-datatools/data-raw/rawDataFunctions.R")
 library(survival)
 library(patchwork)
+standardPrintOutput::setDefault()
+dpc = DataProviderController$setup("~/Data/maps")
+dpc$loadSpimSources("~/S3/encrypted/")
+tsp = dpc$timeseriesProcessor()
+chp = dpc$chessProcessor()
+srv = dpc$survivalProcessor()
 ```
 
 ```{r}
-paths=list(
-  chess="~/S3/encrypted/15Apr/CHESS COVID19 CaseReport 20200415.csv",
-  lineList="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  ff100="~/S3/encrypted/15Apr/Anonymised Line List 20200415.xlsx",
-  chessSummary="~/S3/encrypted/15Apr/CHESS Aggregate Report 20200415.csv",
-  sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx",
-  bristol="~/S3/encrypted/AVONCAP_DATA_2020-04-18_1944.csv"
-)
-
-ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
-CHESSClean = getCHESS(paths$chess) %>% chessAdmissionSubset("2020-04-15")
+CHESSClean = dpc$spim$getCHESS() %>% chp$chessAdmissionSubset()
 
 CHESSClean %>% select(
   trustcode, 
@@ -65,7 +76,7 @@ CHESSClean %>% select(
 # excl2 = dataQualityCheck %>% filter(knownOutcome < (meanKnownOutcome) - sd(dataQualityCheck$knownOutcome))
 # CHESSClean = CHESSClean %>% anti_join(excl2, by="trustcode")
 
-symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddate) & !is.na(hospitaladmissiondate)) %>% generateSurvivalData(
+symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddate) & !is.na(hospitaladmissiondate)) %>% srv$generateSurvivalData(
   idVar = caseid,
   startDateVar = estimateddate, 
   endDateExpr = hospitaladmissiondate,
@@ -86,7 +97,6 @@ symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddate) & 
 ```{r}
 summary = bind_rows(
   symptomaticToAdmission %>% mutate(value = status) %>% group_by(value) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(symptomaticToAdmission)*100)) %>% mutate(category="Outcome"),
-  
   symptomaticToAdmission %>% group_by(value = sex) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(symptomaticToAdmission)*100)) %>% mutate(category="Gender", value = as.character(value)),
   symptomaticToAdmission %>% group_by(value = ageCat) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(symptomaticToAdmission)*100)) %>% mutate(category="Age", value = as.character(value)) %>% arrange(value),
   
@@ -131,7 +141,7 @@ by fitting a survival model and looking at the admission probability at some dis
 This should give us an estimate of the overall probability of admission that accounts for some of the right censoring.
 
 ```{r}
-uncensoredSymptomaticToAdmission = CHESSClean %>% filter(age>15) %>% generateSurvivalData(
+uncensoredSymptomaticToAdmission = CHESSClean %>% filter(age>15) %>% srv$generateSurvivalData(
   idVar = caseid,
   startDateVar = estimateddate, 
   endDateExpr = hospitaladmissiondate,
@@ -146,7 +156,7 @@ uncensoredSymptomaticToAdmission = CHESSClean %>% filter(age>15) %>% generateSur
 fitdistrplus::plotdist(uncensoredSymptomaticToAdmission$time, histo=TRUE, demp=TRUE)
 fitdistrplus::descdist(uncensoredSymptomaticToAdmission$time, discrete=FALSE, boot=500)
 
-models = standardModels(c("gamma","weibull", "lnorm"))
+models = srv$standardModels(c("gamma","weibull", "lnorm"))
  
 subGroup = uncensoredSymptomaticToAdmission %>% mutate(
     left=time,
@@ -167,7 +177,7 @@ p3 = fitdistrplus::ppcompcens(dists, plotstyle = "ggplot") +standardPrintOutput:
 # select log normal models
 
 ```{r}
-out = uncensoredSymptomaticToAdmission %>% fitModelsByAge(models = standardModels(c("lnorm", "weibull", "gamma")))
+out = uncensoredSymptomaticToAdmission %>% fitModelsByAge(models = srv$standardModels(c("lnorm", "weibull", "gamma")))
 ```
 
 ```{r}

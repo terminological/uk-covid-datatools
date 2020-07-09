@@ -1,8 +1,4 @@
-#' Get a provider of UK stats
-#'
-#' This function sets up a connection to the omop databse.
-#' @keywords omop
-#' @import dplyr
+#' UK Geography
 #' @export
 UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFilesystemCache, public = list(
   
@@ -126,6 +122,15 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
         nameCol = NA,
         altCodeCol = NA,
         simplify = FALSE
+      ),
+      ISO3166_2 = list(
+        # https://gadm.org/download_country_v3.html
+        url="https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip",
+        mapName="gadm36_GBR_2",
+        codeCol = "GID_2",
+        nameCol = "NAME_2",
+        altCodeCol = "HASC_2",
+        simplify = FALSE
       )
     ),
     #### tweaks ----
@@ -143,9 +148,9 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
   #### Methods ----
   #' @description get a map as an sf object
   #' @param codeType the map you want
-  getMap = function(mapId) {
+  getMap = function(mapId,...) {
     if (!(mapId %in% names(self$sources$maps))) stop("Unknown code type: ",mapId)
-    self$getSaved(mapId, loader = self$sources$maps[[mapId]], orElse = function(loader) {
+    self$getSaved(mapId, ..., orElse = function(loader,...) {
       # wardsZip = paste0(self$wd,"/",mapId,".zip")
       # unzipDir = paste0(self$wd,"/",mapId)
       # if(!file.exists(wardsZip)) {
@@ -156,30 +161,20 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
       #   unzip(wardsZip, exdir=unzipDir, junkpaths = TRUE)
       #   setwd(wd)
       # }
+      loader = self$sources$maps[[mapId]]
       pattern = paste0(ifelse(is.na(loader$mapName),"",loader$mapName),"\\.shp$")
       mapFile = self$downloadAndUnzip(id=mapId,url=loader$url,pattern=pattern)
       map = sf::st_read(mapFile) %>% sf::st_transform(crs=4326)# %>% nngeo::st_remove_holes()
       browser(expr=self$debug)
       if(loader$simplify) map = suppressWarnings(map %>% sf::st_simplify(dTolerance=0.001))
-      map = self$standardiseMap(map, loader$codeCol, loader$nameCol, loader$altCodeCol, mapId)
+      map = self$standardiseMap(map, !!loader$codeCol, !!loader$nameCol, !!loader$altCodeCol, mapId)
       return(map %>% dplyr::group_by(code,name))
     })
   },
   
-  #' @description LSOA & Scottish Data Zones
-  getDemographicsMap = function() {
-    tmp = self$getDetailedDemographics()
-    tmp = tmp %>% dplyr::group_by(code) %>% dplyr::summarise(count = sum(count))
-    self$getSaved("DEMOG",orElse = function() {return(
-      rbind(
-        self$getMap("LSOA11"),
-        self$getMap("SGDZ11")
-      ) %>% dplyr::group_by(code,name))}) %>% dplyr::left_join(tmp, by="code")
-  },
-  
   #' @description England LADs, Scotland Health Board, Wales Health Board
-  getPHEDashboardMap = function() {
-    self$getSaved("DASH_LTLA",orElse = function() {return(
+  getPHEDashboardMap = function(...) {
+    self$getSaved("DASH_LTLA",...,orElse = function(...) {return(
       rbind(
         self$getMap("LAD19") %>% dplyr::filter(code %>% stringr::str_starts("E")),
         self$getMap("SHB19"), 
@@ -188,33 +183,59 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
   })},
   
   
- #' @description get the intersection between to maps with ids. Caches the result in the working directory.
-  getIntersection = function( inputMapId, inputShape = self$getMap(inputMapId), outputMapId,  outputShape = self$getMap(outputMapId)) {
+  #' @description get the intersection between to maps with ids. Caches the result in the working directory.
+  getIntersection = function( inputMapId, inputShape = self$getMap(inputMapId), outputMapId,  outputShape = self$getMap(outputMapId),...) {
     return(self$getSaved(
       paste0("INTERSECT_",inputMapId,"_",outputMapId),
-      orElse = function() {
+      ...,
+      orElse = function(...) {
         # browser()
         message("calculating intersection ....")
         inputShape = inputShape %>% sf::st_cast(to="POLYGON")
         inputShape = inputShape %>% dplyr::rename_all(function(x) paste0(x,".src"))
         outputShape = outputShape %>% sf::st_cast(to="POLYGON")
-        tmp = inputShape %>% sf::st_intersection(inputShape)
+        tmp = inputShape %>% sf::st_intersection(outputShape)
         message("calculating intersection areas....")
         tmp$intersectionArea = tmp %>% sf::st_area() %>% as.numeric()
         return(tmp)
       }))
   },
+ 
+  #' @description finds shapes that contain the give shape
+  getContainedIn = function( inputSf,  outputShape = self$getMap(outputMapId), outputMapId=NA,  inputIdVar = "code", outputIdVar = "code") {
+    browser()
+    outputShape = outputShape %>% dplyr::mutate(tmp_output_id = row_number())
+    inputSf = inputSf %>% dplyr::mutate(tmp_input_id = row_number())
+    containment = outputShape %>% sf::st_contains(inputSf)
+    mapping = tibble::tibble(
+        tmp_output_id = rep(1:length(containment),sapply(containment, length)),
+        tmp_input_id = unlist(containment %>% purrr::flatten()) 
+      ) %>% 
+      dplyr::distinct() %>% 
+      dplyr::left_join(inputSf %>% tibble::as_tibble() %>% select(tmp_input_id, from = !!inputIdVar), by="tmp_input_id") %>%
+      dplyr::left_join(outputShape %>% tibble::as_tibble() %>% select(tmp_output_id, to = !!outputIdVar), by="tmp_output_id") %>%
+      dplyr::select(-tmp_input_id,-tmp_output_id)
+    return(mapping)
+  },
   
-  #' interpolate a variable from one set of shapes to another
-  #' 
+  #' #' description get the intersection between to maps with ids. Caches the result in the working directory.
+  #' unionByGroup = function(groupedSf, ...) {
+  #'   grps = groupedSf %>% groups()
+  #'   if (length(grps)==0) stop("Must be grouped")
+  #'   catchmentMap = groupedSf %>% group_modify(function(d,g,...) {
+  #'     d %>% summarise(...) %>% mutate(geometry=d %>% sf::st_union())
+  #'   }) %>% sf::st_as_sf(crs=4326)
+  #'   return(catchmentMap)
+  #' },
+  
+  #' @description interpolate a variable from one set of shapes to another
   #' @param inputDf - a grouped dataframe containing the statistic to be interpolated  
   #' @param interpolateVar - the statistic, 
   #' @param inputShape - an input map, 
   #' @param inputIdVar - an id shared between the grouped data fram and the input map, 
   #' @param outputShape - an output map which must be grouped by the desired output, 
-  #' @import dplyr
+  
   #' @return a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
-  #' @export
   interpolateByArea = function(inputDf, 
       inputMapId, inputShape = self$getMap(inputMapId), inputIdVar = "code", 
       interpolateVar, 
@@ -246,6 +267,10 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
       fracInput = intersectionArea/area.src
     ) 
     
+    mismatch = sum(intersection$intersectionArea)/sum(intersection$area.src)
+    
+    if(mismatch < 0.99) warning("Input and output shapes don't match: there is a ",100*mismatch,"% difference in areas")
+    
     mapping = intersection %>% tibble::as_tibble() %>% dplyr::select(!!inputIdVar2, fracInput, !!!outputVars)
     tmpInput = inputDf %>% dplyr::rename(!!inputIdVar2 := !!inputIdVar)
     mapping = suppressWarnings(mapping %>% dplyr::inner_join(tmpInput, by=as_label(inputIdVar2)))
@@ -263,12 +288,11 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
   #' @param mapId - a the ID of the map
   #' @param shape - a sf object, if not present will be loaded from cache
   #' @param idVar - the varable containing the coded identifier of the map
-  #' @import dplyr
+  
   #' @return an edge list of ids with from and to columns
-  #' @export
-  createNeighbourNetwork = function(mapId, shape = self$getMap(mapId) %>% dplyr::group_by(code,name), idVar="code") {
+  createNeighbourNetwork = function(mapId, shape = self$getMap(mapId) %>% dplyr::group_by(code,name), idVar="code",...) {
     idVar = ensym(idVar)
-    self$getSaved(paste0("NN_",mapId), orElse=function() {
+    self$getSaved(paste0("NN_",mapId),..., orElse=function(...) {
       shape = shape %>% dplyr::mutate(tmp_id = row_number())
       graph = shape %>% sf::st_intersects()
       edges = tibble::tibble(
@@ -287,8 +311,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
   # TODO: index of multiple deprivation
   # but not a standard across the 4 nations.
   # https://en.wikipedia.org/wiki/Multiple_deprivation_index#List_of_UK_deprivation_indexes
-  # getIMD = function() {
-  #   self$getSaved("IMD", function() {
+  # getIMD = function(...) {
+  #   self$getSaved("IMD",..., orElse=function(...) {
   #     imdFile = paste0(self$wd,"/IMDbyLSOA.csv")
   #     if(!file.exists(imdFile)) download.file(url="https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/845345/File_7_-_All_IoD2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv",destfile = imdFile)
   #     tmp = readr::read_csv(imdFile)
@@ -300,12 +324,13 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
   # },
   
   #' @description standardise all maps to a minimal set of attributes with consistent naming
-  #' @import dplyr
-  #' @export
+  
   standardiseMap = function(sf, codeCol, nameCol, altCodeCol, codeType) {
-    
+    codeCol = ensym(codeCol)
+    nameCol = tryCatch(ensym(nameCol), error = function(e) NULL)
+    altCodeCol = tryCatch(ensym(altCodeCol), error = function(e) NULL)
     sf = sf %>% dplyr::mutate(tmp_code = as.character(!!codeCol))
-    if(!is.na(nameCol)) {
+    if(!identical(nameCol,NULL)) {
       sf = sf %>% dplyr::mutate(tmp_name = as.character(!!nameCol))
       sf = sf %>% dplyr::select(-!!nameCol)
     } else {
@@ -313,21 +338,20 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
     }
     sf = sf %>% dplyr::select(-!!codeCol) %>% dplyr::rename(code = tmp_code,name = tmp_name)
     
-    if(!is.na(altCodeCol)) {
+    if(!identical(altCodeCol,NULL)) {
       sf = sf %>% dplyr::rename(altCode = !!altCodeCol) %>% dplyr::mutate(altCode = as.character(altCode))
     } else {
       sf = sf %>% dplyr::mutate(altCode = as.character(NA))
     }
     sf = sf %>% dplyr::mutate(codeType = codeType) %>% dplyr::select(codeType, code, name, altCode)
-    sf$area = sf %>% sf::st_area() %>% as.numeric()
-    return(sf)
+    sf$area = sf %>% sf::st_area() %>% as.numeric() 
+    return(sf %>% sf::st_zm())
   },
   
   #' @description save a shapefile to disk in the current working directory
   #' @param mapId - a mapId - will become the zip filename
   #' @param  - a zip directory
   #' @return a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
-  #' @export
   saveShapefile = function(mapId, shape = self$getMap(mapId), overwrite=FALSE) {
     zipDir = paste0(getwd(),"/",mapId)
     if (!dir.exists(zipDir)) dir.create(zipDir)
@@ -352,15 +376,15 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
     self$getMap("LGD12")
   },
   
+  
+ 
   createCatchment = function(
-      supplyId, supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% dplyr::groups(),
-      demandId = "DEMOG", demandShape = self$getDemographicsMap(), demandVar = "count", demandIdVar = "code", 
+      supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% dplyr::groups(),
+      demandId, demandShape, demandIdVar = "code", demandVar, 
       growthRates = function(capacityPerDemand, multiplier = 1.1) {return( rank(capacityPerDemand) / length(capacityPerDemand) * multiplier )},
       distanceModifier = function(distanceToSupply) {return(2/(1+distanceToSupply/min(0.1,mean(distanceToSupply))))},
-      tweakNetwork = self$sources$tweak$DEMOG
+      tweakNetwork = self$sources$tweak$DEMOG, outputMap = TRUE
     ) {
-    
-    self$getSaved(id = paste0(supplyId,"_CATCHMENT_",demandId), orElse = function() {
     
       supplyIdVar = ensym(supplyIdVar)
       supplyVar = ensym(supplyVar)
@@ -477,36 +501,35 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
       }
       suppliedArea = suppliedArea %>% dplyr::select(-accumulatedGrowth) %>% sf::st_as_sf()
       
-      # reassemble features preserved from original supply dataframe
-      message("assembling catchment area map...")
-      #browser()
-      
-      suppliedMap = suppliedArea %>% sf::st_buffer(0) %>% dplyr::group_by(supplierId) %>% dplyr::summarise(
-        area=sum(areaSize),
-        !!demandVar:=sum(areaDemand),
-        !!supplyVar:=first(supplyCapacity)
-      ) %>% dplyr::rename(!!supplyIdVar := supplierId) %>% nngeo::st_remove_holes()
-      suppliedMap = supplyFeatures %>% dplyr::inner_join(suppliedMap %>% tibble::as_tibble(), by=as_label(supplyIdVar), suffix=c(".original",""))%>% sf::st_as_sf(crs=4326)
-      
-      # mapping of demandIdVar to supplyIdVar - this will miss any merged ids.
       crossMapping = suppliedArea %>% tibble::as_tibble() %>% dplyr::select(!!demandIdVar := areaId, !!supplyIdVar := supplierId)
-      # crossMapping = crossMapping %>% dplyr::separate_rows(originalId, sep = "\\|")
-      
-      
-      
       out = list(
-        map = suppliedMap,
         suppliers = supplyPoints,
-        crossMapping = crossMapping,
         mergedSuppliers = mergedSuppliers,
+        crossMapping = crossMapping,
         suppliedArea = suppliedArea,
         notSuppliedArea = unSuppliedArea %>% sf::st_as_sf()
       )
+      
+      if (outputMap) {
+        # reassemble features preserved from original supply dataframe
+        message("assembling catchment area map...")
+        #browser()
+        
+        suppliedMap = suppliedArea %>% sf::st_buffer(0) %>% dplyr::group_by(supplierId) %>% dplyr::summarise(
+          area=sum(areaSize),
+          !!demandVar:=sum(areaDemand),
+          !!supplyVar:=first(supplyCapacity)
+        ) %>% dplyr::rename(!!supplyIdVar := supplierId) %>% nngeo::st_remove_holes()
+        suppliedMap = supplyFeatures %>% dplyr::inner_join(suppliedMap %>% tibble::as_tibble(), by=as_label(supplyIdVar), suffix=c(".original",""))%>% sf::st_as_sf(crs=4326)
+        out$map = suppliedMap
+        
+      } 
+      
       return(out)
-    })
+    
   },
   
-  preview = function(mapId = NA, shape=self$getMap(mapId), nameVar = "name", codeVar = "code", poi=NULL, poiNameVar = "name", poiCodeVar = "code") {
+  preview = function(shape=self$getMap(mapId), mapId = NA, nameVar = "name", codeVar = "code", poi=NULL, poiNameVar = "name", poiCodeVar = "code") {
     nameVar = ensym(nameVar)
     codeVar = ensym(codeVar)
     poiNameVar = ensym(poiNameVar)
@@ -522,42 +545,9 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
     return(leaf)
   },
  
- plot = function(mapId = NA, shape=self$getMap(mapId)) {
+ plot = function(shape=self$getMap(mapId), mapId = NA) {
    ggplot(shape)+geom_sf()
  }
   
 ))
 
-# library(tidyverse)
-# library(sf)
-# usp = UKGeographyProvider$new("~/Data/maps")
-# # usp$nocache = TRUE
-# tmp = usp$getMap("HB19")
-# usp$loadAllMaps()
-# # dm = usp$getPHEDashboardMap()
-# # #usp$saveShapefile("DASH_LTLA", dm)
-# # tmp = usp$getDemographics("DASH_LTLA", dm %>% dplyr::group_by(code,name), combineGenders = FALSE)
-# 
-# # sf = usp$getDemographicsMap()
-# # d = usp$getDetailedDemographics()
-# # x = usp$getDemographics("CTRY19")
-# # sf = usp$getDemographics("WD11")
-# # # sf = usp$getDemographics("LSOA11")
-# # # sf = usp$getDemographics("SGDZ11")
-# # sf = usp$getDemographics("SHB19")
-# # usp$preview("LHB19")
-# # sf = usp$getDemographics("CTYUA19")
-# # sf = usp$getDemographics("LAD19")
-# # sf = usp$getDemographics("CCG20")
-# # sf = usp$getDemographics("NHSER20")
-# # sf = usp$getDemographics("PHEC16")
-# # sf = usp$getDemographics("LGD12")
-# # plot(sf)
-# 
-# tmp = usp$getHospitals(icuBeds>0 & sector=="NHS Sector")
-# catch = usp$createCatchment(
-#   supplyId = "ICUBEDS", supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
-#   demandId = "DEMOG", demandShape = usp$getDemographicsMap(), demandVar = count, demandIdVar = code
-# )
-# 
-# usp$preview(shape=catch$map %>% dplyr::mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)

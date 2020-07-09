@@ -1,66 +1,109 @@
-#' Get a provider of UK stats
-#'
-#' This function sets up a connection to the omop databse.
-#' @keywords omop
-#' @import dplyr
+#' Capacity data from NHS
 #' @export
 NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=PassthroughFilesystemCache, public = list(
   
-  geog = NULL,
-  pcode = NULL,
-  
-  initialize = function(geographyProvider, postcodeProvider) {
-    self$geog = geographyProvider
-    self$pcode = postcodeProvider
-    super$initialize(geographyProvider$wd)
-  },
-  
   getHospitals = function(...) {
-    self$getSaved("HOSPITALS",orElse = function() {
+    self$getSaved("HOSPITALS",...,orElse = function(...) {
       gbHospitals <- readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=128715098&single=true&output=csv","&nocache=",sample(1:1000000,1)))
-      hospSf = sf::st_as_sf(gbHospitals %>% rename(code = hospitalId) %>% select(-nation), coords=c("long","lat"), crs=4326)
-    }) %>% filter(...)
+      hospSf = sf::st_as_sf(gbHospitals %>% 
+                              dplyr::rename(code = hospitalId) %>% 
+                              dplyr::select(-nation), coords=c("long","lat"), crs=4326)
+    })
   },
   
   getNightingales = function(...) {
-    self$getSaved("NIGHTINGALES",orElse = function() {
+    self$getSaved("NIGHTINGALES",...,orElse = function(...) {
       nightingales <- readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=683986407&single=true&output=csv","&nocache=",sample(1:1000000,1)), 
-            col_types = cols(dateOpened = col_date(format = "%Y-%m-%d")))
-      nightingales = sf::st_as_sf(nightingales %>% rename(code = hospitalId) %>% select(-nation), coords=c("long","lat"), crs=4326)
-    }) %>% filter(...)
+            col_types = readr::cols(dateOpened = readr::col_date(format = "%Y-%m-%d")))
+      nightingales = sf::st_as_sf(nightingales %>% 
+                                    dplyr::rename(code = hospitalId) %>% 
+                                    dplyr::select(-nation), coords=c("long","lat"), crs=4326)
+    })
+  },
+  
+  getNHSSiteIcuCatchment = function(...) {
+    self$getSaved("SITE_ICU_CATCHMENT",...,orElse = function(...) {
+      tmp = self$getHospitals() %>% dplyr::filter(icuBeds>0 & sector=="NHS Sector")
+      catch = self$geog$createCatchment(
+        supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), 
+        supplyIdVar = hospId, 
+        supplyVar = icuBeds,
+        demandId = "DEMOG", 
+        demandShape = self$demog$getDemographicsMap(),
+        demandIdVar = code, 
+        demandVar = count,
+        outputMap = TRUE
+      )
+    })
+  },
+  
+  getNHSTrustIcuCatchment = function(...) {
+    self$getSaved("TRUST_ICU_CATCHMENT",...,orElse = function(...) {
+      tmp = self$getHospitals() %>% dplyr::filter(icuBeds>0 & sector=="NHS Sector")
+      catch = self$geog$createCatchment(
+        supplyShape = tmp %>% dplyr::group_by(trustId,trustName), 
+        supplyIdVar = trustId, 
+        supplyVar = icuBeds,
+        demandId = "DEMOG", 
+        demandShape = self$demog$getDemographicsMap(),
+        demandIdVar = code, 
+        demandVar = count,
+        outputMap = TRUE
+      )
+    })
+  },
+
+  getNHSSiteAcuteCatchment = function(...) {
+    self$getSaved("SITE_ACUTE_CATCHMENT",...,orElse = function(...) {
+      tmp = self$getHospitals() %>% dplyr::filter(acuteBeds>0 & sector=="NHS Sector")
+      catch = self$geog$createCatchment(
+        supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), 
+        supplyIdVar = hospId, 
+        supplyVar = acuteBeds,
+        demandId = "DEMOG", 
+        demandShape = self$demog$getDemographicsMap(),
+        demandIdVar = code, 
+        demandVar = count,
+        outputMap = TRUE
+      )
+    })
+  },
+  
+  getNHSTrustAcuteCatchment = function(...) {
+    self$getSaved("TRUST_ACUTE_CATCHMENT",...,orElse = function(...) {
+      tmp = self$getHospitals() %>% dplyr::filter(acuteBeds>0 & sector=="NHS Sector")
+      catch = self$geog$createCatchment(
+        supplyShape = tmp %>% dplyr::group_by(trustId,trustName), 
+        supplyIdVar = trustId, 
+        supplyVar = acuteBeds,
+        demandId = "DEMOG", 
+        demandShape = self$demog$getDemographicsMap(),
+        demandIdVar = code, 
+        demandVar = count,
+        outputMap = TRUE
+      )
+    })
+  },
+  
+  getNHSTrustAcuteDemographics = function(combineGenders = TRUE) {
+    test = ncp$getNHSTrustAcuteCatchment()
+    return(self$demog$getSingleDigitDemographics(test$crossMapping, code, trustId, weightExpr = 1, combineGenders = combineGenders))
+  },
+  
+  getNHSTrustIcuDemographics = function(combineGenders = TRUE) {
+    test = ncp$getNHSTrustIcuCatchment()
+    return(self$demog$getSingleDigitDemographics(test$crossMapping, code, trustId, weightExpr = 1, combineGenders = combineGenders))
+  },
+  
+  getNHSSiteAcuteDemographics = function(combineGenders = TRUE) {
+    test = ncp$getNHSSiteAcuteCatchment()
+    return(self$demog$getSingleDigitDemographics(test$crossMapping, code, hospId, weightExpr = 1, combineGenders = combineGenders))
+  },
+  
+  getNHSSiteIcuDemographics = function(combineGenders = TRUE) {
+    test = ncp$getNHSSiteIcuCatchment()
+    return(self$demog$getSingleDigitDemographics(test$crossMapping, code, hospId, weightExpr = 1, combineGenders = combineGenders))
   }
   
-
 ))
 
-# library(tidyverse)
-# library(sf)
-# usp = UKStatisticsProvider$new("~/Data/maps")
-# usp$loadAllMaps()
-# # dm = usp$getPHEDashboardMap()
-# # #usp$saveShapefile("DASH_LTLA", dm)
-# # tmp = usp$getDemographics("DASH_LTLA", dm %>% group_by(code,name), combineGenders = FALSE)
-# 
-# # sf = usp$getDemographicsMap()
-# # d = usp$getDetailedDemographics()
-# # x = usp$getDemographics("CTRY19")
-# # sf = usp$getDemographics("WD11")
-# # # sf = usp$getDemographics("LSOA11")
-# # # sf = usp$getDemographics("SGDZ11")
-# # sf = usp$getDemographics("SHB19")
-# # usp$preview("LHB19")
-# # sf = usp$getDemographics("CTYUA19")
-# # sf = usp$getDemographics("LAD19")
-# # sf = usp$getDemographics("CCG20")
-# # sf = usp$getDemographics("NHSER20")
-# # sf = usp$getDemographics("PHEC16")
-# # sf = usp$getDemographics("LGD12")
-# # plot(sf)
-# 
-# tmp = usp$getHospitals(icuBeds>0 & sector=="NHS Sector")
-# catch = usp$createCatchment(
-#   supplyId = "ICUBEDS", supplyShape = tmp %>% rename(hospId = code, hospName = name) %>% group_by(hospId,hospName), supplyIdVar = hospId, supplyVar = icuBeds,
-#   demandId = "DEMOG", demandShape = usp$getDemographicsMap(), demandVar = count, demandIdVar = code
-# )
-# 
-# usp$preview(shape=catch$map %>% mutate(per100K = 100000*icuBeds/count),nameVar = hospName, codeVar = per100K, poi=catch$suppliers, poiNameVar = hospName, poiCodeVar = icuBeds)
