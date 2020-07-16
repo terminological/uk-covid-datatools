@@ -4,7 +4,7 @@
 \name{ukcovidtools-package}
 \alias{ukcovidtools}
 \alias{ukcovidtools-package}
-\title{ukcovidtools: Functions for sourcing, cleaning and calculating Rt for uk covid timeseris data}
+\title{ukcovidtools: Functions for sourcing, cleaning and calculating Rt for uk covid timeseries data}
 \description{
 What the package does (one paragraph).
 }

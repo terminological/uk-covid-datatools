@@ -45,7 +45,7 @@ Get a provider of UK postcodes
 \if{html}{\out{<a id="method-getFullONS"></a>}}
 \subsection{Method \code{getFullONS()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getFullONS()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getFullONS(...)}\if{html}{\out{</div>}}
 }
 
 }
@@ -53,7 +53,7 @@ Get a provider of UK postcodes
 \if{html}{\out{<a id="method-getOutcodeCentroids"></a>}}
 \subsection{Method \code{getOutcodeCentroids()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getOutcodeCentroids()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getOutcodeCentroids(...)}\if{html}{\out{</div>}}
 }
 
 }

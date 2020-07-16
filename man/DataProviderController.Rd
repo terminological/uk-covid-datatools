@@ -16,6 +16,7 @@ Control data sources
 \item \href{#method-updateDatasets}{\code{DataProviderController$updateDatasets()}}
 \item \href{#method-timeseriesProcessor}{\code{DataProviderController$timeseriesProcessor()}}
 \item \href{#method-chessProcessor}{\code{DataProviderController$chessProcessor()}}
+\item \href{#method-survivalProcessor}{\code{DataProviderController$survivalProcessor()}}
 \item \href{#method-loadSpimSources}{\code{DataProviderController$loadSpimSources()}}
 \item \href{#method-clone}{\code{DataProviderController$clone()}}
 }
@@ -57,6 +58,14 @@ Control data sources
 \subsection{Method \code{chessProcessor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$chessProcessor(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-survivalProcessor"></a>}}
+\subsection{Method \code{survivalProcessor()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$survivalProcessor(...)}\if{html}{\out{</div>}}
 }
 
 }

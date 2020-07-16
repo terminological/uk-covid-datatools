@@ -76,9 +76,9 @@ CHESSClean %>% select(
 # excl2 = dataQualityCheck %>% filter(knownOutcome < (meanKnownOutcome) - sd(dataQualityCheck$knownOutcome))
 # CHESSClean = CHESSClean %>% anti_join(excl2, by="trustcode")
 
-symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddate) & !is.na(hospitaladmissiondate)) %>% srv$generateSurvivalData(
+symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>% srv$generateSurvivalData(
   idVar = caseid,
-  startDateVar = estimateddate, 
+  startDateVar = estimateddateonset, 
   endDateExpr = hospitaladmissiondate,
   statusExpr = 1,
   ageVar = "age", 
@@ -143,7 +143,7 @@ This should give us an estimate of the overall probability of admission that acc
 ```{r}
 uncensoredSymptomaticToAdmission = CHESSClean %>% filter(age>15) %>% srv$generateSurvivalData(
   idVar = caseid,
-  startDateVar = estimateddate, 
+  startDateVar = estimateddateonset, 
   endDateExpr = hospitaladmissiondate,
   statusExpr = 1,
   censoredDateExpr = censorDate,
@@ -173,6 +173,7 @@ p3 = fitdistrplus::ppcompcens(dists, plotstyle = "ggplot") +standardPrintOutput:
 (p2 + p3 + patchwork::plot_layout(ncol=2)) %>% standardPrintOutput::saveQuarterPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Fig3_fitDistributions")
 ```
 
+#TODO: get output of unage stratified models.
 
 # select log normal models
 
@@ -188,7 +189,7 @@ out %>% filter(model=="weibull") %>% ungroup() %>% mutate(value = sprintf("%1.4f
   select(-low_ci,-high_ci) %>% 
   pivot_wider(names_from = param, values_from = value) %>% select(
   -model,-bic,-aic,age=ageCat, N = n, `log(likelihood)`=loglik, `scale [95% CrI]` = scale, `shape [95% CrI]` = shape
-  ) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Table2_exponentialParameterisation")
+  ) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/symptomatic-to-admission/Table2_weibullParameterisation")
 ```
 
 # generate exp curves

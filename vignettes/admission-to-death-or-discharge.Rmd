@@ -148,7 +148,7 @@ p2 = fitdistrplus::ppcompcens(dists, plotstyle = "ggplot") +standardPrintOutput:
 
 # fit all models to all age groups
 
-Log norms seem to fit best for all age groups
+Gamma seem to fit best for all age groups
 
 ```{r}
 out = censoredAdmissionToDischargeOrDeath %>% srv$fitModelsByAge()

@@ -12,18 +12,40 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
                                   startDateVar, 
                                   endDateExpr, 
                                   statusExpr = if_else(is.na({{endDateExpr}}),0,1), 
-                                  ageVar = "age", 
                                   censoredDateExpr = max({{endDateExpr}},na.rm = TRUE),
+                                  ageVar = "age", 
                                   ageBreaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
                                   ageLabels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
                                   ageReferenceCat = NA,
+                                  statusLabels = c("censored","died")
+  ) {
+    out = self$generateNoAgeSurvivalData(df,{{idVar}},{{startDateVar}},{{endDateExpr}},{{statusExpr}},{{censoredDateExpr}}, statusLabels)
+    ageVar = ensym(ageVar)
+    out = out %>% dplyr::mutate(
+        ageCat = cut(!!ageVar,breaks = ageBreaks, labels = ageLabels, ordered_result = TRUE, include.lowest = TRUE)
+    )
+    if (!is.na(ageReferenceCat)) {
+      out = out %>% mutate(
+        ageCat = relevel(factor(as.character(ageCat),ordered=FALSE), ref = ageReferenceCat)
+      )
+    }
+    return(out %>% as.data.frame())
+    
+  },
+  
+  
+  generateNoAgeSurvivalData = function(df,
+                                  idVar,
+                                  startDateVar, 
+                                  endDateExpr, 
+                                  statusExpr = if_else(is.na({{endDateExpr}}),0,1), 
+                                  censoredDateExpr = max({{endDateExpr}},na.rm = TRUE),
                                   statusLabels = c("censored","died")
   ) {
     idVar = ensym(idVar) 
     startDateVar = ensym(startDateVar) 
     endDateExpr = enexpr(endDateExpr)
     statusExpr = enexpr(statusExpr)
-    ageVar = ensym(ageVar)
     censoredDateExpr = enexpr(censoredDateExpr)
     
     out = df %>% 
@@ -34,31 +56,24 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
         id = !!idVar,
         status = !!statusExpr
       ) %>% mutate(
-        endDate = if_else(status==0, as.Date(!!censoredDateExpr+0.001), endDate+0.001),
+        endDate = if_else(status==0, as.Date(!!censoredDateExpr,"1970-01-01"), endDate),
         time = as.numeric(endDate - startDate), # zero times causes issues
-        ageCat = cut(!!ageVar,breaks = ageBreaks, labels = ageLabels, ordered_result = TRUE, include.lowest = TRUE),
         status = factor(status, labels=statusLabels)
       ) #%>% mutate(
-        #time = time+0.1 # if_else(time==0,0.5,time)
-      #)
-    
-    if (!is.na(ageReferenceCat)) {
-      out = out %>% mutate(
-        ageCat = relevel(factor(as.character(ageCat),ordered=FALSE), ref = ageReferenceCat)
-      )
-    }
+    #time = time+0.1 # if_else(time==0,0.5,time)
+    #)
     
     # first instance of startDate by case
     out = out %>% group_by(id) %>% arrange(startDate) %>% filter(
-        row_number() == 1
-      )
+      row_number() == 1
+    )
     # first instance of endDate by case
     out = out %>% arrange(endDate) %>% filter(
-        row_number() == 1
-      ) 
-    out = out %>% filter(
-        startDate <= endDate
-      ) 
+      row_number() == 1
+    ) 
+    # out = out %>% filter(
+    #   startDate <= endDate
+    # ) 
     
     return(out %>% as.data.frame())
   },
@@ -155,71 +170,195 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
     return(out)
   },
   
-  standardModels = function(items = c("weibull","gamma","lognorm")) {
+  standardModels = function(items = c("weibull","gamma","lnorm","exp","norm","tnorm")) {
     tmp = list(
-      weibull = list(name = "weibull", start = list(shape =1 , scale=10)),
-      gamma = list(name = "gamma", start = list(shape =1 , rate=0.1)),
-      lognorm = list(name = "lnorm", start = list(meanlog =2 , sdlog=1)),
-      exp = list(name = "exp", start = list(rate=0.5)),
-      norm = list(name = "norm", start = list(mean = 1, sd = 1))
+      weibull = list(name = "weibull", start = list(shape =1 , scale=10), fix.arg = list(), lower=list(shape=0,scale=0)),
+      gamma = list(name = "gamma", start = list(shape =1 , rate=0.1), fix.arg = list(), lower=list(shape=0,rate=0)),
+      lnorm = list(name = "lnorm", start = list(meanlog=1 , sdlog=0), fix.arg = list(), lower=list(meanlog=-Inf, sdlog=-Inf)),
+      exp = list(name = "exp", start = list(rate=0.5), fix.arg = list(), lower=list(rate=0)),
+      norm = list(name = "norm", start = list(mean = 1, sd = 0.1), fix.arg = list(), lower=list(sd=0)),
+      tnorm = list(name = "tnorm", start = list(mean = 1, sd = 0.1), fix.arg = list(lower=0,upper=Inf), lower=list(mean=0,sd=0.001))
     )
     return(tmp[names(tmp) %in% items])
+  },
+  
+  
+  plotModels = function(modelFits, survivalDf) {
+    #TODO: attribute fractions of survivalDf to different times based on left and right censoring.
+    # This needs a review of structure fo whole thing
+    p1 = ggplot(survivalDf, aes(x=time)) + geom_histogram(aes(y=..density..),fill=NA,colour = "black", binwidth=1)
+    models = modelFits %>% select(model,shift,param,value) %>% group_by(model,shift) %>% group_modify(function(d,g,...) {
+      fnName = paste0("d",g$model)
+      fitted = tibble(x = 0:max(survivalDf$time))
+      #TODO: bootstrap fitted$Y with modelfits$value_sd; modelfits$low_ci; modelfits$high_ci
+      
+      paramList = d %>% tibble::deframe() %>% c(x = list(fitted$x+g$shift))
+      fitted$y = do.call(fnName, paramList)
+      return(fitted)
+    })
+    p1 = p1 + geom_line(data = models, aes(x=x,y=y,colour = model), size = 1)
+    return(p1)
+  },
+  
+  fitModelsByAge = function(survivalDf,ageVar = "ageCat",... ) {
+    ageVar = ensym(ageVar)
+    self$fitModels(survivalDf %>% ungroup() %>% group_by(!!ageVar))
   },
   
   #' @description for each ageCat fit a set of models and return a data fram with the parameters.
   #' 
   #' @param survivalDf - a data frame containing an ageCat, and a left and right column with min and max times of individual events, If event is censored then right is NA
-  #' @param models -  a list of models that you want to fit - e.g. lnorm, norm, etc...
+  #' @param models -  a list of models that you want to fit - e.g. lognorm, norm, etc...
   
-  #' @return an datafram of ageCat, model, param(eterName), value, low_ci, high_ci
-  fitModelsByAge = function(survivalDf, ageVar = "ageCat", models = self$standardModels(),...) {
+  #' @return an datafram of ageCat, model, parameterName, value, low_ci, high_ci
+  fitModels = function(survivalDf, models = self$standardModels(), shifted=0, ...) {
     
-    
-    ageVar = ensym(ageVar)
-    isCensored = length(levels(survivalDf$status)) > 1
-    censoredFac = min(as.integer(survivalDf$status))
+    if("status" %in% colnames(survivalDf)) {
+      isCensored = length(unique(survivalDf$status)) > 1
+      censoredFac = min(as.integer(survivalDf$status))
+    } else {
+      isCensored = FALSE
+    }
     
     #browser()
     censoredDf = survivalDf %>% mutate(
       #time = if_else(time==0, 0.5, time)
     #) %>% mutate(
-      left=time,
-      right=ifelse(isCensored & as.integer(status)==censoredFac, NA, time)
+      left=time+shifted,
+      right=ifelse(isCensored & as.integer(status)==censoredFac, NA, time+shifted)
     )
     
     modelNames = unlist(sapply(models, "[", "name"))
-    
-    out = censoredDf %>% ungroup() %>% group_by(!!ageVar) %>% group_modify( function(d,g,...) {
-      
+    #TODO: refacto this to use fitUncensored & fit censored
+    out = censoredDf %>% group_modify( function(d,g,...) {
+      if(any(d$left == 0)) warning("Input contains zero values after shift.")
+      if(any(d$left < 0)) warning("Input contains negative values after shift.")
       tmp = data.frame()
       for (m in models) {
-        dist = suppressWarnings({
-          tryCatch(fitdistrplus::fitdistcens(d %>% as.data.frame(), m$name, start = m$start, ...), error = function(e) NULL)
-        })
         #browser()
-        if (!is.null(dist)) {
-          #browser()
-          dist2 = suppressWarnings(fitdistrplus::bootdistcens(dist,silent = TRUE,niter = 100,ncpus = 3))
-          
-          tmp = tmp %>% bind_rows(tibble(
-            n=dist$n,
-            aic=dist$aic,
-            bic=dist$bic,
-            loglik=dist$loglik,
-            model = m$name,
-            param = names(dist$estimate),
-            value = dist$estimate,
-            low_ci = matrix(dist2$CI,ncol=3)[,2],
-            high_ci = matrix(dist2$CI,ncol=3)[,3],
-          ))
+        if (length(m$fix.arg)>0) {
+          if (isCensored) {
+            dist = suppressWarnings({
+              tryCatch(fitdistrplus::fitdistcens(d %>% select(left,right) %>% as.data.frame(), m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
+            })
+          } else {
+            dist = suppressWarnings({
+              tryCatch(fitdistrplus::fitdist(d %>% pull(left), m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
+            })
+          }
+        } else {
+          if (isCensored) {
+            dist = suppressWarnings({
+              tryCatch(fitdistrplus::fitdistcens(d %>% select(left,right) %>% as.data.frame(), m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
+            })
+          } else {
+            dist = suppressWarnings({
+              tryCatch(fitdistrplus::fitdist(d %>% pull(left), m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
+            })
+          }
+        }
+        #browser()
+        if (is.null(dist)) {
+          message("No fit for ",m$name)
+        } else {
+          tmp = tmp %>% bind_rows(self$extractFitted(dist, isCensored = FALSE) %>% mutate(shift = shifted))
         }
       }
       return(tmp)
+    })
+    return(out)
+  },
   
+  
+  #' @description for each ageCat fit a set of models and return a data fram with the parameters.
+  #' 
+  #' @param survivalDf - a data frame containing an ageCat, and a left and right column with min and max times of individual events, If event is censored then right is NA
+  #' @param models -  a list of models that you want to fit - e.g. lognorm, norm, etc...
+  
+  #' @return an datafram of ageCat, model, parameterName, value, low_ci, high_ci
+  fitUncensored = function(uncensoredDf, models = self$standardModels(), valueVar = "left") {
+    valueVar = ensym(valueVar)
+    
+    out = uncensoredDf %>% mutate(left = !!valueVar) %>% group_modify( function(d,g,...) {
+      if(any(d$left == 0)) warning("Input contains zero values after shift.")
+      if(any(d$left < 0)) warning("Input contains negative values after shift.")
+      tmp = data.frame()
+      for (m in models) {
+        #browser()
+        if (length(m$fix.arg)>0) {
+          dist = suppressWarnings({
+            tryCatch(fitdistrplus::fitdist(d %>% pull(left), m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
+          })
+        } else {
+          dist = suppressWarnings({
+            tryCatch(fitdistrplus::fitdist(d %>% pull(left), m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
+          })
+        }
+        #browser()
+        if (is.null(dist)) {
+          message("No fit for ",m$name)
+        } else {
+          tmp = tmp %>% bind_rows(self$extractFitted(dist, isCensored = FALSE))
+        }
+      }
+      return(tmp)
+      
     })
     
     return(out)
   },
+  
+  extractFitted = function(dist, isCensored) {
+    if (!is.null(dist)) {
+      if (isCensored)
+        dist2 = suppressWarnings(fitdistrplus::bootdistcens(dist,silent = TRUE,niter = 100,ncpus = 3))
+      else 
+        dist2 = suppressWarnings(fitdistrplus::bootdist(dist,silent = TRUE,niter = 100,ncpus = 3))
+    }
+    return(tibble(
+      n=dist$n,
+      aic=dist$aic,
+      bic=dist$bic,
+      loglik=dist$loglik,
+      model = dist2$fitpart$distname,
+      param = names(dist$estimate),
+      value = sapply(dist2$estim,mean, na.rm=TRUE), #dist$estimate,
+      value_sd = sapply(dist2$estim,sd, na.rm=TRUE), #dist$sd,
+      low_ci = matrix(dist2$CI,ncol=3)[,2],
+      high_ci = matrix(dist2$CI,ncol=3)[,3]
+    ))
+  }
+  
+  fitCensored = function(censoredDf, models = self$standardModels(), leftVar = "left", rightVar="right", ...) {
+    leftVar=ensym(leftVar)
+    rightVar=ensym(rightVar)
+    out = censoredDf %>% mutate(left = !!leftVar, right=!!rightVar) %>% group_modify( function(d,g,...) {
+      if(any(d$left == 0,na.rm=TRUE)) warning("Input contains zero values after shift.")
+      if(any(d$left < 0,na.rm=TRUE)) warning("Input contains negative values after shift.")
+      tmp = data.frame()
+      for (m in models) {
+        #browser()
+        if (length(m$fix.arg)>0) {
+          dist = suppressWarnings({
+              tryCatch(fitdistrplus::fitdistcens(d %>% select(left,right) %>% as.data.frame(), m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
+          })
+        } else {
+          dist = suppressWarnings({
+            tryCatch(fitdistrplus::fitdistcens(d %>% select(left,right) %>% as.data.frame(), m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
+          })
+        }
+        #browser()
+        if (is.null(dist)) {
+          message("No fit for ",m$name)
+        } else {
+          tmp = tmp %>% bind_rows(self$extractFitted(dist, isCensored = TRUE))
+        }
+      }
+      return(tmp)
+    })
+    return(out)
+  },
+  
   
   doPdf = function(model, paramNames, params, timepoints, ...) {
     names(params) = paramNames

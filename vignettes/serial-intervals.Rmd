@@ -48,10 +48,18 @@ library(sp)
 devtools::load_all("~/Git/standard-print-output/")
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 
-devtools::load_all("~/Git/uk-covid-datatools/")
-dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-tsp = dpc$timeseriesProcessor()
-tsp$printSerialInterval()
+dpc = tsp = chp = srv = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+}
+
+reload()
 ```
 
 Robert Challen ^1,2^; Leon Danon ^3,4^
@@ -118,13 +126,18 @@ ff100 = dpc$spim$getFF100()
 
 tmp = ff100 %>% inner_join(ff100, by=c("ContactOf_FF100_ID"="FF100_ID"),suffix=c(".infectee",".infector"))
 tmp = tmp %>% select(FF100_ID,ContactOf_FF100_ID,contains("date"))
+```
+
+```{r}
 tmp2 = tmp %>% mutate(
   EL = 0L, ER = 1L,
   SL = as.integer(date_onset.infectee - date_onset.infector),
   SR = as.integer(date_onset.infectee - date_onset.infector +1),
+  #SL = as.integer(date_hosp_adm.infectee - date_specimen.infector),
+  #SR = as.integer(date_hosp_adm.infectee - date_specimen.infector +1),
   type=0L) %>% select(EL,ER,SL,SR,type)
 
-panel1 = ggplot(tmp2, aes(x=SL)) + geom_bar(width=0.7) +xlab("days")
+panel1 = ggplot(tmp2) + geom_bar(width=0.7,aes(x=SL)) + xlab("days")
 
 # tmp2 = ff100 %>% mutate(
 #   EL = 0L, 
@@ -155,7 +168,8 @@ config <- EpiEstim::make_config(list(si_parametric_distr = dist,
 ## first estimate the SI distribution using function dic.fit.mcmc fron 
 ## coarseDataTools package:
 n_mcmc_samples <- config$n1*mcmc_control$thin
-SI_fit <- coarseDataTools::dic.fit.mcmc(dat = tmp3,
+
+SI_fit = coarseDataTools::dic.fit.mcmc(dat = tmp3,
                   dist = "G",#off1G",
                   init.pars = EpiEstim::init_mcmc_params(tmp2, dist),
                   burnin = mcmc_control$burnin,
@@ -232,6 +246,33 @@ fig1 = panel1+panel2+ patchwork::plot_annotation(tag_levels = "A")+plot_layout(n
 fig1 %>% saveThirdPageFigure("~/Dropbox/covid19/serial-intervals/Fig1_UKSerialInterval")
 
 ```
+## Fit using truncated normal
+
+```{r}
+
+tmp2 = tmp %>% mutate(
+  EL = 0L, ER = 1L,
+  SL = as.integer(date_onset.infectee - date_onset.infector),
+  SR = as.integer(date_onset.infectee - date_onset.infector +1),
+  type=0L) %>% select(EL,ER,SL,SR,type)
+
+panel1 = ggplot(tmp2) + geom_bar(width=0.7,aes(x=SL)) + xlab("days")
+tmp3 = fitdistrplus::fitdist(tmp2 %>% filter(SL>-3) %>% pull(SL), "tnorm", start=list(mean=3,sd=1), fix.arg = list(lower=-3, upper=Inf))
+tmp4 = fitdistrplus::bootdist(tmp3)
+mean = mean(tmp4$estim[["mean"]])
+sd = mean(tmp4$estim[["sd"]])
+
+mean_sd = sd(tmp4$estim[["mean"]])
+sd_sd = sd(tmp4$estim[["sd"]])
+mean_lowerCI = tmp4$CI["mean","2.5%"]
+mean_upperCI = tmp4$CI["mean","97.5%"]
+sd_lowerCI = tmp4$CI["sd","2.5%"]
+sd_upperCI = tmp4$CI["sd","97.5%"]
+offset = -3
+sprintf("%1.2f \u00B1 %1.2f (%1.2f-%1.2f)", mean, mean_sd, mean_lowerCI, mean_upperCI)
+sprintf("%1.2f \u00B1 %1.2f (%1.2f-%1.2f)", sd, sd_sd, sd_lowerCI, sd_upperCI)
+```
+
 ## Resampling serial interval estimates
 
 * distributions from table 1. 
@@ -426,6 +467,167 @@ patchwork::wrap_plots(plts, ncol=2, guides = "collect") %>% saveHalfPageFigure("
 * What effect does the serial interval of death-death or test-test events considered
 * simulate delay process using a gamma distribution
 * assume a known generation interval and simulate effects
+
+```{r}
+# https://www.acpjournals.org/doi/10.7326/M20-0504#t4-M200504
+# Lauer incubation periods
+incub = tibble::tribble(
+  ~distribution, ~param1, ~param2,
+  "Log-normal","1.621 (1.504–1.755)","0.418 (0.271–0.542)",
+  "Gamma", "5.807 (3.585–13.865)", "0.948 (0.368–1.696)",
+  "Weibull", "2.453 (1.917–4.171)", "6.258 (5.355–7.260)"
+  #Erlang 6 (3–11) 0.880 (0.484–1.895)
+)
+
+incub = incub %>% mutate(
+  param1_m = lapply(stringr::str_extract_all(param1, "[0-9]+\\.[0-9]+"),as.numeric)
+) %>% mutate(
+  mean = map_dbl(param1_m, ~.x[1]),
+  low_ci = map_dbl(param1_m, ~.x[2]),
+  high_ci = map_dbl(param1_m, ~.x[3])
+)
+```
+
+# Estimates of incubation period, symptomatic to admission, admission to death
+
+```{r}
+censIncub = ff100 %>% filter(!is.na(date_exposure_first)) %>% select(date_exposure_first,date_exposure_last,date_onset) %>%
+  mutate(
+    right = as.numeric(date_onset-date_exposure_first), 
+    left = as.numeric(date_onset-date_exposure_last)) %>%
+  mutate( 
+    left = ifelse(left<=0,NA_integer_,left)
+  ) %>% filter( right > 0)
+
+ggplot(censIncub)+geom_histogram(aes(x=right),fill="red")+geom_histogram(aes(x=left),fill="blue")
+incubationModels = censIncub %>% srv$fitCensored(models)
+incubationModels %>% group_by(model) %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", value, value_sd, low_ci, high_ci), loglik = max(loglik)) %>% ungroup() %>% select(
+  `Distribution` = model,
+  `Log-likelihood` = loglik,
+  `AIC` = aic,
+  `Parameter` = param,
+  `Value (95% CI)` = valueCI,
+) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_incubationParams")
+
+```
+
+
+* Select out chess trusts which update their data - (need to document this method)
+Can we get some distributions from the data we have?
+
+
+
+```{r}
+CHESS = dpc$spim$getCHESS()
+CHESSClean = CHESS %>% chp$chessAdmissionSubset()
+
+models = srv$standardModels()
+```
+
+
+* use estimated date onset -> infection swab date positive specimen taken
+* limitations: in hospital subset of patients. retrospectve date reporting, peaks at 1 day, 1 week, 2 weeks etc, suggest approximation on data entry
+* mostly positive dates - some outliers removed
+* fitered to exclude zero or negative days before fit
+* This defines 111 to cases / admissions
+
+```{r}
+symptomaticToCase = CHESSClean %>% filter(age>10 & !is.na(estimateddateonset) & !is.na(infectionswabdate)) %>% 
+  srv$generateNoAgeSurvivalData(
+    idVar = caseid,
+    startDateVar = estimateddateonset, 
+    endDateExpr = infectionswabdate,
+    statusExpr = 1,
+    statusLabels = "case",
+    censoredDateExpr = NA
+  ) 
+#ggplot(symptomaticToCase %>% filter(time < 100),aes(x=time))+geom_histogram(binwidth = 1)
+symptomaticToCase = symptomaticToCase %>% filter(time < 100 & time > 0)
+symptomaticToCaseModels = symptomaticToCase %>% srv$fitModels(models, shifted=1)
+symptomaticToCaseModels %>% srv$plotModels(symptomaticToCase) %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/FigS1_symptomaticToCase")
+symptomaticToCaseModels %>% group_by(model) %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", value, value_sd, low_ci, high_ci), loglik = max(loglik)) %>% ungroup() %>% select(
+  `Distribution` = model,
+  `Log-likelihood` = loglik,
+  `AIC` = aic,
+  `Parameter` = param,
+  `Value (95% CI)` = valueCI,
+) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_symptomaticToCaseParams")
+```
+
+Hospital admission generally predates case detection in this data set as hospital based. No clear reason to treat case identification and hospital admission as different time points.
+
+
+```{r}
+casesToAdmission = CHESSClean %>% filter(age>10 & !is.na(infectionswabdate) & !is.na(hospitaladmissiondate)) %>% 
+  srv$generateNoAgeSurvivalData(
+    idVar = caseid,
+    startDateVar = infectionswabdate, 
+    endDateExpr = hospitaladmissiondate,
+    statusExpr = 1,
+    statusLabels = "admitted",
+    censoredDateExpr = NA
+  ) #%>% filter(time < 100 & time > 0)
+
+ggplot(casesToAdmission,aes(x=time))+geom_histogram(binwidth=1)
+#symptomaticToAdmissionModels = symptomaticToAdmission %>% srv$fitModels(models, shifted=0)
+#symptomaticToAdmissionModels %>% srv$plotModels(symptomaticToAdmission)  %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/FigS2_symptomaticToAdmission")
+
+
+```
+
+* Time delay from case identification to death
+
+```{r}
+casesToDeath = CHESSClean %>% filter(age>10 & !is.na(infectionswabdate) & !is.na(finaloutcomedate) & finaloutcome=="Death") %>% 
+  srv$generateNoAgeSurvivalData(
+    idVar = caseid,
+    startDateVar = infectionswabdate, 
+    endDateExpr = finaloutcomedate,
+    statusExpr = 1,
+    statusLabels = "died",
+    censoredDateExpr = NA
+  ) %>% filter(time < 100 & time > 0)
+  
+
+#   dplyr::mutate(
+#   id = caseid,
+#   startDate = hospitaladmissiondate, 
+#   endDate = finaloutcomedate, 
+#   status = if_else(is.na(finaloutcome),"censored","died")
+# ) %>% mutate(
+#   left = as.numeric(if_else(status=="censored", as.Date(censorDate), endDate) - startDate)+0.001,
+#   right = ifelse( status=="censored",NA,as.numeric(endDate - startDate)+0.001) # zero times causes issues
+# )
+
+
+
+
+ggplot(admissionToDeath,aes(x=time,fill=status))+geom_histogram(position="dodge",binwidth = 1)
+casesToDeathModels = casesToDeath %>% filter(status=="died") %>% srv$fitModels(models)
+casesToDeathModels %>% srv$plotModels(casesToDeath)
+#admissionToDeathCensoredModels = admissionToDeath %>% srv$fitModels(models, shifted=1)
+
+# ggplot(symptomaticToAdmission,aes(x=time))+geom_histogram()
+# 
+# symptomaticToAdmissionModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdist(symptomaticToAdmission %>% pull(time), m$name, start = m$start)))
+# admissionToDeathModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdist(admissionToDeath %>% filter(status=="died") %>% pull(left), m$name, start = m$start)))
+# admissionToDeathCensoredModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdistcens(admissionToDeath %>% select(left,right) %>% as.data.frame(), m$name, start = m$start)))
+# 
+# fitdistrplus::denscomp(symptomaticToAdmissionModels) 
+# fitdistrplus::denscomp(admissionToDeathModels) #, plotstyle = "ggplot") +standardPrintOutput::narrowAndTall()
+# fitdistrplus::ppcompcens(admissionToDeathCensoredModels)
+# 
+# symptomaticToAdmissionModels2 =  fitdistrplus::bootdist(symptomaticToAdmissionModels$exp)
+
+casesToDeathModels %>% group_by(model) %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", value, value_sd, low_ci, high_ci), loglik = max(loglik)) %>% ungroup() %>% select(
+  `Distribution` = model,
+  `Log-likelihood` = loglik,
+  `AIC` = aic,
+  `Parameter` = param,
+  `Value (95% CI)` = valueCI,
+) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS2_caseToDeathParams")
+
+```
 
 # Discussion
 

@@ -160,7 +160,7 @@ for each ageCat fit a set of models and return a data fram with the parameters.
 \if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$fitModelsByAge(
   survivalDf,
   ageVar = "ageCat",
-  models = standardModels(),
+  models = self$standardModels(),
   ...
 )}\if{html}{\out{</div>}}
 }

@@ -15,6 +15,7 @@ General covid  processing
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{CovidTimeseriesProvider$new()}}
+\item \href{#method-trimNAs}{\code{CovidTimeseriesProvider$trimNAs()}}
 \item \href{#method-complete}{\code{CovidTimeseriesProvider$complete()}}
 \item \href{#method-fixDatesAndNames}{\code{CovidTimeseriesProvider$fixDatesAndNames()}}
 \item \href{#method-timeseriesQA}{\code{CovidTimeseriesProvider$timeseriesQA()}}
@@ -46,6 +47,14 @@ General covid  processing
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$new(providerController, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-trimNAs"></a>}}
+\subsection{Method \code{trimNAs()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$trimNAs(r0Timeseries)}\if{html}{\out{</div>}}
 }
 
 }

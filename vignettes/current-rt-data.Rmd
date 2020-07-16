@@ -1,5 +1,5 @@
 ---
-title: "Current $R_t$: Data selection and QA"
+title: "Current R(t): Data selection and QA"
 author: "Rob Challen"
 date: '`r format(Sys.Date(), "%d-%m-%Y")`'
 output: 
@@ -22,6 +22,7 @@ knitr::opts_chunk$set(
 devtools::load_all("~/Git/standard-print-output/")
 standardPrintOutput::setDefaults()
 setwd("~/Git/uk-covid-datatools/vignettes/")
+devtools::load_all("~/Git/uk-covid-datatools//")
 source("cron-estimate-rt.R")
 
 datasrc = function(ct, st) {
@@ -343,7 +344,7 @@ p = tsp$plotIncidenceQuantiles(currentRt$rt, denominatorExpr = population/100000
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")+
   scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
-p %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/data/Fig20_AllGeogsAllModels")
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig20_AllGeogsAllModels")
 
 ```  
 
@@ -360,7 +361,7 @@ p2 = tsp$plotRt(
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
-  standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels")
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels")
 
 ```
  
@@ -376,7 +377,7 @@ p3 = tsp$plotWindowedGrowthRate(
     rlim = c(-0.125,0.125))+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
-p3 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels")
 
 ```
 
@@ -393,7 +394,7 @@ p2 = tsp$plotRt(
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
-  standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/data/Fig23_Rt28_AllGeogsAllModels")
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig23_Rt28_AllGeogsAllModels")
 
 ```
  
@@ -409,28 +410,29 @@ p3 = tsp$plotWindowedGrowthRate(
     rlim = c(-0.125,0.125))+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
-p3 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_GrowthRate28_AllGeogsAllModels")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_GrowthRate28_AllGeogsAllModels")
 
 ```
 
 ```{r}
+
+export7day = currentRt$rt %>% filter(!(name == "Wales" & statistic == "case")) %>% filter(source %in% c("4NationsCases","Deaths","Triage"))
+export28day = currentRt$rt28 %>% filter(!(name == "Wales" & statistic == "case")) %>% filter(source %in% c("4NationsCases","Deaths","Triage"))
+
   ## create SPI-M export ----
   exportSPIM7day = bind_rows(
-    currentRt$rt %>% 
+    export7day %>%
       ungroup() %>%
-      filter(source %in% c("4NationsCases","Deaths","Triage")) %>% 
       filter(!is.na(`Median(R)`)) %>% 
-      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="7 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="7 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="7 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="7 day"),
+      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.01"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="0.01"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="0.01"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="0.01"),
     
-    currentRt$rt %>% 
+    export7day %>%
       ungroup() %>%
-      filter(source %in% c("4NationsCases","Deaths","Triage")) %>% 
       filter(!is.na(`Median(R)`)) %>% 
-      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="7 day")
-    # cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
+      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.01")
   )
   
   excelOutput <- openxlsx::createWorkbook()
@@ -440,20 +442,18 @@ p3 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/dat
   
   ## create SPI-M export ----
   exportSPIM28Day = bind_rows(
-    currentRt$rt28 %>% 
+    export28day %>%
       ungroup() %>%
-      filter(source %in% c("4NationsCases","Deaths","Triage")) %>% 
       filter(!is.na(`Median(R)`)) %>% 
-      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="28 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="28 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="28 day"),
-    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="28 day"),
+      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.02"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="0.02"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="0.02"),
+    tsp$rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="0.02"),
     
-    currentRt$rt28 %>% 
+    export28day %>%
       ungroup() %>%
-      filter(source %in% c("4NationsCases","Deaths","Triage")) %>% 
       filter(!is.na(`Median(R)`)) %>% 
-      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="28 day")
+      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.02")
     # cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
   )
   

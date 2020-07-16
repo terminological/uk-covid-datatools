@@ -51,7 +51,13 @@ Caching and dataset management
 \if{html}{\out{<a id="method-getHashCached"></a>}}
 \subsection{Method \code{getHashCached()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getHashCached(object, operation, orElse, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getHashCached(
+  object,
+  operation,
+  params = NULL,
+  orElse,
+  ...
+)}\if{html}{\out{</div>}}
 }
 
 }
@@ -60,7 +66,7 @@ Caching and dataset management
 \subsection{Method \code{getSaved()}}{
 a pass through 2 level cache (memory / saved file / orElse function)
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getSaved(id, orElse, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getSaved(id, orElse, params = NULL, ...)}\if{html}{\out{</div>}}
 }
 
 }

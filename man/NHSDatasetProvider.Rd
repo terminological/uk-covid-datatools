@@ -46,6 +46,7 @@ NHS datasets
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="describeErrors">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-describeErrors}{\code{ukcovidtools::CovidTimeseriesProvider$describeErrors()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="trimNAs">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-trimNAs}{\code{ukcovidtools::CovidTimeseriesProvider$trimNAs()}}\out{</span>}
 }
 \out{</details>}
 }

@@ -12,11 +12,11 @@ library(EpiEstim)
 ```
 ## Vignettes:
 
-https://terminological.github.io/uk-covid-datatools/vignettes/basic-usage.html
-
-https://terminological.github.io/uk-covid-datatools/vignettes/lockdown-impact.html
-
-https://terminological.github.io/uk-covid-datatools/vignettes/ventilator-survival-models.html
+sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+sudo apt update
+sudo apt install -y libudunits2-0 libudunits2-dev
+sudo apt install libgeos-dev
+sudo apt install libgdal-dev
 
 ## Get data and cleanse:
 

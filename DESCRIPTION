@@ -16,7 +16,18 @@ Imports:
     EpiEstim,
     msm,
     forecast,
-    ggplot2
+    ggplot2,
+    ensurer,
+    latex2exp,
+    openxlsx,
+    readr,
+    rgdal,
+    rgeos,
+    ggspatial,
+    sf,
+    metR
+Remotes:  
+    thomasp85/patchwork
 Suggests: 
     knitr,
     rmarkdown,

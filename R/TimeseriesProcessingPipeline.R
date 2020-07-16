@@ -567,7 +567,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(tibble::tribble(
       ~startDate, ~Mean.Prior.R0, ~SE.Prior.R0, ~Adj.Mean.SerialInterval, ~Adj.SD.SerialInterval,
       "2020-01-01", 2.5, 0.5, 1.0, 1.0,
-      "2020-03-23", 0.7, 0.1, 1.0, 0.75,
+      "2020-03-23", 0.7, 0.1, 1.0, 1.0,
       "2020-07-04", 1.2, 0.1, 1.0, 1.5,
     ) %>% dplyr::mutate(startDate = as.Date(startDate)))
   },
@@ -688,9 +688,32 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }})
   },
   
-  
-  summariseVolatilty = function(covidTimeseries, valueVar) {
-    
+  #' @description calculate a volatility statistic for the timeseries based on previous N days
+  #' @details 
+  #' This will not work well for timeseries with NAs
+  #' 
+  #' $x+y=z$
+  #'  
+  #' @param df a df containing a timeseries
+  #' @param valueVar - value for which the volatility being calculated
+  #' @param window - The number of time points to consider
+  estimateVolatilty = function(covidTimeseries, valueVar, outputVar=NULL, window=28) {
+    valueVar = ensym(valueVar)
+    outputVar = tryCatch(ensym(outputVar),error=function(e) return(as.symbol(paste0("Volatility.",window,".",as_label(valueVar)))))
+    # https://stats.stackexchange.com/questions/309483/measure-of-volatility-for-time-series-data
+    tmp = covidTimeseries %>% dplyr::mutate(tmp_x = !!valueVar) %>%
+      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>%
+      dplyr::arrange(date) 
+    tmp = tmp %>% dplyr::mutate(tmp_delta_x = abs(tmp_x-lag(tmp_x)))
+    tmp = tmp %>% dplyr::mutate(
+      tmp_delta_x_roll = stats::filter(tmp_delta_x, filter = rep(1,(window-1))/(window-1), sides = 1),
+      tmp_abs_x_roll = stats::filter(abs(tmp_x), filter = rep(1,window)/window, sides = 1)
+    ) %>% dplyr::mutate(
+      !!outputVar := ifelse(tmp_abs_x_roll==0,0,tmp_delta_x_roll/tmp_abs_x_roll)
+    ) %>% dplyr::select(
+      -tmp_x, -tmp_delta_x, -tmp_delta_x_roll, -tmp_abs_x_roll
+    )
+    return(tmp %>% ungroup())
   },
   
   #### plot data ----

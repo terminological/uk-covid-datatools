@@ -38,14 +38,14 @@ library(tidyverse)
 # devtools::install_github("terminological/uk-covid-datatools")
 # library(ukcovidtools)
 devtools::load_all("~/Git/standard-print-output/")
-library(rgdal)
+#library(rgdal)
 library(ggplot2)
-library(ggspatial)
-library(rgeos)
-library(maptools)
-library(lubridate)
+#library(ggspatial)
+#library(rgeos)
+#library(maptools)
+#library(lubridate)
 library(patchwork)
-library(sp)
+#library(sp)
 
 standardPrintOutput::setDefaults()
 
@@ -114,43 +114,42 @@ the authors and should not be attributed to TSFT or the GDE.
 
 In late 2019 an outbreak of a novel infectious disease was detected. It 
 manifested principally with severe acute respiratory distress, and
-pneumonia,[@huangClinicalFeaturesPatients2020]
-although many cases followed a mild course[@wuCharacteristicsImportantLessons2020].
+pneumonia, [@huangClinicalFeaturesPatients2020]
+although many cases followed a mild course [@wuCharacteristicsImportantLessons2020].
 The pathogen was rapidly identified as a new species of coronavirus
 (severe acute respiratory syndrome coronavirus 2 - SARS-CoV-2), and the
-disease named COVID-19[@NamingCoronavirusDisease].
+disease named COVID-19 [@NamingCoronavirusDisease].
 Global transmission of the virus followed and major outbreaks have been
-observed in Europe, beginning with Italy[@ceredaEarlyPhaseCOVID192020].
-On the 31st Jan 2020 the first cases were identified in the UK[@mossLessonsManagingHighconsequence2020].
+observed in Europe, beginning with Italy [@ceredaEarlyPhaseCOVID192020].
+On the 31st Jan 2020 the first cases were identified in the UK [@mossLessonsManagingHighconsequence2020].
 This was initially managed using testing of suspected individuals in the
 community, contact tracing and isolation of affected cases. However this
 was successful only in delaying the spread of the disease and on 13th
 March 2020 the UK government moved towards a mitigation strategy
-reserving testing for hospital inpatients only[@publichealthenglandCOVID19InvestigationInitial2020].
+reserving testing for hospital inpatients only [@publichealthenglandCOVID19InvestigationInitial2020].
 Following this, a stepwise implementation of social distancing measures
 were mandated by the government including voluntary self isolation of
-any symptoms & vulnerable people[
-[@publichealthenglandCOVID19GuidanceSocial2020],
-a ban on non essential travel worldwide[@foreignTravelAdviceCoronavirus2020]
-and school closures[@departmentforeducationClosureEducationalSettings2020].
+any symptoms & vulnerable people [@publichealthenglandCOVID19GuidanceSocial2020],
+a ban on non essential travel worldwide [@foreignTravelAdviceCoronavirus2020]
+and school closures [@departmentforeducationClosureEducationalSettings2020].
 Finally on 23rd March 2020 the government mandated that everyone apart
-from essential workers should stay at home and away from others[@cabinetofficeFullGuidanceStaying2020]
+from essential workers should stay at home and away from others [@cabinetofficeFullGuidanceStaying2020].
 
 Epidemiological studies conducted during the outbreak in China have
 provided us with a number of estimates of the parameters describing the
 virus’s spread through the population including a reproduction number
-between 2.24 and 3.58[@zhaoPreliminaryEstimationBasic2020]
+between 2.24 and 3.58 [@zhaoPreliminaryEstimationBasic2020]
 and a median incubation period of 5.1 days (credible interval 4.5 to
-5.8)[@lauerIncubationPeriodCoronavirus2020].
+5.8) [@lauerIncubationPeriodCoronavirus2020].
 It is estimated that fewer than 2.5% of people will show signs before
 2.2 days and 97.5% of people who will develop symptoms will have done so
-by 11.2 days after exposure[@lauerIncubationPeriodCoronavirus2020].
+by 11.2 days after exposure [@lauerIncubationPeriodCoronavirus2020].
 
-As part of the University of Exeter's contribution to the work of the Scientific Pandemic Influenza Group on Modelling (SPI-M), we investigated the reproduction number of SARS-CoV-2 in the UK to determine whether there are any obvious spatial or temporal patterns beyond those resulting from the social distancing measures imposed, and to track their effectiveness. This article summarizes the methodology and interpretation of national and regional estimates of the time varying reproduction number ($R_t$) of the SARS-CoV-2 outbreak in the United Kingdom.
+As part of the University of Exeter's contribution to the work of the Scientific Pandemic Influenza Group on Modelling (SPI-M), we investigated the reproduction number of SARS-CoV-2 in the UK to determine whether there are any spatial or temporal patterns beyond those resulting from the imposition of social distancing measure, and to track the progression of the outbreak. This article summarizes the methodology and interpretation of national and regional estimates of the time varying reproduction number ($R_t$) of the SARS-CoV-2 outbreak in the United Kingdom.
 
 # Methods
 
-This section covers the following aspects of the methodology
+This section covers the following aspects of the methodology employed
 
 * Data sources and processing applied
 * Combination of data sources
@@ -160,17 +159,17 @@ This section covers the following aspects of the methodology
 ## Data
 We integrate data from a variety of sources, both publicly available and provided to SPI-M by Public Health England (PHE) and the Defence Science and Technology Laboratory [dstl]. SPI-M requested that estimates of $R_t$ and the exponential growth rate is performed for the UK, for the 4 nations of the UK, (CTRY) and for the 7 NHS regions in England (NHSER). 
 
-At the UK level data is available on cases and deaths by the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19]. The PHE coronavirus tracker[@publichealthenglandTotalUKCOVID19] publishes a overall figure for the UK on a daily basis. It also produces a regional breakdown of the 4 nations, which exclude tests performed in private laboratories. A historical time series of the UK level data is not made available though the PHE site. However the data has been collected prospectively and curated by Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata]. Cumulative case counts from both the PHE headline UK figure and the combined sum of the 4 nations are compared as these numbers differ. 
+At the UK level data is available on cases and deaths by the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19]. The PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19] publishes a overall figure for the UK on a daily basis. It also produces a regional breakdown of the 4 nations, which exclude tests performed in private laboratories. A historical time series of the UK level data is not made available though the PHE site. However the data has been collected prospectively and curated by Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata]. Cumulative case counts from both the PHE headline UK figure and the combined sum of the 4 nations are compared as these numbers differ. 
 
 Hospital admission data is available from NHS trusts across the UK via the [dstl] provided data feeds, which in turn aggregate the situation reports (SitReps) provided by NHS hospital trusts. This data is aggregated to UK level. 
 
-For the 4 nations of the UK, we used data from the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19] for cases and deaths in England. For the other 4 nation states of the UK, as above, both historical cases and death data is aggregated from Public Health Wales [@PublicHealthWales] and Scotland's [@CoronavirusScotlandGov] sites, and from Northern Ireland's HSC site [@COVID19SurveillanceReports], using a time series retrieved from Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata] for Scotland, Wales and Northern Ireland data. Death data from the 4 nations is also provided by the [dstl], via the CHESS data set[@CoronavirusCOVID19Using]. Death data is subject to a weekly periodicity due to reporting delay over the weekend and wherever available the death data is gathered using date of death rather than date of report.
+For the 4 nations of the UK, we used data from the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19] for cases and deaths in England. For the other 4 nation states of the UK, as above, both historical cases and death data is aggregated from Public Health Wales [@PublicHealthWales] and Scotland's [@CoronavirusScotlandGov] sites, and from Northern Ireland's HSC site [@COVID19SurveillanceReports], using a time series retrieved from Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata] for Scotland, Wales and Northern Ireland data. Death data from the 4 nations is also provided by the [dstl], via the CHESS data set [@CoronavirusCOVID19Using]. Death data is subject to a weekly periodicity due to reporting delay over the weekend and wherever available the death data is gathered using date of death rather than date of report.
 
 At the level of the NHS England regions, we take the case data from SPI-M provided anonymised test result line listings. Mortality data for NHS England is provided to SPI-M by PHE in a canonical line list of deaths, and this is used alongside the CHESS dataset. Admissions data is available from [dstl] feeds, and ICU admissions from CHESS data sets.
 
 For England as a nation and for the NHS England regions we also have data available from triage telephone calls from NHS 111 and 999 services. The data on the calls made to 111 & 999 as well as the outcome of that call are provided to SPI-M via the [dstl]. These are used to produce additional estimates for SPI-M, and described in detail elsewhere, but in brief the number of 111 calls or 999 calls that go through the 111 or 999 coronavirus assessment pathway and result in an ambulance being dispatched or an urgent clinical review being scheduled are used as an indicator of a potential coronavirus case.
 
-For all data sources cumulative case figures are converted into daily incidence figures, and any data which is broken down by age, or by gender, are combined. In case and death data which may be subject to reporting delay the final 5 days of the time series is discarded. The resulting time series are analysed for outlying data points, which are more than 5 standard deviations away from the mean of the nearest 14 data points. Missing values are imputed using the R "forecast" library[@ForecastingFunctionsTime], the results of which are truncated ensuring no negative incidence figures. Outlying or missing data are imputed from a linear interpolation of the logarithm of incidence figures. Prior to calculation of $R_t$ a smoothing function (a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 7 day window. This is needed as all the data sources have some degree of weekly periodicity regardless of source. Prior to calculation of the growth rate a different smoothing function (also a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 14 day window, which is needed as the growth rates depend on an assessment of the instantaneous rate of change which tends to amplify data set noise[@loaderLocfitLocalRegression2020].
+For all data sources cumulative case figures are converted into daily incidence figures, and any data which is broken down by age, or by gender, are combined. In case and death data which may be subject to reporting delay the final 5 days of the time series is discarded. The resulting time series are analysed for outlying data points, which are more than 5 standard deviations away from the mean of the nearest 14 data points. Missing values are imputed using the R "forecast" library [@ForecastingFunctionsTime], the results of which are truncated ensuring no negative incidence figures. Outlying or missing data are imputed from a linear interpolation of the logarithm of incidence figures. Prior to calculation of $R_t$ a smoothing function (a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 7 day window. This is needed as all the data sources have some degree of weekly periodicity regardless of source. Prior to calculation of the growth rate a different smoothing function (also a locally weighted polynomial of degree one) is fitted to the logarithm of incidence applied over a 14 day window, which is needed as the growth rates depend on an assessment of the instantaneous rate of change which tends to amplify data set noise [@loaderLocfitLocalRegression2020].
 
 ## Combination of data sources
 
@@ -192,7 +191,7 @@ At present we do not alter the serial interval for data of different sources (e.
 ## Calculation of $R_t$, growth rate and dispersion parameters
 
 Using the inferred serial interval distribution, we analysed the time
-series data using R[@rcoreteamLanguageEnvironmentStatistical2017]
+series data using R [@rcoreteamLanguageEnvironmentStatistical2017]
 and the EpiEstim [@coriEstimateTimeVarying; @coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019] library to estimate the time varying reproduction numbers during the outbreak, with the underlying assumption that
 there is negligible mixing of populations between each geographical
 area. The validity of this assumption decreases as we consider smaller
@@ -200,12 +199,12 @@ geographies, particularly in the early stages of the outbreak before
 unnecessary travel was restricted.
 
 Calculation of $R_t$ is performed using EpiEstim library on the different data streams described above. 
-The $R_t$ is calculated using a 7 day rolling window, and assumes a prior mean $R_0$ of 1 and standard deviation 0.5. This prior distribution is an assumption on the conditions following lockdown after which the $R_0$ described in the literature[@zhaoPreliminaryEstimationBasic2020] was felt to be inappropriate for the current situation in the UK.
+The $R_t$ is calculated using a 7 day rolling window, and assumes a prior mean $R_0$ of 1 and standard deviation 0.5. This prior distribution is an assumption on the conditions following lockdown after which the $R_0$ described in the literature [@zhaoPreliminaryEstimationBasic2020] was felt to be inappropriate for the current situation in the UK.
 
 Essentially, $R_t$ is estimated by inferring connections between pairs of
 cases based on the difference in their dates of symptom onset and an
-assumed serial interval. The EpiEstim package[@thompsonImprovedInferenceTimevarying2019] 
-implements the method outlined by Cori et al. (2013)[@coriNewFrameworkSoftware2013],
+assumed serial interval. The EpiEstim package [@thompsonImprovedInferenceTimevarying2019] 
+implements the method outlined by Cori et al. (2013) [@coriNewFrameworkSoftware2013],
 which is based on an original method from Wallinga and Teunis (2004) [@wallingaDifferentEpidemicCurves2004].
 The method uses a sliding time window during which the instantaneous
 reproduction number is assumed to be constant. We empirically decided on
@@ -213,7 +212,7 @@ a 7 day sliding window for calculations of the time varying reproduction
 number, $R_t$, which aligns with the median incubation period of the
 virus, and offered a good trade off between noise and loss of detail.
 $R_t$ was visualised using ggplot and r-spatial libraries, using
-administrative maps from the UK Office for National Statistics[@CountiesUnitaryAuthorities].
+administrative maps from the UK Office for National Statistics [@CountiesUnitaryAuthorities].
 The $R_t$ calculation was performed for the various regions of the NHS in
 England and compared to the overall time series for England, using a two
 sided t-Test to detect the significance of regional differences between
@@ -243,8 +242,8 @@ We have compared this to other methods of calculating growth rate and found this
 
 ```{r}
 tdp = function(...) sprintf("%1.2f (%1.2f; %1.2f)",...)
-currentRt$rt = currentRt$rt  %>% mutate(per1M = sprintf("%1.1f",Est.value/population*1000000))
-r0UK = currentRt$rt %>% filter(codeType=="UK")
+currentRt$rtAssumed = currentRt$rtAssumed  %>% mutate(per1M = sprintf("%1.1f",Est.value/population*1000000))
+r0UK = currentRt$rtAssumed %>% filter(codeType=="UK")
 latestDate = as.Date(max(r0UK$date),"1970-01-01")
 events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Tracing stop","Lockdown","VE day","All shops reopen","Hotels and bars reopen"))
 ```
@@ -256,7 +255,7 @@ r0UK %>% group_by(statistic) %>% filter(date==max(date)) %>%ungroup() %>% mutate
 ```
 
 Figure 1, panel A, shows the incidence per million people of cases, deaths, and hospital admissions due to COVID-19 in the UK over the outbreak, on a logarithmic scale. Panel B shows the associated values for $R_t$. The initial value of $R_t$ ($R_0$) was within
-the estimates described in other countries[@huangClinicalFeaturesPatients2020].
+the estimates described in other countries [@huangClinicalFeaturesPatients2020].
 
 #TODO: fix
 and is seen in all regions to be decreasing overall. $R_t$
@@ -278,7 +277,7 @@ p1 = tsp$plotIncidenceQuantiles(
     r0UK, 
     denominatorExpr = population/1000000, 
     events = events, 
-    dates = "2020-03-09", 
+    #dates = "2020-03-09", 
     colour=statistic, 
     ylim=c(0,150))+
   #facet_wrap(vars(name),ncol=4)#+
@@ -287,7 +286,7 @@ p1 = tsp$plotIncidenceQuantiles(
 p2 = tsp$plotRt(
     r0UK, 
     events = events, 
-    dates = "2020-03-09", 
+    #dates = "2020-03-09", 
     colour=statistic, 
     rtlim = c(0.5,3.5), ribbons=TRUE)
   #facet_wrap(vars(name),ncol=4)+
@@ -301,7 +300,7 @@ r0ukplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-
 
 ## $R_t$ by UK nations
 
-The $R_t$ in the different countries of the UK, based on cases and deaths, and triage calls is presented in table 3 and figure 2. 
+Estimates of the $R_t$ in the different countries of the UK, based on cases, deaths, hospital admissions or triage calls is presented in table 3 and figure 2. 
 
 #TODO: 
 Over the period from March 19th to
@@ -752,13 +751,13 @@ and methodological changes, presented in this analysis. In interpreting
 the relationship between the dates and changes in the reproduction
 number we must remember that changes in reproduction number will lag the
 introduction of a social measure by at least the incubation period of
-SARS-CoV-2 (median 5.1 days - 95% IQR 2.2-11.2)[@lauerIncubationPeriodCoronavirus2020].
+SARS-CoV-2 (median 5.1 days - 95% IQR 2.2-11.2) [@lauerIncubationPeriodCoronavirus2020].
 Given the testing strategy that is currently in place, COVID-19 cases
 will not be identified until a patient is admitted to hospital with
 symptoms, the test is performed and results obtained. This introduces
 further time delays which may vary in length from individual to
 individual. The delay between onset of symptoms and admission has been
-estimated at 5 to 9 days[@lintonIncubationPeriodOther2020].
+estimated at 5 to 9 days [@lintonIncubationPeriodOther2020].
 The delay induced by the test processing is unknown. If we assume a 2
 day delay for testing, we would estimate that interventions begin to
 have an effect from 9 days after the intervention, have half of their
@@ -779,7 +778,7 @@ However, because of changes in test strategy, the step
 wise implementation of social distancing measures, and the variable lag
 introduced by the incubation period, it is difficult to get a picture of
 the causative influence of social distancing measures on the drop in
-$R_t$ rates over time[@pootsHowAttributeCausality2017].
+$R_t$ rates over time [@pootsHowAttributeCausality2017].
 It is however possible to note that significant changes in both $R_t$,
 and the rate of change of $R_t$, predate the implementation of social
 distancing measures in the UK.
