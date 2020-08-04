@@ -1,6 +1,10 @@
 #' Capacity data from NHS
 #' @export
-NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=PassthroughFilesystemCache, public = list(
+NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=DataProvider, public = list(
+  
+  initialize = function(providerController, ...) {
+    super$initialize(providerController, ...)
+  },
   
   getHospitals = function(...) {
     self$getSaved("HOSPITALS",...,orElse = function(...) {

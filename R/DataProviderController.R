@@ -1,7 +1,6 @@
 #' Control data sources
 #' @export
-DataProviderController = R6::R6Class("DataProviderController", public = list(
-  
+DataProviderController = R6::R6Class("DataProviderController", inherit = PassthroughFilesystemCache, public = list(
   
   directory = NULL,
   
@@ -12,6 +11,7 @@ DataProviderController = R6::R6Class("DataProviderController", public = list(
   capac = NULL,
   datasets = NULL,
   spim = NULL,
+  serial = NULL,
   ident = list(
     maps = list(
       WD11 = "WD11",
@@ -36,6 +36,11 @@ DataProviderController = R6::R6Class("DataProviderController", public = list(
       M99999999 = "M99999999"  #(pseudo) = Isle of Man; 
     )
   ),
+  
+  initialize = function(wd) {
+    super$initialize(wd)
+    self$directory = wd
+  },
   
   updateCodes = function() {
     self$codes$getManualCodes(nocache=TRUE)
@@ -79,6 +84,10 @@ DataProviderController = R6::R6Class("DataProviderController", public = list(
     SurvivalProcessingPipeline$new(self, ...)
   },
   
+  metawardProcessor = function(...) {
+    MetawardProcessingPipeline$new(self, ...)
+  },
+  
   loadSpimSources = function(path, ...) {
     self$spim = SPIMDatasetProvider$new(self, path %>% stringr::str_remove("/$"), ...)
     invisible(self)
@@ -87,8 +96,8 @@ DataProviderController = R6::R6Class("DataProviderController", public = list(
 ))
 
 DataProviderController$setup = function(path, spimPath = NULL, ...) {
-    out = DataProviderController$new() 
-    out$directory = path.expand(path) %>% stringr::str_remove("/$")
+    dir = path.expand(path) %>% stringr::str_remove("/$")
+    out = DataProviderController$new(dir) 
     
     out$geog = UKGeographyProvider$new(out)
     out$demog = UKDemographicsProvider$new(out)
@@ -96,6 +105,7 @@ DataProviderController$setup = function(path, spimPath = NULL, ...) {
     out$codes = UKCodeMappingProvider$new(out)
     out$capac = NHSCapacityProvider$new(out)
     out$datasets = NHSDatasetProvider$new(out)
+    out$serial = SerialIntervalProvider$default(out)
     if (!identical(spimPath,NULL)) out$loadSpimSources(path = spimPath)
     return(out)
 }

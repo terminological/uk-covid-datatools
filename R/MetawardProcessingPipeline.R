@@ -1,6 +1,6 @@
 #' Process metawards output
 #' @export
-MetawardProcessingPipeline = R6::R6Class("MetawardProcessingPipeline", inherit=PassthroughFilesystemCache, public = list(
+MetawardProcessingPipeline = R6::R6Class("MetawardProcessingPipeline", inherit=DataProvider, public = list(
   
   
   initialize = function(providerController, ...) {
@@ -115,165 +115,11 @@ MetawardProcessingPipeline = R6::R6Class("MetawardProcessingPipeline", inherit=P
     )
     
     return(matrix)
-  },
-  
-  
-  
-  #' @description applies a set of parameterised convolution functions groupwise to input data
-  #' 
-  
-  #' @param groupedDf - an optionally grouped dataframe, containing at dateVar, and a valueVar to be colvolved
-  #' @param distributionsDf - a dataframe containing the same grouping columns as groupedDf plus "distribution", and relevant distribution parameter columns
-  #' @param dateVar - 
-  #' @param days - 
-  #' @param timepoints - the times to 
-  #' @param padLeft - what can we assume about the run in to the current values? default NA.
-  #' @return a list of matrices
-
-  tsParameterizedConvolution = function(groupedDf, distributionsDf, outputVar = "output", valueVar = "value", dateVar="date", days = 30, timepoints = 0:days, padLeft = NA, padRight = NA) {
-    grps = groupedDf %>% groups()
-    
-    discreteDistDf = distributionsDf %>% group_by(!!!grps) %>% group_modify(function(d,g,...) {
-      if(nrow(d) != 1) stop("A single covolution distribution must be defined for each group in groupedDf")
-      func = paste0("p",d$distribution)
-      funcCDF = paste0("p",d$distribution)
-      params = formals(func)
-      params2 = d %>% select(any_of(names(params))) %>% as.list()
-      start = timepoints[1:(length(timepoints)-1)]
-      end = timepoints[2:(length(timepoints))]
-      discreteDist = tibble(
-        start = start,
-        end = end,
-        prob = do.call(func, c(q=list(end),params2))-do.call(func, c(q=list(start),params2)),
-        surv = 1-do.call(func, c(q=list(start),params2))
-      )
-      return(discreteDist)
-    })
-    
-    tsDiscreteCovolution(groupedDf, discreteDistDf, {{outputVar}}, {{valueVar}},{{dateVar}},padLeft, padRight)
-    
-  },
-  
-  #' @description applies a set of parameterised convolution functions groupwise to input data
-  #' 
-  
-  #' @param groupedDf - an optionally grouped dataframe, containing at dateVar, and a valueVar to be colvolved
-  #' @param discreteDistDf - a dataframe containing the same grouping columns as groupedDf plus "start", "end" and "prob" columns
-  #' @param dateVar - 
-  #' @param padLeft - what can we assume about the run in to the current values? default NA.
-  #' @param padRight - what can we assume about the run in to the current values? default NA.
-  #' @return a list of matrices
-
-  tsDiscreteConvolution = function(groupedDf, discreteDistDf, outputVar = "output", valueVar="value", dateVar="date", pExpr="prob", padLeft=NA, padRight=NA ) {
-    grps = groupedDf %>% groups()
-    valueVar = ensym(valueVar)
-    dateVar = ensym(dateVar)
-    outputVar = ensym(outputVar)
-    pExpr = ensym(pExpr)
-    joinCols = c(sapply(grps, as_label),"tmp_join")
-    finalJoinCols = c(sapply(grps, as_label),as_label(dateVar))
-    
-    dateRanges = groupedDf %>% summarise(min_date = min(!!dateVar), max_date = max(!!dateVar)) %>% mutate(tmp_join=1)
-    
-    combinations = discreteDistDf %>% select(!!!grps,start) %>% mutate(tmp_join=1) %>% inner_join(dateRanges, by=joinCols)
-    
-    padLeftDf = combinations %>% mutate(tmp_value=padLeft, tmp_date=min_date-start-1) %>% select(-start)
-    padRightDf = combinations %>% mutate(tmp_value=padRight, tmp_date=max_date+start+1) %>% select(-start)
-    
-    tmp = groupedDf %>% select(!!!grps,tmp_value=!!valueVar, tmp_date=!!dateVar) %>% group_by(!!!grps) %>%
-      mutate(tmp_join=1, min_date = min(tmp_date), max_date = max(tmp_date))
-    
-    tmp = bind_rows(padLeftDf,tmp,padRightDf)
-    
-    tmp2 = tmp %>% 
-      inner_join(discreteDistDf %>% mutate(tmp_join=1), by=joinCols)
-    
-    tmp3 = tmp2 %>% mutate(eff_date = tmp_date+start, eff_value = tmp_value*!!pExpr) %>% select(-tmp_join) %>%
-      filter(eff_date <= max_date & eff_date >= min_date)
-  
-    tmp4 = tmp3 %>% group_by(!!!grps,eff_date) %>% summarise(!!outputVar := sum(eff_value)) %>% mutate(!!dateVar := as.Date(eff_date,"1970-01-01")) %>% select(-eff_date)
-  
-    return(groupedDf %>% inner_join(tmp4, by=finalJoinCols))
-  },
-  
-  #' @description calculates a set of bootstrap parameter distributions
-  #' 
-  
-  #' @param distributionDistDf - a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max
-  #' @param bootstraps - number of bootstrap iterations 
-  #' @return a list of randomly selected bootstraps conforming to the specifications.
-
-  bootstrapDistributions = function(distributionDistDf, bootstraps=100) {
-    grps = distributionDistDf %>% groups()
-    distributionsDf = distributionDistDf %>% group_by(!!!grps) %>% group_modify(function(d,g,...) {
-      if(nrow(d) != 1) stop("A single covolution distribution must be defined for each group")
-      func = paste0("p",d$distribution)
-      out = tibble(
-        distribution = d %>% pull(distribution),
-        bootstrap_iteration = 1:bootstraps
-      )
-      for (param in names(formals(func))) {
-        if(all(paste0(param,c("_mean","_sd","_min","_max")) %in% colnames(d))) {
-          
-          paramMean = d %>% pull(paste0(param,"_mean"))
-          paramSd = d %>% pull(paste0(param,"_sd"))
-          paramMin = d %>% pull(paste0(param,"_min"))
-          paramMax = d %>% pull(paste0(param,"_max"))
-          paramBoot = rnorm(bootstraps, paramMean, paramSd)
-          paramBoot[paramBoot>paramMax]=paramMax
-          paramBoot[paramBoot<paramMin]=paramMin
-          out = out %>% add_column(!!param := paramBoot)
-        }
-      }
-      return(out)
-    })
-    return(distributionsDf)
-  },
-  
-  #' @description executes a convolution using bootstrapped parameterized distributions
-  #' 
-  
-  #' @param distributionDistDf - a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and  columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max
-  #' @param bootstraps - number of bootstrap iterations 
-  #' @return the full bootstrap result (i.e. not summarized) which can be futher convoluted (asd long as the number of bootstrap iterations are kept the same).
-
-  tsBootstrapConvolution = function(groupedDf, distributionDistDf, bootstraps=100, outputVar = "output", valueVar="value", dateVar="date", days = 30, timepoints = 0:days, padLeft=NA, padRight=NA) {
-    grps = groupedDf %>% groups()
-    tmp = groupedDf %>% crossing(tibble(bootstrap_iteration = 1:bootstraps)) %>% group_by(!!!grps,bootstrap_iteration)
-    distributionDistDf = distributionDistDf %>% group_by(!!!grps)
-    out = tmp %>% tsParameterizedConvolution(bootstrapDistributions(distributionDistDf, bootstraps = bootstraps), 
-          outputVar = {{outputVar}}, valueVar = {{valueVar}}, dateVar = {{dateVar}}, days = days, timepoints = timepoints, padLeft = padLeft, padRight = padRight)
-    out = out %>% ungroup() %>% group_by(!!!grps)
-    return(out)
-  },
-  
-  #' @description summarise the result of a bootstrapped convolution using parameterized distributions
-  #' 
-  
-  #' @param distributionDistDf - a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and  columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max
-  #' @param bootstraps - number of bootstrap iterations 
-  #' @return the full bootstrap result (i.e. not summarized) which can be futher convoluted (asd long as the number of bootstrap iterations are kept the same).
-
-  summariseBootstrap = function(groupedDf, outputVars = vars(output), dateVar = "date") {
-    grps = groupedDf %>% groups()
-    dateVar = ensym(dateVar)
-    joinCols = c(sapply(grps,as_label),as_label(dateVar))
-    out = groupedDf %>% select(!!!grps,!!dateVar) %>% distinct()
-    p <- c(0.2, 0.5, 0.8)
-    for(outputVar in outputVars) {
-      
-      tmp = groupedDf %>% group_by(!!!grps,!!dateVar) %>% summarise(
-        !!(paste0("CI.0.025(",as_label(outputVar),")")) := quantile(!!outputVar,p=0.025),
-        !!(paste0("CI.0.1(",as_label(outputVar),")")) := quantile(!!outputVar,p=0.1),
-        !!(paste0("Median(",as_label(outputVar),")")) := quantile(!!outputVar,p=0.5),
-        !!(paste0("CI.0.9(",as_label(outputVar),")")) := quantile(!!outputVar,p=0.9),
-        !!(paste0("CI.0.975(",as_label(outputVar),")")) := quantile(!!outputVar,p=0.975),
-      )
-      
-      out = out %>% inner_join(tmp, by=joinCols)
-    }
-    return(out)
   }
+  
+  
+  
+  
 ))
   
 #TEST:

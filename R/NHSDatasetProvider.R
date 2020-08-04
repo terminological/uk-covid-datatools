@@ -311,6 +311,8 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     },
     
     ####TODO: ----
+    # BBC contact tracing matrix data:
+    # https://www.medrxiv.org/content/10.1101/2020.02.16.20023754v2.supplementary-material
     
     # getPHETests = function() {
     #   # TODO: https://www.gov.uk/guidance/coronavirus-covid-19-information-for-the-public

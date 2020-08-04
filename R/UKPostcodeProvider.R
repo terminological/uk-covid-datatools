@@ -1,6 +1,10 @@
 #' Get a provider of UK postcodes
 #'
-UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=PassthroughFilesystemCache, public = list(
+UKPostcodeProvider = R6::R6Class("UKPostcodeProvider", inherit=DataProvider, public = list(
+  
+  initialize = function(providerController, ...) {
+    super$initialize(providerController, ...)
+  },
   
   getFullONS = function(...) {
     self$getSaved("ONSPD",...,orElse = function() {

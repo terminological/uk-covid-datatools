@@ -188,18 +188,29 @@ currentRt = tsp$getDaily(id = "CURRENT-RT", orElse=function() {
     finalDeathsNHSER %>% mutate(source = "Deaths")
   ) %>% dplyr::select(source, statistic, type, subgroup, gender, ageCat, date, code, codeType, name, value) %>% dpc$demog$findDemographics()
   
+  
+  
   set.seed(100)
   finalRtDataset = finalDataset %>%
     tsp$estimateRt() %>%
-    tsp$logIncidenceStats()
+    tsp$logIncidenceStats() %>%
+    tsp$estimateVolatilty(valueVar = `Mean(R)`)
   
   final28DayRtDataset = finalDataset %>%
     tsp$estimateRt(window = 28) %>%
-    tsp$logIncidenceStats(growthRateWindow = 28)
+    tsp$logIncidenceStats(growthRateWindow = 28) %>%
+    tsp$estimateVolatilty(valueVar = `Mean(R)`)
+  
+
+  # devtools::load_all("~/Git/uk-covid-datatools/")
+  # dpc = DataProviderController$setup("~/Data/maps")
+  # dpc$loadSpimSources("~/S3/encrypted/")
+  # tsp = dpc$timeseriesProcessor()
   
   finalRtAssumed = finalDataset %>%
-    tsp$estimateRtWithAssumptions() %>%
-    tsp$logIncidenceStats()
+    tsp$estimateRtWithAssumptions(quick = TRUE) %>%
+    tsp$logIncidenceStats() %>%
+    tsp$estimateVolatilty(valueVar = `Mean(R)`)
   
   
   return(list(

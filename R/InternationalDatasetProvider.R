@@ -1,11 +1,10 @@
 #' international datasets
 #' @export
-InternationalDatasetProvider = R6::R6Class("InternationalDatasetProvider", inherit=PassthroughFilesystemCache, public = list(
+InternationalDatasetProvider = R6::R6Class("InternationalDatasetProvider", inherit=DataProvider, public = list(
   
-  directory=NULL,
+  #TODO: refactor to use caching directory
   
   initialize = function(providerController, path, ...) {
-    self$directory = path.expand(path)
     super$initialize(providerController, ...)
   },
   

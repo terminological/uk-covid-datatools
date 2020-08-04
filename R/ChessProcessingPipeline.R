@@ -1,6 +1,6 @@
 #' Process chess data
 #' @export
-ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=PassthroughFilesystemCache, public = list(
+ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataProvider, public = list(
   
   
   initialize = function(providerController, ...) {
@@ -49,7 +49,7 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=Passthr
         as.Date(recentDate) >= CHESS_date-3 & 
           outcomeWithoutDates/knownOutcomes < 0.1
       )
-    #browser()
+    
     return(
       CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
         inner_join(incHosp %>% dplyr::select(-trustname), by="trustcode") %>% 
@@ -81,7 +81,7 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=Passthr
           knownOutcomePercent > 0.1
       )
     
-    #browser()
+    
     return(
       CHESSdf %>% self$chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
         inner_join(incHosp, by="trustcode") %>% 

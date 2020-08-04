@@ -1,6 +1,6 @@
 #' UK Geography
 #' @export
-UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFilesystemCache, public = list(
+UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, public = list(
   
   #### Fields ----
   sources = list(
@@ -145,6 +145,10 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
     #### end of list ----
   ),
   
+  initialize = function(providerController, ...) {
+    super$initialize(providerController, ...)
+  },
+  
   #### Methods ----
   #' @description get a map as an sf object
   #' @param codeType the map you want
@@ -203,7 +207,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=PassthroughFile
  
   #' @description finds shapes that contain the give shape
   getContainedIn = function( inputSf,  outputShape = self$getMap(outputMapId), outputMapId=NA,  inputIdVar = "code", outputIdVar = "code") {
-    browser()
+    #browser()
     outputShape = outputShape %>% dplyr::mutate(tmp_output_id = row_number())
     inputSf = inputSf %>% dplyr::mutate(tmp_input_id = row_number())
     containment = outputShape %>% sf::st_contains(inputSf)

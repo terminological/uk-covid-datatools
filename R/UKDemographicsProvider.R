@@ -1,6 +1,10 @@
 #' UK ONS demographics
 #' @export
-UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=PassthroughFilesystemCache, public = list(
+UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvider, public = list(
+  
+  initialize = function(providerController, ...) {
+    super$initialize(providerController, ...)
+  },
   
   #' @description get the full range of demographics data at most detailed resolution
   getDetailedDemographics = function(...) {
@@ -22,7 +26,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
         tmp = demogByLSOA %>%
           dplyr::select(-`All Ages`) %>%
           tidyr::pivot_longer(cols=all_of(ageCols),names_to = "age",values_to = "count") #, names_ptypes = list(age=integer()))
-        # browser()
+        
         tmp = tmp %>% dplyr::rename(code = `Area Codes`, name=`Area Names`) %>% #, total=`All Ages`) %>%
           dplyr::mutate(age = as.integer(stringr::str_remove(age,"\\+")), codeType="LSOA11")
         return(tmp)
@@ -256,7 +260,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
         dplyr::group_by(fromCode,toCodeType) %>%
         dplyr::mutate(weight = 1/n()) %>%
         dplyr::ungroup()
-      #browser()
+      
       return(df3)
     }, ...)
   },
@@ -282,7 +286,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=Passthrou
           tmp_ageMax = ifelse(isTRUE(ageCat %>% stringr::str_detect("<([0-9]+)")), tmp_ageMax-1, tmp_ageMax),
           tmp_ageMin = ifelse(isTRUE(ageCat %>% stringr::str_detect(">([0-9]+)")), tmp_ageMin+1, tmp_ageMin)
         )
-      #browser()
+      
       
       #TODO: check and fix: "Adding missing grouping variables: `source`, `type`, `statistic`"
       

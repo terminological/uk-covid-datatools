@@ -2,7 +2,7 @@
 #' @import ggplot2
 #' @import msm
 #' @export
-CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=PassthroughFilesystemCache, public = list(
+CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataProvider, public = list(
   
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
@@ -88,16 +88,15 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=Passthr
   describeErrors = function(covidTimeseries, valueVar = "value") {
     valueVar = ensym(valueVar)
     groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>%
-      dplyr::mutate(tmp_value = !!valueVar) %>% 
-      dplyr::arrange(date)
+      covidStandardGrouping() %>%
+      dplyr::mutate(tmp_value = !!valueVar)
     
     groupedDf = groupedDf %>% group_modify(function(d,g,...) {
       errs = NULL
       if(any(duplicated(d$date))) errs = c(errs,"Duplicate dates")
       if(length(d$date) < max(d$date)-min(d$date)) errs = c(errs,"Missing dates")
       if(any(is.na(d$tmp_value))) errs = c(errs,"NAs in values")
-      if(any(d$type == "incidence" & d$tmp_value<0)) errs = c(errs,"Negative values in incidence figures")
+      if(any(g$type == "incidence" & d$tmp_value<0)) errs = c(errs,"Negative values in incidence figures")
       
       if (identical(errs,NULL)) errs = NA 
       else errs = paste0(errs,collapse="; ")
@@ -121,26 +120,3 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=Passthr
   
 ))
 
-
-
-
-#### Common interface definitions ----
-
-#' Check timeseries conforms
-#' @return A dataframe that is specific to the covid timeseries format.
-#' @export
-covidTimeseriesFormat = ensurer::ensures_that(
-  is.data.frame(.) ~ "not a data frame",
-  all(c("code","name","codeType","statistic","source","ageCat","gender","type","value","subgroup","date") %in% colnames(.)) ~ "missing columns",
-  lubridate::is.Date(.$date) ~ "incorrect date format",
-  length(unique(.$code)) == length(unique(paste0(.$code,.$name))) ~ "more than one code/name combination per code"
-)
-
-#' In fix operator to apply ensurer rules
-#' @param ensurer an ensurer contract
-#' @param object the object
-#' @return object if it conforms stops otherwise.
-#' @export
-`%def%` = function(ensurer,object) {
-  return(ensurer(object))
-}

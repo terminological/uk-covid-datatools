@@ -4,18 +4,13 @@
 #' @export
 TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inherit=CovidTimeseriesProvider, public = list(
   
-  rtConfig = NULL,
-  rtMethod = NULL,
-  rtSources = NULL,
-  rtWindow = NULL,
+  serial = NULL,
   
   
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
-    self$setSerialInterval()
+    self$serial = providerController$serial #SerialIntervalProvider$default(providerController)
   },
-  
-
   
   #### type conversion functions ----
   
@@ -25,8 +20,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         ts %>% dplyr::filter(type == "incidence"),
         ts %>% 
           dplyr::filter(type == "cumulative") %>% 
-          dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat) %>% 
-          dplyr::arrange(date) %>%
+          covidStandardGrouping() %>%
           dplyr::mutate(value = value-lag(value)) %>%
           dplyr::ungroup() %>%
           dplyr::mutate(
@@ -44,8 +38,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         ts %>% dplyr::filter(type == "cumulative"),
         ts %>% 
           dplyr::filter(type == "incidence") %>% 
-          dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat) %>% 
-          dplyr::arrange(date) %>%
+          covidStandardGrouping() %>%
           dplyr::mutate(value = cumsum(value)) %>%
           dplyr::ungroup() %>%
           dplyr::mutate(
@@ -58,19 +51,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   
   #### aggregation functions ----
   
-  standardGrouping = function(ts, ...) {
-    vars = ensyms(...)
-    grps = sapply(c("code","codeType","name","source","subgroup","statistic","gender","ageCat","type"),as.symbol)
-    grps = grps[!(names(grps) %in% sapply(vars,as_label))]
-    return(ts %>% dplyr::group_by(!!!grps))
-  },
+  
   
   aggregateAge = function(covidTimeseries, fn = sum, ...) {covidTimeseriesFormat %def% {
     tmp = covidTimeseriesFormat(covidTimeseries)
     
     errors = tmp %>% 
-      self$standardGrouping(ageCat) %>%
-      #dplyr::group_by(code,codeType,name,source,gender,statistic,subgroup,type) %>%
+      covidStandardDateGrouping(ageCat) %>%
       dplyr::summarise(mixed = any(is.na(ageCat)) & any(!is.na(ageCat))) %>%
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by age, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
@@ -78,7 +65,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     tmp= tmp %>% dplyr::mutate(ageCat=NA)
     tmp = tmp %>% 
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
+      covidStandardDateGrouping() %>%
       dplyr::summarise(value = fn(value, ...)) %>%
       dplyr::mutate(value = ifelse(is.nan(value),NA,value))
     return(tmp %>% dplyr::ungroup())
@@ -88,14 +75,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     tmp = covidTimeseriesFormat(covidTimeseries)
     
     errors = tmp %>% 
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,ageCat,type) %>%
+      covidStandardDateGrouping(gender) %>% 
       dplyr::summarise(mixed = any(is.na(gender)) & any(!is.na(gender))) %>%
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by gender, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
     
     tmp= tmp %>% dplyr::mutate(gender=NA)
     tmp = tmp %>% 
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
+      covidStandardDateGrouping() %>% 
       dplyr::summarise(value = fn(value, ...)) %>%
       dplyr::mutate(value = ifelse(is.nan(value),NA,value))
     return(tmp %>% dplyr::ungroup())
@@ -105,14 +92,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     tmp = covidTimeseriesFormat(covidTimeseries)
     
     errors = tmp %>% 
-      dplyr::group_by(code,codeType,name,source,gender,statistic,ageCat,type) %>%
+      covidStandardDateGrouping(subgroup) %>%
       dplyr::summarise(mixed = any(is.na(subgroup)) & any(!is.na(subgroup))) %>%
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by subgroup, but not all items have a subgroup. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
   
     tmp= tmp %>% dplyr::mutate(subgroup=NA)
     tmp = tmp %>% 
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
+      covidStandardDateGrouping() %>% 
       dplyr::summarise(value = fn(value, ...)) %>%
       dplyr::mutate(value = ifelse(is.nan(value),NA,value))
     return(tmp %>% dplyr::ungroup())
@@ -127,7 +114,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     # filter out dates where there are non equal numbers of sources
     
     tmp = tmp %>% 
-      dplyr::group_by(code,codeType,name,subgroup,gender,statistic,ageCat,type) %>%
+      covidStandardGrouping(source) %>% 
       dplyr::group_modify(function(d,g,...) {
         # check each date has the same number of elements and introduce NAs for those dates where not every source is represented
         out = tidyr::crossing(
@@ -225,12 +212,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }
     self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       tmp = ts %>%
-        dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
-        dplyr::arrange(date) %>%
+        covidStandardGrouping() %>%
         dplyr::mutate(
           logValue1 = log(value+1)) %>%
         self$completeAndRemoveAnomalies(valueVar = logValue1, originalValueVar = logValue1.original) %>%
-        dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
+        covidStandardGrouping() %>%
         dplyr::group_modify(function(d,g,...) {
          d = d %>%
           dplyr::mutate(
@@ -266,7 +252,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::ungroup() %>%
       dplyr::mutate(!!originalValueVar := !!valueVar) %>%
       self$complete(infer=FALSE) %>%
-      dplyr::group_by(statistic,type,code,codeType,source,subgroup,ageCat,gender) %>% 
+      covidStandardGrouping() %>%
       dplyr::group_modify(function(d,g,...) {
         
         tmp_ts = d %>% dplyr::mutate(tmp_y = !!valueVar)
@@ -324,7 +310,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::mutate(
         x = as.integer(date-min(date)),
       ) %>%
-      dplyr::group_by(statistic,type,code,codeType,source,subgroup,ageCat,gender) %>% 
+      covidStandardGrouping() %>%
       dplyr::group_modify(function(d,g,...) {
         tmp_alpha = min(window/nrow(d),1)
         tmp_ts = d %>% 
@@ -422,8 +408,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     tmp[["tmp_gv.se"]] = tmp[[lblV("Growth.SE")]]
     
     tmp = tmp %>% 
-      self$standardGrouping() %>% 
-      dplyr::arrange(date) %>%
+      covidStandardGrouping() %>% 
       dplyr::mutate(
           !!lblV("Growth.windowed") := stats::filter(x = tmp_gv, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1),
           !!lblV("Growth.windowed.SE") := stats::filter(x = tmp_gv.se, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1) / sqrt(growthRateWindow),
@@ -444,9 +429,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         dplyr::mutate(I = value) %>%
          
 
-      groupedDf = groupedDf %>%
-        dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>%
-        dplyr::arrange(date) 
+      groupedDf = groupedDf %>% covidStandardGrouping()
 
       groupedDf = groupedDf %>% group_modify(function(d,g,...) {
         if (nrow(d) < 2+window) errors = paste0(ifelse(is.na(errors),"",paste0(errors,"; ")),"Not enough data to calculate growth rates")
@@ -483,10 +466,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param config An object of class estimate_R_config, as returned by function EpiEstim::make_config.
   #' @param window - the width of the smoothing function applied (default 2)
   #' @return a dataframe with groupwise Rt estimates
-  estimateRtQuick = function(covidTimeseries, valueVar = "RollMean.value", window = self$rtWindow, config = self$rtConfig, ...) {
+  estimateRtQuick = function(covidTimeseries, valueVar = "RollMean.value", window = 7) {
     valueVar = ensym(valueVar)
-    self$estimateRt(covidTimeseries, valueVar = !!valueVar, window = window, config = config, method = "parametric_si",...) %>%
-      dplyr::select(-`Quantile.0.025(R)`,-`Quantile.0.25(R)`,-`Quantile.0.75(R)`,-`Quantile.0.975(R)`)
+    self$estimateRt(covidTimeseries, valueVar = !!valueVar, window = window, quick=TRUE,...) %>%
+      dplyr::select(-`Quantile.0.025(R)`,-`Quantile.0.05(R)`,-`Quantile.0.25(R)`,-`Quantile.0.75(R)`,-`Quantile.0.95(R)`,-`Quantile.0.975(R)`)
   },
   
   #' @description Calculates a survival R(t) curve on grouped data
@@ -497,9 +480,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param incidenceVar - the sequence of daily incidence
   #' @param window - the width of the smoothing function applied (default 2)
   #' @return a dataframe with groupwise Rt estimates
-  estimateRt = function(covidTimeseries, valueVar = "RollMean.value", window = self$rtWindow, config = self$rtConfig, method = self$rtMethod, ...) {
+  estimateRt = function(covidTimeseries, valueVar = "RollMean.value", window = 7, priorR0=1, priorR0Sd=2, quick=FALSE, ...) {
     valueVar = ensym(valueVar)
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT", params=list(as_label(valueVar), window, config, method), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT", params=list(as_label(valueVar), window, quick, priorR0, priorR0Sd), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
       if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
         if (as_label(valueVar) == "RollMean.value") {
@@ -517,17 +501,19 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         dplyr::mutate(I = !!valueVar) %>%
         self$describeErrors(I) 
       
-      groupedDf = groupedDf %>%
-        dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>%
-        dplyr::arrange(date) 
+      groupedDf = groupedDf %>% covidStandardGrouping()
         
       # tmp starts on first non zero value of I in group
-      tmp2 = groupedDf %>% group_modify(function(d,g) {
+      tmp2 = groupedDf %>% group_modify(function(d,g,...) {
+        
+        cfg = self$serial$getBasicConfig(quick=quick, priorR0=priorR0, priorR0Sd=priorR0Sd) #, statistic = g$statistic)
+        siConfig = cfg$config
+        method = cfg$method
+        
         tmp = d %>% dplyr::select(dates=date,I)
         if (nrow(d) < 2+window) errors = paste0(ifelse(is.na(errors),"",paste0(errors,"; ")),"Not enough data to calculate R(t)")
         if (any(!is.na(d$errors))) {return(d)}
 
-        siConfig = config
         d = d %>% dplyr::mutate(seq_id=row_number())
 
         siConfig$t_start = c(2:(nrow(tmp)-window))
@@ -545,10 +531,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         tmp6 = d %>% dplyr::select(-errors) %>% dplyr::left_join(tmp5, by="seq_id")
         # browser()
         return(tmp6 %>% select(-seq_id))
-        })
+      })
       if(all(!is.na(tmp2$errors))) warning("Rt estimation failed - see errors column")
       if(any(!is.na(tmp2$errors))) warning("Rt estimation completed with errors")
-      return(tmp2 %>% select(-I))
+      return(tmp2 %>% select(-I)) 
       
       #TODO: 
       # R_to_growth(2.18, 4, 1)  
@@ -563,23 +549,38 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }})
   },
   
-  defaultUKAssumptions = function() {
+  defaultOffsetAssumptions = function() {
+    return(list(
+      "case"=7,
+      "death"=10+7,
+      "hospital admission"=7,
+      "icu admission"=2+7,
+      "symptom"=5,
+      "triage"=6,
+      "serology"=NA,
+      "test"=NA,
+      "information seeking"=NA
+    ))
+  },
+  
+  defaultR0Assumptions = function() {
     return(tibble::tribble(
       ~startDate, ~Mean.Prior.R0, ~SE.Prior.R0, ~Adj.Mean.SerialInterval, ~Adj.SD.SerialInterval,
-      "2020-01-01", 2.5, 0.5, 1.0, 1.0,
-      "2020-03-23", 0.7, 0.1, 1.0, 1.0,
-      "2020-07-04", 1.2, 0.1, 1.0, 1.5,
-    ) %>% dplyr::mutate(startDate = as.Date(startDate)))
+      as.Date("2020-01-01"), 2.5, 0.5, 1.0, 1.0,
+      as.Date("2020-03-23"), 0.7, 0.1, 1.0, 1.0,
+      as.Date("2020-07-04"), 1.2, 0.1, 1.0, 1.5,
+    ))
   },
   
   estimateRtWithAssumptions = function(covidTimeseries, 
-              valueVar = "RollMean.value", window = self$rtWindow, config = self$rtConfig, method = self$rtMethod,
-              assumptions = self$defaultUKAssumptions(), 
+              valueVar = "RollMean.value", window = 7, quick=FALSE,
+              r0Assumptions = self$defaultR0Assumptions(), 
+              offsetAssumptions = self$defaultOffsetAssumptions(),
               dateRange = as.Date(c(min(covidTimeseries$date),max(covidTimeseries$date)),"1970-01-01"), 
               ...) {
     
     valueVar = ensym(valueVar)
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT-ASSUM", params=list(as_label(valueVar), window, config, method, assumptions, dateRange), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT-ASSUM", params=list(as_label(valueVar), window, r0Assumptions, offsetAssumptions, dateRange, quick), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
         if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
           if (as_label(valueVar) == "RollMean.value") {
@@ -597,8 +598,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         dplyr::mutate(I = !!valueVar) %>%
         self$describeErrors(I) 
       
-      wtSIs = config
-      assumptions = assumptions  %>% 
+      r0Assumptions = r0Assumptions  %>% 
         dplyr::arrange(startDate) %>% 
         dplyr::mutate(
           endDate = lead(startDate, default = as.Date("2030-01-01"))-1
@@ -613,28 +613,17 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         ) 
       
       
-      tmp7 = assumptions %>% rowwise() %>% do({
+      tmp7 = r0Assumptions %>% rowwise() %>% do({
         
-        siConfig = EpiEstim::make_config(config = list(
-            mean_si = wtSIs$mean_si * .$Adj.Mean.SerialInterval, 
-            std_mean_si = wtSIs$std_mean_si * .$Adj.Mean.SerialInterval,
-            min_mean_si = wtSIs$min_mean_si * .$Adj.Mean.SerialInterval, 
-            max_mean_si = wtSIs$max_mean_si * .$Adj.Mean.SerialInterval,
-            std_si = wtSIs$std_si * .$Adj.SD.SerialInterval, 
-            std_std_si = wtSIs$std_std_si * .$Adj.SD.SerialInterval, 
-            min_std_si = wtSIs$min_std_si* .$Adj.SD.SerialInterval, 
-            max_std_si = wtSIs$max_std_si* .$Adj.SD.SerialInterval, 
-            mean_prior = .$Mean.Prior.R0,
-            std_prior = .$SE.Prior.R0,
-            n1 = 100), method=method)
-        
+        cfg = self$serial$getBasicConfig(quick=quick,priorR0=.$Mean.Prior.R0,priorR0Sd=.$SE.Prior.R0) #, statistic = g$statistic)
+        siConfig = cfg$config
+        method = cfg$method
         
         startDate = .$startDate
         endDate = .$endDate
         
         groupedDf = groupedDf %>%
-          self$standardGrouping() %>%
-          dplyr::arrange(date)
+          covidStandardGrouping()
         
         tmp2 = groupedDf %>% group_modify(function(d,g,...) {
           d = d %>% dplyr::arrange(date) %>% dplyr::mutate(seq_id=row_number())
@@ -678,8 +667,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
               Prior.SD.R0 = siConfig$std_prior
               ) #warn)
             tmp6 = d %>% dplyr::select(-errors) %>% dplyr::inner_join(tmp5, by="seq_id") %>% select(-seq_id)
+            tmp6 = tmp6 %>% self$serial$adjustDateOutputs(offset = offsetAssumptions[[g$statistic]])
           }
-          # browser()
           return(tmp6)
         })
       })
@@ -701,9 +690,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     valueVar = ensym(valueVar)
     outputVar = tryCatch(ensym(outputVar),error=function(e) return(as.symbol(paste0("Volatility.",window,".",as_label(valueVar)))))
     # https://stats.stackexchange.com/questions/309483/measure-of-volatility-for-time-series-data
-    tmp = covidTimeseries %>% dplyr::mutate(tmp_x = !!valueVar) %>%
-      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>%
-      dplyr::arrange(date) 
+    tmp = covidTimeseries %>% dplyr::mutate(tmp_x = !!valueVar) %>% covidStandardGrouping() 
     tmp = tmp %>% dplyr::mutate(tmp_delta_x = abs(tmp_x-lag(tmp_x)))
     tmp = tmp %>% dplyr::mutate(
       tmp_delta_x_roll = stats::filter(tmp_delta_x, filter = rep(1,(window-1))/(window-1), sides = 1),
@@ -904,206 +891,6 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       geom_line(aes(y=yMid,...),alpha=0.5)+
       geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
     return(p2)
-  },
-  
-  #### serial intervals from the literature ----
-  
-  setSerialInterval = function(cfg = self$defaultSerialInterval(), epiEstimConfig = cfg$config, method = cfg$method, window = cfg$window, sources = cfg$sources) {
-    self$rtConfig = epiEstimConfig
-    self$rtMethod = method
-    self$rtWindow = window
-    self$rtSources = sources
-  },
-  
-  printSerialInterval = function(si = self$defaultSerialInterval(confint)$config, confint = c(0.1,0.9)) {
-    tdp = function(w,x,y,z) sprintf("%1.2f \U00B1 %1.2f (%1.2f; %1.2f)", w, x ,y, z)
-    #TODO: adjust this for non uncertain SI. Add in info about distributions...
-    wtSIs = si
-    ci = floor((confint[2]-confint[1])*100)
-    return(list(
-      mean = paste0("Serial interval mean plus ",ci,"% credible interval: ",tdp(wtSIs$mean_si, wtSIs$std_mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si)),
-      sd = paste0("Serial interval standard deviation plus ",ci,"% credible interval: ",tdp(wtSIs$std_si, wtSIs$std_std_si, wtSIs$min_std_si, wtSIs$max_std_si))
-    ))
-  },
-  
-  printSerialIntervalSources = function(serialIntervals = self$defaultSerialInterval()$sources) {
-    unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
-    conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
-    SItable1 = serialIntervals %>% mutate(
-      `Mean\n(95% CrI) days`=conf(mean_si_estimate,mean_si_estimate_low_ci,mean_si_estimate_high_ci),
-      `Std\n(95% CrI) days`=conf(std_si_estimate,std_si_estimate_low_ci,std_si_estimate_high_ci),
-    ) %>% select(-contains("si_estimate")) %>% select(
-      `Reference`=source,
-      `Statistic`=estimate_type,
-      `Mean\n(95% CrI) days`,
-      `Std\n(95% CrI) days`,
-      `N`=sample_size,
-      `Distribution` = assumed_distribution,
-      `Population`=population
-    )
-  },
-  
-  defaultSerialInterval = function(...) {
-    return(self$resampledSerialInterval(...))
-  },
-  
-  resampledSerialInterval = function(confint=c(0.025,0.975),...) {
-    
-    bootstrap = self$getSaved("SERIAL-INTERVAL",...,orElse = function() {
-      serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-      out = list()
-      out$sources = serialIntervals
-      
-      boot.samples = NULL
-      set.seed(101)
-      bootIterations = 250
-      
-      for (iteration in 1:bootIterations) {
-        samples = NULL
-        message(".",appendLF = FALSE)
-        if (iteration %% 50==0) message(iteration)
-        serialIntervals = serialIntervals %>% filter(estimate_type %>% stringr::str_starts("serial"))
-        suppressWarnings(suppressMessages({
-          for (i in 1:nrow(serialIntervals)) {
-            
-            dist = serialIntervals$assumed_distribution[[i]]
-            if(dist != "empirical") {
-              #browser()
-              mean = serialIntervals$mean_si_estimate[[i]]
-              mean_sd = (serialIntervals$mean_si_estimate_high_ci[[i]]-serialIntervals$mean_si_estimate_low_ci[[i]])/(1.96*2)
-              if(is.na(mean_sd) | mean_sd < 0) mean_sd=0
-              sd = serialIntervals$std_si_estimate[[i]]
-              sd_sd = (serialIntervals$std_si_estimate_high_ci[[i]]-serialIntervals$std_si_estimate_low_ci[[i]])/(1.96*2)
-              if(is.na(sd_sd) | sd_sd < 0) sd_sd=0
-              
-              N = serialIntervals$sample_size[[i]]
-              
-              boot_mean = rnorm(1,mean,mean_sd) %>% scales::squish(range=c(serialIntervals$mean_si_estimate_low_ci[[i]],serialIntervals$mean_si_estimate_high_ci[[i]]))
-              #boot_sd = rnorm(1,sd,sd_sd) %>% scales::squish(range=c(serialIntervals$std_si_estimate_low_ci[[i]],serialIntervals$std_si_estimate_high_ci[[i]]))
-              # http://www.milefoot.com/math/stat/samp-variances.htm
-              boot_sd = (sd*sqrt(rchisq(1, N-1)/(N-1))) %>% scales::squish(range=c(serialIntervals$std_si_estimate_low_ci[[i]],serialIntervals$std_si_estimate_high_ci[[i]]))
-              #browser()
-              if (dist == "normal") {
-                samples = c(samples,rnorm(N*10,boot_mean,boot_sd))
-              } else if (dist == "log normal") {
-                # reparametereise
-                lmean = log(boot_mean/sqrt(1+(boot_sd^2)/(boot_mean^2)))
-                lsd = sqrt(log(1+(boot_sd^2)/(boot_mean^2)))
-                samples = c(samples,rlnorm(N*10,lmean,lsd))
-              } else if (dist == "gamma") {
-                scale = (boot_sd^2) / boot_mean
-                shape = (boot_mean^2) / (boot_sd^2)
-                samples = c(samples,rgamma(N*10,shape = shape,scale=scale))
-              }
-            }
-          }
-          #browser()
-          samples = samples[samples > 0 & !is.na(samples) & samples<21]
-          fit.gamma <- fitdistrplus::fitdist(samples, distr = "gamma", method = "mle")
-          #summary(fit.gamma)
-          fit.shape = fit.gamma$estimate[[1]]
-          fit.rate = fit.gamma$estimate[[2]]
-          fit.mean = fit.shape/fit.rate
-          fit.sd = sqrt(fit.shape/(fit.rate)^2)
-          fir.aic = fit.gamma$aic
-          boot.samples = boot.samples %>% bind_rows(tibble(shape = fit.shape,rate = fit.rate,mean = fit.mean,sd=fit.sd))
-        }))
-      }
-      out$estimates = boot.samples
-      return(out)
-    })
-    
-    sd_lowfit = min(bootstrap$estimates$sd)
-    sd_highfit = max(bootstrap$estimates$sd)
-    fit_data = bootstrap$estimates$sd
-    
-    #find the mode
-    tmp_max = which.max(density(bootstrap$estimates$sd)$y)
-    sd_mode = density(bootstrap$estimates$sd)$x[tmp_max]
-    
-    fit.std_as_norm = suppressWarnings(fitdistrplus::fitdist(fit_data, distr = "tnorm", fix.arg=
-      list(
-        lower=sd_lowfit,
-        upper=sd_highfit,
-        mean=sd_mode
-      ),
-      start = list(
-        sd = sd(bootstrap$estimates$sd)
-      ), lower=c(0), method="mle"))
-    #summary(fit.gamma)
-    fit.std_as_norm.sd = fit.std_as_norm$estimate[[1]]
-    
-    cfg = EpiEstim::make_config(list(
-      mean_si = mean(bootstrap$estimates$mean), 
-      std_mean_si = sd(bootstrap$estimates$mean), 
-      min_mean_si = quantile(x = bootstrap$estimates$mean,confint[[1]])[[1]],
-      max_mean_si = quantile(x = bootstrap$estimates$mean,confint[[2]])[[1]],
-      std_si = sd_mode, #mean(bootstrap$estimates$sd), or could in theory use the mode
-      std_std_si = fit.std_as_norm.sd, #sd(bootstrap$estimates$sd), 
-      # The problem here is the skew of the bootstrap distribution of SD. If we use this then because epiestim resamples using truncated normal it will tend to over estimate 
-      # this is now fixed by fitting normal distribution to bootstrapped sds, so these will be assymetrically distributed around fitted mean which is what we want.
-      min_std_si = quantile(x = bootstrap$estimates$sd,confint[[1]])[[1]],
-      max_std_si = quantile(x = bootstrap$estimates$sd,confint[[2]])[[1]],
-      # min_std_si = mean(bootstrap$estimates$sd)+qnorm(confint[[1]])*sd(bootstrap$estimates$sd),
-      # max_std_si = mean(bootstrap$estimates$sd)+qnorm(confint[[2]])*sd(bootstrap$estimates$sd),
-      mean_prior = 1,
-      std_prior = 0.5,
-      n1 = 100), method="uncertain_si")
-    
-    bootstrap$config = cfg
-    bootstrap$method = "uncertain_si"
-    bootstrap$window = 7
-    # Calculate the mean serial intervals
-    return(bootstrap)
-  },
-  
-  midmarketSerialInterval = function(...) {
-    self$getSaved("SERIAL-INTERVAL-MIDMARKET",...,orElse = function() {
-      serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-      
-      unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
-      conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
-      
-      # Calculate the mean serial intervals
-      wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial")) %>% summarise(
-        mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
-        min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
-        max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
-        std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
-        min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
-        max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
-        #total = sum(sample_size)
-      ) %>% mutate(
-        std_mean_si = (max_mean_si - min_mean_si) / 3.92, 
-        std_std_si = (max_std_si - min_std_si) / 3.92
-      )
-      
-      # SD should be distributed as chsqd which is a gamma with scale=2
-      fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=shape, scale=2), data = tibble( x=c(0.025,0.5,0.975), y=c(wtSIs$min_std_si, wtSIs$std_si, wtSIs$max_std_si)) ))
-      sd_shape = summary(fit.sd.gamma)$parameters[["shape",1]]
-      std_std_si = sqrt(sd_shape*4) # shape*scale^2
-      # ultimately this is going to be modelled by epiestim as a normal.
-      
-      cfg = EpiEstim::make_config(list(
-        mean_si = wtSIs$mean_si, 
-        std_mean_si = wtSIs$std_mean_si,
-        min_mean_si = wtSIs$min_mean_si, 
-        max_mean_si = wtSIs$max_mean_si,
-        std_si = wtSIs$std_si, 
-        std_std_si = std_std_si, # from chisquared fit of SD - #wtSIs$std_std_si - from normal fit of SD,
-        min_std_si = wtSIs$min_std_si, 
-        max_std_si = wtSIs$max_std_si,
-        mean_prior = 1,
-        std_prior = 0.5,
-        n1 = 100), method="uncertain_si")
-      
-      bootstrap = list()
-      bootstrap$sources = serialIntervals
-      bootstrap$config = cfg
-      bootstrap$method = "uncertain_si"
-      bootstrap$window = 7
-      return(bootstrap)
-    })
   }
   
 ))
@@ -1112,8 +899,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 
 # completeTimeseries = ensurer::ensures_that(
 #   .$
-#   . %>% dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% dplyr::arrange(date) %>% dplyr::mutate(check = lead(date)==date) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be unique"
-#   . %>% dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% dplyr::arrange(date) %>% dplyr::mutate(check = lead(date)==date+1) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be contiguous"
+#   . %>% covidStandardGrouping() %>% dplyr::mutate(check = lead(date)==date) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be unique"
+#   . %>% covidStandardGrouping() %>% dplyr::mutate(check = lead(date)==date+1) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be contiguous"
 # )
 # 
 # nonNegativeIncidence = ensurer::ensures_that(
@@ -1126,65 +913,3 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 #   +completeTimeseries,
 #   +nonNegativeIncidence
 # )
-
-
-
-# defaultCovidSI = function() {
-#   
-#   
-#   serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-#   unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
-#   conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
-# 
-#   #TODO: remove this from here
-#   SItable1 = serialIntervals %>% mutate(
-#     `Mean\n(95% CrI) days`=conf(mean_si_estimate,mean_si_estimate_low_ci,mean_si_estimate_high_ci),
-#     `Std\n(95% CrI) days`=conf(std_si_estimate,std_si_estimate_low_ci,std_si_estimate_high_ci),
-#   ) %>% select(-contains("si_estimate")) %>% select(
-#     `Reference`=source,
-#     `Statistic`=estimate_type,
-#     `Mean\n(95% CrI) days`,
-#     `Std\n(95% CrI) days`,
-#     `N`=sample_size,
-#     `Distribution` = assumed_distribution,
-#     `Population`=population
-#   )
-#   
-#   # Calculate the mean serial intervals
-#   
-#   wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma") %>% summarise(
-#     mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
-#     min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
-#     max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
-#     std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
-#     min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
-#     max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
-#     #total = sum(sample_size)
-#   ) %>% mutate(
-#     std_mean_si = (max_mean_si - min_mean_si) / 3.92, # TODO: fit gamma
-#     std_std_si = (max_std_si - min_std_si) / 3.92
-#   )
-#   
-#   ### TODO: Think some more about prior from Rt
-#   ### 
-#   
-#   cfg = EpiEstim::make_config(list(
-#     mean_si = wtSIs$mean_si, 
-#     std_mean_si = wtSIs$std_mean_si,
-#     min_mean_si = wtSIs$min_mean_si, 
-#     max_mean_si = wtSIs$max_mean_si,
-#     std_si = wtSIs$std_si, 
-#     std_std_si = wtSIs$std_si,
-#     min_std_si = wtSIs$min_std_si, 
-#     max_std_si = wtSIs$max_std_si,
-#     mean_prior = 1,
-#     std_prior = 0.5), method="uncertain_si")
-#   
-#   return(list(
-#     config=cfg,
-#     sources = SItable1,
-#     method = "uncertain_si",
-#     window = 7
-#   ))
-# 
-# }

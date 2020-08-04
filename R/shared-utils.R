@@ -139,3 +139,48 @@ plotRibbons = function(meanVar, sdVar, colourExpr, ...) {
     ))
   }
 }
+
+# ggplot ------------------------------------------------------------------
+
+geom_quantiles <- function(mapping, ...) {
+  list(
+    stat_summary_bin(mapping,
+                 geom = "line",
+                 fun.data = function(x) {quantile(x, 0.5)},
+                 #orientation = 'x',
+                 ...),
+    stat_summary_bin(mapping,
+               geom = "ribbon",
+               fun.min = function(x) quantile(x, 0.025),
+               fun.max = function(x) quantile(x, 0.975),
+               #orientation = 'x',
+               alpha = 0.1, ...),
+    stat_summary_bin(mapping,
+                 geom = "ribbon",
+                 fun.min = function(x) quantile(x, 0.25),
+                 fun.max = function(x) quantile(x, 0.75),
+                 #orientation = 'x',
+                 alpha = 0.15, ...)
+  )
+}
+
+#' In fix operator to apply ensurer rules
+#' @param ensurer an ensurer contract
+#' @param object the object
+#' @return object if it conforms stops otherwise.
+#' @export
+`%def%` = function(ensurer,object) {
+  return(ensurer(object))
+}
+
+#' magrittr pipe
+#' @importFrom magrittr %>%
+#' @name %>%
+#' @rdname pipe
+#' @keywords internal
+#' @export
+NULL
+
+# `%>%`.R6 = function(r6,fn) {
+# 
+# }

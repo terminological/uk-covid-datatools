@@ -1,6 +1,6 @@
 #' Process UK ONS code maps
 #' @export
-UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=PassthroughFilesystemCache, public = list(
+UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvider, public = list(
   
   #### code mapping ----
   mapping = list(
@@ -137,6 +137,10 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=Passthrough
       rel = "best_fit"
     )
   ),
+  
+  initialize = function(providerController, ...) {
+    super$initialize(providerController, ...)
+  },
   
   # OUT_CODE_TO_LSOA = ONSPD_NOV_2019_UK %>% dplyr::mutate(outcode = pcd %>% stringr::str_sub(1,4) %>% stringr::str_trim()) %>% dplyr::select(outcode,lsoa11) %>% dplyr::distinct()
   # LSOA_TO_IMD = ONSPD_NOV_2019_UK %>% dplyr::select(lsoa11,imd) %>% dplyr::distinct()

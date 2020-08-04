@@ -68,7 +68,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         datecols = c("symptom_onset_date","dateswab_NHSE","dateofresult_NHSE","specimen_date","lab_report_date","dateadmission","dod",
                      "NHSdeathreportdate","DBSdeathreportdate", "HPTdeathreportdate", "ONS_death_registration_date")
         for(datecol in datecols) {
-          tmp[[datecol]] = as.Date(as.numeric(tmp[[datecol]]),"1899-12-30")
+          tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
         }
         tmp = tmp %>% 
           dplyr::mutate(
@@ -91,10 +91,10 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
                                  col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
         tmp = tmp %>% 
           dplyr::mutate(
-            Onsetdate = as.Date(as.numeric(Onsetdate),"1899-12-30"),
-            specimen_date = as.Date(as.numeric(specimen_date),"1899-12-30"),
-            lab_report_date = as.Date(as.numeric(lab_report_date),"1899-12-30"),
-            age = as.numeric(age),
+            Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
+            specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
+            lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30")),
+            age = suppressWarnings(as.numeric(age)),
           )
         return(tmp %>% dplyr::ungroup())
       })
@@ -116,14 +116,14 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         }
         
         data = readxl::read_excel(path.expand(path), sheet = sheet, col_types = "text") %>% dplyr::mutate(
-          SampleDate = as.Date(as.numeric(SampleDate),"1899-12-30"),
+          SampleDate = suppressWarnings(as.Date(as.numeric(SampleDate),"1899-12-30")),
         ) %>% dplyr::mutate(
           SampleDate = if_else(is.na(SampleDate) & surv == "NHSBT_Wales_wk17", as.Date("2020-04-20"), SampleDate),
-          age = as.numeric(age)
+          age = suppressWarnings((as.numeric(age)))
         )
-        if ("Abbott_units" %in% colnames(data)) data = data %>% dplyr::mutate(Abbott_units = as.numeric(Abbott_units))
-        if ("EuroImmun_units" %in% colnames(data)) data = data %>% dplyr::mutate(EuroImmun_units = as.numeric(EuroImmun_units))
-        if ("RBD_units" %in% colnames(data)) data = data %>% dplyr::mutate(RBD_units = as.numeric(RBD_units))
+        if ("Abbott_units" %in% colnames(data)) data = data %>% dplyr::mutate(Abbott_units = suppressWarnings(as.numeric(Abbott_units)))
+        if ("EuroImmun_units" %in% colnames(data)) data = data %>% dplyr::mutate(EuroImmun_units = suppressWarnings(as.numeric(EuroImmun_units)))
+        if ("RBD_units" %in% colnames(data)) data = data %>% dplyr::mutate(RBD_units = suppressWarnings(as.numeric(RBD_units)))
         
         
         data2 = data %>% 
@@ -243,11 +243,11 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       )
       
       data = data %>% dplyr::mutate(
-        vitamin_d_during_admission = vitamin_d_during_admission %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric(),
-        d_dimer = d_dimer %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric(),
+        vitamin_d_during_admission = suppressWarnings(vitamin_d_during_admission %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric()),
+        d_dimer = suppressWarnings(d_dimer %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric()),
         fio2 = suppressWarnings(fio2 %>% stringr::str_remove_all("%") %>% as.numeric())
       ) %>% dplyr::mutate(
-        fio2 = if_else(fio2<21, as.numeric(NA), fio2)
+        fio2 = if_else(fio2<21, NA_real_, fio2)
       )
       
       data = data %>% dplyr::filter((is.na(discharge_date) | (discharge_date < Sys.Date() & admission_date < discharge_date)))
@@ -1144,20 +1144,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           days_of_symptoms_before_ad)
     },
     
-    #### Incidence data loaders ----
-    # These functions all aim to produce a standard format:
-    # "date"      
-    # "code" - the geographic code
-    # "name" - the geographic region name
-    # "codeType" - the geographic region type (ONS code or "NHS site", "NHS trust")
-    # "statistic" - the factor the data is measuring: one of: case|death|icu admission|hospital admission|symptom|triage|serology|test|information seeking
-    # "source" - the provenance of the source    
-    # "ageCat" - an age range e.g. ("<5", "5-10", "10+")  
-    # "gender" - male|female
-    # "type" - the type of the value one of incidence|prevalence|cumulative|background|bias
-    # "value" - the value of the statistic
-    # "subgroup" -  a subgroup for source specific factors (e.g. subtypes of symptoms, severity of cases) or NA if none
-    # "note" - any other info
+    
     
     #' @description Load incidence from line list
     #' 
@@ -1343,7 +1330,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           dplyr::select(-DateVal,-Day,-Month,-Year) %>% 
           tidyr::pivot_longer(cols = c(-date,-code,-name,-codeType), names_to = "category", values_to = "value") %>% 
           dplyr::mutate(
-            value = as.numeric(value),
+            value = suppressWarnings(as.numeric(value)),
             source = case_when(
               category %like% "111-ONLINE%" ~ "online",
               category %like% "111-Outcome%" ~ "111",
@@ -1363,12 +1350,14 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
               category %like% "111-ONLINE%" ~ "triage",
               category %like% "111-Outcome%" ~ "triage",
               category %like% "999-Outcome%" ~ "triage",
-              category %like% "All-111-Number_of_calls_where_person_triaged" ~ "background",
               TRUE ~ "information seeking"
             ),
             gender = NA_character_,
             ageCat = NA_character_,
-            type = "incidence"
+            type = case_when(
+              category %like% "All-111-Number_of_calls_where_person_triaged" ~ "background",
+              TRUE ~ "incidence"
+            )
           ) %>%
           dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
         
@@ -1408,8 +1397,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           ) 
         #TODO: fix >84 in ageCat instead of 85+
         tmp3 = tmp2 %>% dplyr::mutate(
-          date = as.Date(DateVal),
-          value = as.numeric(value)
+          date = suppressWarnings(as.Date(DateVal)),
+          value = suppressWarnings(as.numeric(value))
         ) %>% dplyr::select(-Day,-Month,-Year)
         
         tmp4 = tmp3 %>% dplyr::mutate(
@@ -1512,7 +1501,7 @@ convertRtToSPIM = function(df, geographyExpr, modelExpr, dateVar = "date", group
       `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
       `Geography` = !!geographyExpr,
       `ValueType` = "R",
-      `Value` = `Median(R)` %>% round(2),
+      `Value` = `Mean(R)`,# %>% round(2),
       `Quantile 0.05` = `Quantile.0.05(R)`,# %>% round(2),
       `Quantile 0.1` = NA,
       `Quantile 0.15` = NA,	
@@ -1571,7 +1560,7 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, growthVar = "Gr
     `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
     `Geography` = !!geographyExpr,
     `ValueType` = "growth_rate",
-    `Value` = !!growthVar %>% round(2),
+    `Value` = !!growthVar,# %>% round(2),
     `Quantile 0.05` = qnorm(0.05, !!growthVar, !!growthSEVar),# %>% round(2),
     `Quantile 0.1` = NA,
     `Quantile 0.15` = NA,	
@@ -1611,14 +1600,14 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, growthVar = "Gr
 #' @return a tibble of the formatted estimates
 #' @export
 convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter", version="0.1") {
-  quant = function(quant) {
-    m = msm::qtnorm(quant, cfg$mean_si, cfg$std_mean_si, lower=cfg$min_mean_si, upper=cfg$max_mean_si)
-    v = msm::qtnorm(quant, cfg$std_si, cfg$std_std_si, lower=cfg$min_std_si, upper=cfg$max_std_si)
+  quant = function(q) {
+    m = msm::qtnorm(q, cfg$mean_si, cfg$std_mean_si, lower=cfg$min_mean_si, upper=cfg$max_mean_si)
+    v = msm::qtnorm(q, cfg$std_si, cfg$std_std_si, lower=cfg$min_std_si, upper=cfg$max_std_si)
     
     k_mean = (cfg$std_si / cfg$mean_si)^2
     k_sd = sdFromRatio(mu_x = cfg$std_si, sig_x = cfg$std_std_si, mu_y = cfg$mean_si, sig_y = cfg$std_mean_si ) ^ 2
     
-    k = qnorm(quant, k_mean, k_sd)
+    k = qnorm(q, k_mean, k_sd)
     
     # v = scales::squish(v, range = c(cfg$min_std_si,cfg$max_std_si))
     # m = scales::squish(m, range = c(cfg$min_mean_si,cfg$max_mean_si))

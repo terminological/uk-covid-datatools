@@ -328,7 +328,7 @@ Investigate impact of varying the serial interval on estimates of R
 
 ```{r fig3, fig.cap="Epidemic curve for cases in the UK. Red lines show significant dates..."}
 
-ends = as.Date(c("2020-03-28","2020-04-22","2020-05-12","2020-06-10"))
+ends = as.Date(c("2020-04-01","2020-05-01","2020-06-01","2020-07-01"))
 
 ukts = dpc$datasets$getPHEDashboard() %>% 
   filter(name=="England" & type=="incidence") %>%
@@ -528,7 +528,8 @@ Can we get some distributions from the data we have?
 ```{r}
 CHESS = dpc$spim$getCHESS()
 CHESSClean = CHESS %>% chp$chessAdmissionSubset()
-
+plots=list()
+tables=list()
 
 ```
 
@@ -546,22 +547,22 @@ onsetToTest = CHESSClean %>%
       time = as.integer(infectionswabdate - estimateddateonset)
     ) %>% select(caseid,transition,time) %>% filter(time < 28 & time > -14) %>% group_by(transition)
 
-onsetToTestFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp","pois","nbinom"),shifted = 1)$fromUncensoredData(onsetToTest, valueExpr = time, truncate = TRUE, bootstraps = 100)
-onsetToTestFit$plot(xlim = c(-2,20))
-onsetToTestFit$printDistributionDetail()
+onsetToTestFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom","exp"))$fromUncensoredData(onsetToTest, valueExpr = time, truncate = TRUE, bootstraps = 100)
+plots$onsetToTest = onsetToTestFit$plot(xlim = c(-2,20))+xlab("time delay")
+tables$onsetToTest = onsetToTestFit$printDistributionDetail()
 ```
 
 ```{r}
 onsetToTestResult = CHESSClean %>% 
     filter(age>10 & !is.na(estimateddateonset) & !is.na(labtestdate)) %>% 
     mutate(
-      transition = "onset to test",
+      transition = "onset to test result",
       time = as.integer(labtestdate - estimateddateonset)
     ) %>% select(caseid,transition,time) %>% filter(time < 28 & time > -14) %>% group_by(transition)
 
-onsetToTestResultFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","exp"))$fromUncensoredData(onsetToTestResult, valueExpr = time, truncate = TRUE, bootstraps = 100)
-onsetToTestResultFit$plot(xlim = c(-2,20))
-onsetToTestResultFit$printDistributionDetail()
+onsetToTestResultFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToTestResult, valueExpr = time, truncate = TRUE, bootstraps = 100)
+plots$onsetToTestResult = onsetToTestResultFit$plot(xlim = c(0,20))+xlab("time delay")
+tables$onsetToTestResult = onsetToTestResultFit$printDistributionDetail()
 ```
 
 * Admission assumed to be after onset.
@@ -576,143 +577,91 @@ onsetToAdmission = CHESSClean %>%
       transition = "onset to admission",
       time = as.integer(hospitaladmissiondate - estimateddateonset)
     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
-onsetToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(onsetToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
-onsetToAdmissionFit$plot(xlim = c(0,25))
-onsetToAdmissionFit$printDistributionDetail()
+onsetToAdmissionFit = DistributionFit$new(distributions = c("exp","lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
+plots$onsetToAdmission = onsetToAdmissionFit$plot(xlim = c(0,25))+xlab("time delay")
+tables$onsetToAdmission = onsetToAdmissionFit$printDistributionDetail() %>% arrange(aic,dist,param)
 ```
 
-* Test to admission
-* Potentially complex as admission may occur before test comes back positive.
-* Also issues with hospital acquired infections.
-* Assume admission before 14 days is unrelated.
+<!-- * Test to admission -->
+<!-- * Potentially complex as admission may occur before test comes back positive. -->
+<!-- * Also issues with hospital acquired infections. -->
+<!-- * Assume admission before 14 days is unrelated. cap at 100. -->
+
+<!-- ```{r} -->
+<!--   # Swab positive to admission -->
+<!-- testToAdmission = CHESSClean %>%  -->
+<!--     filter(age>10 & !is.na(infectionswabdate) & !is.na(hospitaladmissiondate)) %>%  -->
+<!--     mutate( -->
+<!--       transition = "test to admission", -->
+<!--       time = as.integer(hospitaladmissiondate - infectionswabdate) -->
+<!--     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > -14) -->
+<!-- testToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(testToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100) -->
+<!-- testToAdmissionFit$plot(xlim = c(-14,25)) -->
+<!-- testToAdmissionFit$printDistributionDetail() -->
+<!-- ``` -->
+
+* Deaths assume must happen after onset - capped at 100 days
+* Long tail. Large SD.
+
 
 ```{r}
-  # Swab positive to admission
-testToAdmission = CHESSClean %>% 
-    filter(age>10 & !is.na(infectionswabdate) & !is.na(hospitaladmissiondate)) %>% 
+onsetToDeath = CHESSClean %>% 
+  filter(age>10 & !is.na(estimateddateonset) & !is.na(finaloutcomedate) & finaloutcome=="Death") %>% 
     mutate(
-      transition = "test to admission",
-      time = as.integer(hospitaladmissiondate - infectionswabdate)
-    ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > -14)
-testToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(testToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
-testToAdmissionFit$plot(xlim = c(-14,25))
-testToAdmissionFit$printDistributionDetail()
-```
-
-symptomaticToAdmissionFit$plot(xlim = c(,30))
-
-
-symptomaticToDeath = CHESSClean %>% 
-    filter(age>10 & !is.na(estimateddateonset) & !is.na(finaloutcomedate) & finaloutcome=="Death") %>% 
-    mutate(
-      transition = "symptomatic to death",
-      tim = as.integer(finaloutcomedate - estimateddateonset)
-    ) %>% select(caseid,transition,delay) %>% filter(time < 100 & time > 0)
-symptomaticToCaseFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(symptomaticToCase, valueExpr = time, truncate = TRUE, bootstraps = 100)
-symptomaticToCaseFit$plot(xlim = c(-14,28))
-
-transitionsFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))
-# transitionsFit$models$weibull$lower$shape = 1
-# transitionsFit$models$weibull$start$shape = 1.1
-# transitionsFit$models$gamma$lower$shape = 1
-# transitionsFit$models$gamma$start$shape = 1.1
-transitionsFit$fromUncensoredData(transitions,valueExpr = delay,truncate = TRUE, bootstraps = 100)
+      transition = "onset to death",
+      time = as.integer(finaloutcomedate - estimateddateonset)
+    ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
+onsetToDeathFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToDeath, valueExpr = time, truncate = TRUE, bootstraps = 100)
+plots$onsetToDeath = onsetToDeathFit$plot(xlim = c(0,60))+xlab("time delay")
+tables$onsetToDeath = onsetToDeathFit$printDistributionDetail() %>% arrange(aic,dist,param)
+# 
+#   # Onset ot admission
+#     filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>% 
+#     mutate(
+#       transition = "onset to admission",
+#       time = as.integer(hospitaladmissiondate - estimateddateonset)
+#     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
+# onsetToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(onsetToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
+# onsetToAdmissionFit$plot(xlim = c(0,25))
+# onsetToAdmissionFit$printDistributionDetail()
 ```
 
 ```{r}
-#ggplot(symptomaticToCase %>% filter(time < 100),aes(x=time))+geom_histogram(binwidth = 1)
-symptomaticToCase = symptomaticToCase %>% filter(time < 100 & time > 0)
-symptomaticToCaseModels = symptomaticToCase %>% srv$fitModels(models, shifted=1)
-symptomaticToCaseModels %>% srv$plotModels(symptomaticToCase) %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/FigS1_symptomaticToCase")
-symptomaticToCaseModels %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", mean, sd, lower, upper), loglik = max(loglik)) %>% ungroup() %>% select(
-  `Distribution` = dist,
-  `Log-likelihood` = loglik,
-  `AIC` = aic,
-  `Parameter` = param,
-  `Value (95% CI)` = valueCI,
-) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_symptomaticToCaseParams")
+patchwork::wrap_plots(plots)
+
+suppTable = bind_rows(tables) %>% ungroup() %>% select(-dist,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>% rename(Transition = transition, Parameter= param, AIC= aic, N=n) %>% arrange(AIC) %>% group_by(Transition, Distribution)
+suppTable %>% standardPrintOutput::mergeCells()
 ```
 
-Hospital admission generally predates case detection in this data set as hospital based. No clear reason to treat case identification and hospital admission as different time points.
+
+<!-- Hospital admission generally predates case detection in this data set as hospital based. No clear reason to treat case identification and hospital admission as different time points. -->
 
 
-```{r}
-symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>% 
-  srv$generateNoAgeSurvivalData(
-    idVar = caseid,
-    startDateVar = estimateddateonset, 
-    endDateExpr = hospitaladmissiondate,
-    statusExpr = 1,
-    statusLabels = "admitted",
-    censoredDateExpr = NA
-  ) #%>% filter(time < 100 & time > 0)
+<!-- ```{r} -->
+<!-- symptomaticToAdmission = CHESSClean %>% filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>%  -->
+<!--   srv$generateNoAgeSurvivalData( -->
+<!--     idVar = caseid, -->
+<!--     startDateVar = estimateddateonset,  -->
+<!--     endDateExpr = hospitaladmissiondate, -->
+<!--     statusExpr = 1, -->
+<!--     statusLabels = "admitted", -->
+<!--     censoredDateExpr = NA -->
+<!--   ) #%>% filter(time < 100 & time > 0) -->
 
-symptomaticToAdmission = symptomaticToAdmission %>% filter(time < 100 & time > 0)
-symptomaticToAdmissionModels = symptomaticToAdmission %>% srv$fitModels(models, shifted=1)
-symptomaticToAdmissionModels %>% srv$plotModels(symptomaticToAdmission) %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/FigS1_symptomaticToAdmission")
-symptomaticToAdmissionModels %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", mean, sd, lower, upper), loglik = max(loglik)) %>% ungroup() %>% select(
-  `Distribution` = dist,
-  `Log-likelihood` = loglik,
-  `AIC` = aic,
-  `Parameter` = param,
-  `Value (95% CI)` = valueCI,
-) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_symptomaticToAdmissionParams")
+<!-- symptomaticToAdmission = symptomaticToAdmission %>% filter(time < 100 & time > 0) -->
+<!-- symptomaticToAdmissionModels = symptomaticToAdmission %>% srv$fitModels(models, shifted=1) -->
+<!-- symptomaticToAdmissionModels %>% srv$plotModels(symptomaticToAdmission) %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/FigS1_symptomaticToAdmission") -->
+<!-- symptomaticToAdmissionModels %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", mean, sd, lower, upper), loglik = max(loglik)) %>% ungroup() %>% select( -->
+<!--   `Distribution` = dist, -->
+<!--   `Log-likelihood` = loglik, -->
+<!--   `AIC` = aic, -->
+<!--   `Parameter` = param, -->
+<!--   `Value (95% CI)` = valueCI, -->
+<!-- ) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_symptomaticToAdmissionParams") -->
 
-```
+<!-- ``` -->
 
-* Time delay from case identification to death
-
-```{r}
-casesToDeath = CHESSClean %>% filter(age>10 & !is.na(infectionswabdate) & !is.na(finaloutcomedate) & finaloutcome=="Death") %>% 
-  srv$generateNoAgeSurvivalData(
-    idVar = caseid,
-    startDateVar = infectionswabdate, 
-    endDateExpr = finaloutcomedate,
-    statusExpr = 1,
-    statusLabels = "died",
-    censoredDateExpr = NA
-  ) %>% filter(time < 100 & time > 0)
-  
-
-#   dplyr::mutate(
-#   id = caseid,
-#   startDate = hospitaladmissiondate, 
-#   endDate = finaloutcomedate, 
-#   status = if_else(is.na(finaloutcome),"censored","died")
-# ) %>% mutate(
-#   left = as.numeric(if_else(status=="censored", as.Date(censorDate), endDate) - startDate)+0.001,
-#   right = ifelse( status=="censored",NA,as.numeric(endDate - startDate)+0.001) # zero times causes issues
-# )
-
-
-
-
-#ggplot(admissionToDeath,aes(x=time,fill=status))+geom_histogram(position="dodge",binwidth = 1)
-casesToDeathModels = casesToDeath %>% filter(status=="died") %>% srv$fitModels(models)
-casesToDeathModels %>% srv$plotModels(casesToDeath)
-#admissionToDeathCensoredModels = admissionToDeath %>% srv$fitModels(models, shifted=1)
-
-# ggplot(symptomaticToAdmission,aes(x=time))+geom_histogram()
-# 
-# symptomaticToAdmissionModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdist(symptomaticToAdmission %>% pull(time), m$name, start = m$start)))
-# admissionToDeathModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdist(admissionToDeath %>% filter(status=="died") %>% pull(left), m$name, start = m$start)))
-# admissionToDeathCensoredModels = suppressWarnings(lapply(models, function(m) fitdistrplus::fitdistcens(admissionToDeath %>% select(left,right) %>% as.data.frame(), m$name, start = m$start)))
-# 
-# fitdistrplus::denscomp(symptomaticToAdmissionModels) 
-# fitdistrplus::denscomp(admissionToDeathModels) #, plotstyle = "ggplot") +standardPrintOutput::narrowAndTall()
-# fitdistrplus::ppcompcens(admissionToDeathCensoredModels)
-# 
-# symptomaticToAdmissionModels2 =  fitdistrplus::bootdist(symptomaticToAdmissionModels$exp)
-
-casesToDeathModels %>% mutate(valueCI = sprintf("%1.3f \U00B1 %1.3f (%1.3f; %1.3f)", mean, sd, lower, upper), loglik = max(loglik)) %>% ungroup() %>% select(
-  `Distribution` = dist,
-  `Log-likelihood` = loglik,
-  `AIC` = aic,
-  `Parameter` = param,
-  `Value (95% CI)` = valueCI,
-) %>% group_by(`Distribution`,`Log-likelihood`,`AIC`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS2_caseToDeathParams")
-
-```
+## Impact of delays on serial nterval
 
 What is impact of these delay distributions on serial interval? We need to look at a hypothetical gamma distribution, and add a random sample of symptomatic to cases and subtract similar
 
@@ -726,12 +675,26 @@ What is impact of these delay distributions on serial interval? We need to look 
 # split into 2 groups and exclude any values with number of days > 30
 # calculate the difference
 
-offset = symptomaticToCaseModels  %>% filter(aic == min(aic)) %>%  mwp$bootstrapDistributions() %>% mwp$bootstrapSamples(samples = 200) %>% 
-  mutate(sampleCat = (sampleNumber-1) %/% 100 + 1, sampleNumber = sampleNumber %% 100) %>%
-  pivot_wider(names_from = sampleCat, values_from = sampleValue,names_prefix = "delay") %>%
-  filter(delay1 < 45 & delay2 < 45 ) %>% mutate(delayOffset = delay2-delay1)
+# onsetToTestFit$filterModels(aic == min(aic))
+# onsetToTestFit$generateSamples(sampleExpr = 2000)
+relativeDelay = function(distFit) {
+  distFit2 = distFit$clone()
+  distFit2$filterModels(aic == min(aic))
+  distFit2$generateSamples(sampleExpr = 2000)
+  delayDist = distFit2$samples %>%
+    mutate(sampleCat = (sampleNumber-1) %/% 1000 + 1, sampleNumber = sampleNumber %% 1000) %>%
+    pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "delay") %>% mutate(delayOffset = delay2-delay1)
+  return(delayDist)
+}
 
-ggplot(offset, aes(x=delayOffset))+geom_density()
+relativeDelays = bind_rows(
+  onsetToTestFit %>% relativeDelay(),
+  onsetToAdmissionFit %>% relativeDelay(),
+  onsetToTestResultFit %>% relativeDelay(),
+  onsetToDeathFit %>% relativeDelay()
+)
+
+ggplot(relativeDelays %>% filter(delayOffset > -45 & delayOffset < 45), aes(x=delayOffset, colour = transition))+geom_density()
 
 # 
 
