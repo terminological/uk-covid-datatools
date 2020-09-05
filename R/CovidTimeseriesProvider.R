@@ -13,6 +13,11 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
       dplyr::ungroup() %>%
       dplyr::group_by(statistic,type,code,codeType,source,subgroup,ageCat,gender) %>% 
       dplyr::group_modify(function(d,g,...) {
+        # rowAny <- function(x) rowSums(x) > 0
+        # tmp = d %>% filter(rowAny(across(-date,~!is.na(.))))
+        # startDate = suppressWarnings(min(tmp$date))
+        # endDate = suppressWarnings(max(d$date))
+        # return(d %>% filter(date <= endDate & date >= startDate))
         startDate = suppressWarnings(min(d$date[!is.na(d$value)]))
         endDate = suppressWarnings(max(d$date[!is.na(d$value)]))
         return(d %>% filter(date <= endDate & date >= startDate))
@@ -20,11 +25,14 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
       dplyr::ungroup()
   },
   
-  complete = function(covidTimeseries, infer = TRUE) {
+  #' @description Take a set of timeseries and add in missing dates as NAs. Preserves source, type, statistic differences in timeseries length. 
+  #' intially Fills all regions to be the same length but with trim trailing NAs
+  #' @return a covidTimeseriesFormat dataframe
+  complete = function(covidTimeseries) {
     tmp = covidTimeseriesFormat(covidTimeseries)
     tmp = tmp %>% 
       dplyr::ungroup() %>%
-      dplyr::group_by(codeType,source,type,statistic) %>% 
+      dplyr::group_by(source,type,statistic) %>% 
       dplyr::group_modify(function(d,g,...) {
         minDate = suppressWarnings(min(d$date,na.rm = TRUE))
         maxDate = suppressWarnings(max(d$date,na.rm = TRUE))
@@ -32,23 +40,13 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           ageCats = d %>% select(ageCat) %>% distinct()
           genders = d %>% select(gender) %>% distinct()
           subgroups = d %>% select(subgroup) %>% distinct()
-          dates = tibble(date = as.Date(minDate:maxDate,"1970-01-01"))
-          codesAndNames = d %>% select(code,name) %>% distinct()
+          dates = tibble(
+            date = as.Date(minDate:maxDate,"1970-01-01")
+          )
+          codesAndNames = d %>% select(code,name,codeType) %>% distinct()
           combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
-          d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name"))
-          if (infer) {
-            if (g$type == "cumulative") {
-              d = d %>% dplyr::arrange(code,name,date) %>% dplyr::mutate(Inferred = is.na(value)) %>% tidyr::fill(value)
-            } else if (g$type == "incidence") {
-              d = d %>% dplyr::mutate(Inferred = is.na(value)) %>% dplyr::mutate(value = ifelse(is.na(value),0,value))
-            } else {
-              # bias or prevalence
-              # leave as NA
-              d = d %>% dplyr::mutate(Inferred = FALSE)
-            }
-          } else {
-            d = d %>% dplyr::mutate(Inferred = FALSE)
-          }
+          d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
+          if("Implicit" %in% colnames(d)) d = d %>% mutate(Implicit = ifelse(is.na(Implicit),FALSE,Implicit))
           return(d)
         } else {
           return(tibble())
@@ -59,16 +57,83 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp)
   },
   
-  fixDatesAndNames = function(tmp5, truncate, naIsZero = FALSE) {
+  fillAbsent = function(covidTimeseries) {
+    tmp = covidTimeseriesFormat(covidTimeseries)
+    tmp = tmp %>% 
+      dplyr::ungroup() %>%
+      dplyr::group_by(source,type,statistic) %>% 
+      dplyr::group_modify(function(d,g,...) {
+        if (nrow(d) > 0) {
+          ageCats = d %>% select(ageCat) %>% distinct()
+          genders = d %>% select(gender) %>% distinct()
+          subgroups = d %>% select(subgroup) %>% distinct()
+          dates = tibble(date = unique(d$date))
+          codesAndNames = d %>% select(code,name,codeType) %>% distinct()
+          combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+          d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
+          if (g$type == "cumulative") {
+            d = d %>% dplyr::group_by(ageCat,gender,subgroup,code,name,codeType) %>% dplyr::arrange(date) %>% dplyr::mutate(Implicit = is.na(value)) %>% tidyr::fill(value) %>% dplyr::ungroup()
+          } else if (g$type == "incidence") {
+            d = d %>% dplyr::mutate(Implicit = is.na(value)) %>% dplyr::mutate(value = ifelse(is.na(value),0,value))
+          } else {
+            # bias or prevalence
+            # leave as NA
+            d = d %>% dplyr::mutate(Implicit = FALSE)
+          }
+          return(d)
+        } else {
+          return(tibble())
+        }
+      }) %>%
+      dplyr::ungroup() 
+    return(tmp)
+  },
+  
+  fillAbsentRegional = function(covidTimeseries) {
+    tmp = covidTimeseriesFormat(covidTimeseries)
+    tmp = tmp %>% 
+      dplyr::ungroup() %>%
+      dplyr::group_by(source,type,statistic,code,name,codeType) %>% 
+      dplyr::group_modify(function(d,g,...) {
+        if (nrow(d) > 0) {
+          ageCats = d %>% select(ageCat) %>% distinct()
+          genders = d %>% select(gender) %>% distinct()
+          subgroups = d %>% select(subgroup) %>% distinct()
+          dates = tibble(date = unique(d$date))
+          combinations = tidyr::crossing(ageCats,genders,subgroups,dates)
+          d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date"))
+          if (g$type == "cumulative") {
+            d = d %>% dplyr::group_by(ageCat,gender,subgroup) %>% dplyr::arrange(date) %>% dplyr::mutate(Implicit = is.na(value)) %>% tidyr::fill(value) %>% dplyr::ungroup()
+          } else if (g$type == "incidence") {
+            d = d %>% dplyr::mutate(Implicit = is.na(value)) %>% dplyr::mutate(value = ifelse(is.na(value),0,value))
+          } else {
+            # bias or prevalence
+            # leave as NA
+            d = d %>% dplyr::mutate(Implicit = FALSE)
+          }
+          return(d)
+        } else {
+          return(tibble())
+        }
+      }) %>%
+      dplyr::ungroup() 
+    return(tmp)
+  },
+  
+  #' @description Take a set of timeseries and fixes any non standard names, trncates time series bu truncate days. 
+  #' intially Fills all regions to be the same length but with trim trailing NAs
+  #' @return a covidTimeseriesFormat dataframe
+  fixDatesAndNames = function(covidTimeseries, truncate) {
+    tmp5 = covidTimeseriesFormat(covidTimeseries)
     if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA)
     tmp5 = tmp5 %>% 
+      dplyr::ungroup() %>%
       dplyr::select(-name) %>%
       self$codes$findNamesByCode( outputCodeTypeVar = "lookupCodeType" ) %>% 
       dplyr::select(-lookupCodeType) %>% 
       dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
       dplyr::filter(date <= max(date)-truncate) %>%
       dplyr::ungroup()
-    tmp5 = self$complete(tmp5, infer = naIsZero)
     return(tmp5)
   },
   

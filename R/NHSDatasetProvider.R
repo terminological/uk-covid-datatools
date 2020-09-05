@@ -92,14 +92,19 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           dplyr::mutate(codeType = "CCG20", type="incidence",statistic="triage",subgroup=NA, note=NA, source=paste0(source,"-public")) %>% 
           dplyr::rename(value=incidence)
         # out2 = out2 %>% dplyr::select(-name) %>% self$codes$findNamesByCode(outputCodeTypeVar = NULL)
-        return(out2 %>% self$fixDatesAndNames(0))
+        return(out2 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
       }))
     },
+    
+    
+    # TODO: https://www.health-ni.gov.uk/publications/daily-dashboard-updates-covid-19-august-2020
+    # Wales: http://www2.nphs.wales.nhs.uk:8080/CommunitySurveillanceDocs.nsf/3dc04669c9e1eaa880257062003b246b/77fdb9a33544aee88025855100300cab/$FILE/Rapid%20COVID-19%20surveillance%20data.xlsx
+    # Scotland: https://www.opendata.nhs.scot/dataset/covid-19-in-scotland
     
     getTomWhiteCases = function(...) {
       self$getDaily("TOM-WHITE-CASES", ..., orElse = function (...) covidTimeseriesFormat({
         walesUAtoHealthBoard = self$codes$getMappings() %>% filter(fromCodeType=="UA",toCodeType=="LHB")
-        covid_19_cases_uk <- readr::read_csv("https://github.com/tomwhite/covid-19-uk-data/raw/master/data/covid-19-cases-uk.csv", 
+        covid_19_cases_uk <- readr::read_csv("https://github.com/geeogi/covid-19-uk-data/raw/master/data/covid-19-cases-uk.csv", 
                                       col_types = readr::cols(Date = readr::col_date(format = "%Y-%m-%d")), 
                                       na = c("","NaN","NA"))
         tmp_cases_uk = covid_19_cases_uk %>% 
@@ -134,14 +139,14 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           #tidyr::fill(value) %>%
           self$complete() %>%
           dplyr::ungroup()
-        return(tmp_cases_uk %>% self$fixDatesAndNames(4))
+        return(tmp_cases_uk %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
       }))
     },
       
     #browser()
     getTomWhiteIndicators = function(...) {
       self$getDaily("TOM-WHITE-INDIC", ..., orElse = function (...) covidTimeseriesFormat({
-        covid_19_indicators_uk <- readr::read_csv("https://github.com/tomwhite/covid-19-uk-data/raw/master/data/covid-19-indicators-uk.csv", 
+        covid_19_indicators_uk <- readr::read_csv("https://github.com/geeogi/covid-19-uk-data/raw/master/data/covid-19-indicators-uk.csv", 
                                            col_types = readr::cols(Date = readr::col_date(format = "%Y-%m-%d")))
         
         country_totals = covid_19_indicators_uk %>% 
@@ -193,7 +198,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         links = tmp %>% rvest::html_nodes(xpath="//a") %>% rvest::html_attr(name = "href")
         url = function(str) {return(links[links %>% stringr::str_detect(str)])}
         #Load files matched from landing page
-        file = self$downloadDaily(id = "NHS_DEATHS",url = url("COVID-19-total-announced-deaths(?!.*-weekly-tables)(.*)\\.xlsx"),type="xlsx")
+        file = self$downloadDaily(id = "NHS_DEATHS",url = url("COVID-19-total-announced-deaths(?!.*-weekly-file)(.*)\\.xlsx"),type="xlsx")
         NHS_DEATHS <- suppressMessages(readxl::read_excel(file, sheet = "Tab4 Deaths by trust", skip = 15))
         NHS_DEATHS = NHS_DEATHS %>% 
           dplyr::select(-c(1,2,5)) %>%
@@ -216,7 +221,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
             gender=NA_character_,
             ageCat=NA_character_
           )
-        out = out %>% self$fixDatesAndNames(4)
+        out = out %>%  self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete()
         return(out)
         
       }))
@@ -240,6 +245,10 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
             type == "Region" ~ "RGN",
             type == "Upper tier local authority" ~ "UTLA",
             type == "Lower tier local authority" ~ "LAD",
+            type == "utla" ~ "UTLA",
+            type == "ltla" ~ "LAD",
+            type == "nation" ~ "CTRY",
+            type == "region" ~ "RGN"
           )) %>%
           dplyr::ungroup() %>%
           dplyr::select(-type)
@@ -306,8 +315,102 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           dplyr::rename(incidence = daily_cases, cumulative=cumulative_cases) %>% 
           tidyr::pivot_longer(cols=c(incidence,cumulative), names_to ="type")
         
-        return(out %>% self$fixDatesAndNames(4))
+        return(out  %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
       }))
+    },
+    
+    getPHEApiNations = function(...) {
+      self$getDaily("PHE-API-CTRY", ..., orElse = function (...) covidTimeseriesFormat({
+        ctryCodes = dpc$codes$getCodes() %>% filter(codeType=="CTRY" & status=="live") %>% pull(code)
+        tmp = bind_rows(lapply(ctryCodes, FUN=function(x) self$getPHEApi(areaType = "nation", areaCode=x)))
+        return(tmp)
+      }))
+    },
+    
+    getPHEApiNHSRegions = function(...) {
+      self$getDaily("PHE-API-NHSER", ..., orElse = function (...) covidTimeseriesFormat({
+        nhserCodes = dpc$codes$getCodes() %>% filter(codeType=="NHSER" & status=="live") %>% pull(code)
+        tmp = bind_rows(lapply(nhserCodes, FUN=function(x) self$getPHEApi(areaType = "region", areaCode=x)))
+        return(tmp)
+      }))
+    },
+    
+    getPHEApi = function(areaType = "nation", areaName= NULL, areaCode = NULL, ...) {
+      
+      endpoint <- "https://api.coronavirus.data.gov.uk/v1/data"
+      
+      # Create filters:
+      filters = sprintf("areaType=%s", areaType)
+      if(!identical(areaName,NULL)) filters = c(filters, sprintf("areaName=%s", areaName))
+      if(!identical(areaCode,NULL)) filters = c(filters, sprintf("areaCode=%s", areaCode))
+      
+      # Create the structure as a list or a list of lists:
+      structure <- list(
+        date = "date", 
+        codeType = "areaType", 
+        name = "areaName", 
+        code = "areaCode", 
+        case = "newCasesBySpecimenDate",
+        death = "newDeaths28DaysByDeathDate",
+        admission = "newAdmissions"
+      )
+      
+      # The "httr::GET" method automatically encodes 
+      # the URL and its parameters:
+      httr::GET(
+        # Concatenate the filters vector using a semicolon.
+        url = endpoint,
+        
+        # Convert the structure to JSON (ensure 
+        # that "auto_unbox" is set to TRUE).
+        query = list(
+          filters = paste(filters, collapse = ";"),
+          structure = jsonlite::toJSON(structure, auto_unbox = TRUE)
+        ),
+        
+        # The API server will automatically reject any
+        # requests that take longer than 10 seconds to 
+        # process.
+        httr::timeout(10)
+      ) -> response
+      
+      # Handle errors:
+      if (response$status_code >= 400) {
+        url <- response$url
+        print(url)
+        err_msg = httr::http_status(response)
+        stop(err_msg)
+      }
+      
+      # Convert response from binary to JSON:
+      json_text <- httr::content(response, "text")
+      data = jsonlite::fromJSON(json_text)
+      
+      # Store the encoded URL for inspection:
+      # url <- response$url
+      # print(url)
+      
+      ts = data$data
+      
+      ts = ts %>% pivot_longer(cols=c("case","death","admission"),names_to = "statistic",values_to = "value") %>%
+        mutate(
+          type = "incidence",
+          codeType = case_when(
+            codeType == "nation" ~ "CTRY",
+            codeType == "region" ~ "RGN",
+            codeType == "utla" ~ "UTLA",
+            codeType == "ltla" ~ "LAD",
+            TRUE ~ NA_character_
+          ),
+          source = "phe api",
+          subgroup = NA,
+          ageCat = NA,
+          gender = NA,
+          note = NA,
+          statistic = ifelse(statistic == "admission","hospital admission",statistic),
+          date = as.Date(date,"%Y-%m-%d")
+        )
+      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
     },
     
     ####TODO: ----

@@ -1,0 +1,204 @@
+---
+title: "Monitoring the 111 data for early indication of outbreaks"
+output: 
+  pdf_document:
+    fig_caption: yes
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-monitor", output_file=paste0('NHS-111-monitor-',Sys.Date(),'.pdf')) })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Estimating R(t) from NHS 111 data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+library(tidyverse)
+library(patchwork)
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
+standardPrintOutput::setDefaults()
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+reload()
+```
+
+Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Ellen
+Brooks-Pollock^4^; Leon Danon ^3,5^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+Report: `r Sys.Date()`
+
+# Background
+
+
+
+# Methods
+
+The NHS 111 data includes information on people who contacted the emergency services via different routes, i.e. the NHS 111 website, or phoned 111 or 999. Where the contact concerned symptoms and signs of COVID-19 outcome of the outcome is recorded and this was classified as either "self care", "clinical review" (within 4-12 hours), "urgent clinical review" (within 2 hours), or needing an "emergency ambulance". 
+
+# Results
+
+```{r load111}
+
+ts111 = dpc$spim$getOneOneOne()
+events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Hotels and bars reopen"))
+```
+Restricting analysis from here on to England data specific to COVID-19.
+
+```{r}
+# triageCTRY = ts111 %>% 
+#     filter(statistic == "triage" & codeType == "CTRY" & name=="England") %>% 
+#     tsp$aggregateSubgroup() %>%
+#     filter(date >= "2020-03-15") %>%
+#     dpc$demog$findDemographics() %>%
+#     tsp$estimateRt()
+
+triage_111_999 = ts111 %>% 
+    filter(statistic == "triage" & codeType %in% c("CTRY","NHSER") & source %in% c("111","999")) %>% 
+    tsp$aggregateSource(fn=sum, na.rm=TRUE) %>% 
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$estimateRt(quick=TRUE)
+
+
+# triage_111 = ts111 %>% 
+#     filter(statistic == "triage" & codeType %in% c("NHSER") & source %in% c("111")) %>% 
+#     #tsp$aggregateSource(fn=sum, na.rm=TRUE) %>% 
+#     filter(date >= "2020-03-15") %>%
+#     dpc$demog$findDemographics() %>%
+#     tsp$estimateRt()
+
+
+# 
+# triageCTRY_final = ts111 %>% 
+#     filter(statistic == "triage" & name!="Scotland" & source %in% c("111") & subgroup %in% c("urgent clinical review","emergency ambulance")) %>% 
+#     filter(name != "Unknown (England)" & codeType %in% c("CTRY","NHSER")) %>%
+#     tsp$aggregateSource(fn=sum, na.rm=TRUE) %>%
+#     tsp$aggregateSubgroup() %>%
+#     filter(date >= "2020-03-15") %>%
+#     dpc$demog$findDemographics() %>%
+#     tsp$logIncidenceStats(smoothingWindow = 21) %>%
+#     tsp$estimateRtWithAssumptions(valueVar = Est.value)
+```
+
+`r ref$fig("111-CTRY")`  shows numbers of contact events by outcome where self care expected to be mild cases, clinical review moderate or severe, and emergency ambulance for life threatening.
+
+Panel A:
+
+* increasing trend in self care cases since 4th July - mild cases.
+* more recently followed by increases in other outcomes
+* ambulance rates dropped back but this could be reporting artefact
+
+Panel B:
+
+* $R_t$ significantly above one on self care metric at around 1.3. 
+* Other measures also above 1 - Potential to be early signal.
+* Could be result of local outbreaks - TBD if there is significant geographic variation
+
+```{r fig1}
+triageCTRY_111_999 = triage_111_999 %>% filter(subgroup != "other" & date > "2020-07-01" & codeType=="CTRY" & name == "England")
+p1 = tsp$plotIncidenceQuantiles(triageCTRY_111_999, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+    facet_wrap(vars(name))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")+standardPrintOutput::hideX()
+p2 = tsp$plotRt(triageCTRY_111_999,events = events,colour = subgroup, rtlim = c(0.5,1.5))
+  
+(p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,2))) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure1_111And999byOutcomeCTRY")
+```
+
+`r cap$fig("111-CTRY","The incidence of 111 & 999 contact events with different outcomes, and R(t) estimates based on those contact events as a proxy for cases.")`
+
+In `r ref$fig("111-NHSER")` we see rates of 111 calls. Striking increases in calls with self care outcomes initially in North West bu t more recently across all regions. Latterly large increases in London and South West. Upward trend in other outcomes. Scale is logarithmic so growth rates are exponential.
+
+```{r fig2}
+triageNHSER_111_999 = triage_111_999 %>% filter(subgroup != "other" & date > "2020-07-01" & codeType=="NHSER")
+p1 = tsp$plotIncidenceQuantiles(triageNHSER_111_999, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+    facet_wrap(vars(name))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")+standardPrintOutput::hideX()
+p2 = tsp$plotRt(triageNHSER_111_999,events = events,colour = subgroup, rtlim = c(0.5,1.5))+facet_wrap(vars(name))
+  
+#(p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,2))) %>%
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure2_111And999byOutcomeNHSER")
+
+```
+
+`r cap$fig("111-NHSER","The incidence of 111 & 999 contact events in regions, and R(t) estimates based on those contact events as a proxy for cases.")`
+
+In `r ref$fig("111-CTRY-RT")` we see associated $R_t$. Levels at high as 1.5 in London and South West. Sustained high level in North West. All indicators above the estimates recently submitted using hospital based metrics.
+
+
+```{r}
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure3_111And999byOutcomeNHSER_Rt")
+```
+
+`r cap$fig("111-NHSER-RT","The R(t) estimates based on 111 & 999 contact events in NHS regions as a proxy for cases.")`
+
+# Discussion
+
+* Using R(t) calculated from 111 & 999 call data, which result in an urgent clinical review, or for which an ambulance attends is a valid approach, and may give us a more up to date picture.
+* 111 reflects behavioral factors but also possibly a younger community population.
+* Evidence of early exponential spread in areas such as London and South West.
+* Not obviously isolated to individual regions.
+
+# Limitations & next steps
+
+* No equivalent outcome data for Scotland, Wales, or Northern Ireland.
+* A weekly behavioral artifact is noted with more calls on a Monday Tuesday and fewer over weekend.
+* Detailed age and CCG breakdown TBD
+* Large behavioral element possible - not clear that self care could be a default option for people that are not thought to have COVID
+* Outcome does not include information about whether self isolation / testing is recommended. Need further discussion with 111 & 999 providers.
+
+# Conclusion
+
+* $R_t$ significantly higher than current estimates when using looser definitions of cases that may include mild cases in the community
+* Current hospital based estimates don't reflect focus of spread in community and younger people.
+* This needs replicating.
+
+# References

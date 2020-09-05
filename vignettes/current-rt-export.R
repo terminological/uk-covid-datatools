@@ -1,31 +1,44 @@
 setwd("~/Git/uk-covid-datatools/vignettes/")
-devtools::load_all("~/Git/uk-covid-datatools//")
+#devtools::load_all("~/Git/uk-covid-datatools/")
 source("cron-estimate-rt.R")
 
-rtConfig = tsp$serial$getBasicConfig(quick = FALSE)$config
+rtConfig = tsp$serial
 
-export7day = currentRt$rt %>% 
-  filter(!(name %in% c("Northern Ireland","Scotland"))) %>% 
+export7dayRt = currentRt$rt %>% 
+  filter(!(name %in% c("Northern Ireland","Scotland","Wales"))) %>% 
   filter(source %in% c("4NationsCases","Deaths","Triage"))
-export28day = currentRt$rt28 %>% 
+export7dayGrowth = currentRt$rt %>% 
+  #filter(!(name %in% c("Northern Ireland","Scotland","Wales"))) %>% 
+  filter(source %in% c("4NationsCases","Deaths","Triage"))
+
+export28dayRt = currentRt$rt28 %>% 
   filter(!(name %in% c("Northern Ireland","Scotland"))) %>% 
   #filter(!(name == "Wales" & statistic == "case")) %>% 
   filter(source %in% c("4NationsCases","Deaths","Triage"))
+export28dayGrowth = currentRt$rt28 %>% 
+  #filter(!(name %in% c("Northern Ireland","Scotland"))) %>% 
+  #filter(!(name == "Wales" & statistic == "case")) %>% 
+  filter(source %in% c("4NationsCases","Deaths","Triage"))
+
 
   ## create SPI-M export ----
   exportSPIM7day = bind_rows(
-    export7day %>%
+    export7dayRt %>%
       ungroup() %>%
-      filter(!is.na(`Median(R)`)) %>% 
-      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.01"),
+      filter(!is.na(`Median(R)`)) %>% mutate(
+        modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", TRUE ~ NA_character_)
+      ) %>% 
+      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), modelTypeExpr = modelType, version="0.01"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="0.01"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="0.01"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="0.01"),
     
-    export7day %>%
+    export7dayGrowth %>%
       ungroup() %>%
-      filter(!is.na(`Median(R)`)) %>% 
-      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.01")
+      filter(!is.na(`Median(R)`)) %>% mutate(
+        modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", TRUE ~ NA_character_)
+      ) %>%
+      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source),modelTypeExpr = modelType, version="0.01")
   )
   
   excelOutput <- openxlsx::createWorkbook()
@@ -35,18 +48,22 @@ export28day = currentRt$rt28 %>%
   
   ## create SPI-M export ----
   exportSPIM28Day = bind_rows(
-    export28day %>%
+    export28dayRt %>%
       ungroup() %>%
-      filter(!is.na(`Median(R)`)) %>% 
-      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.02"),
+      filter(!is.na(`Median(R)`)) %>% mutate(
+        modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", TRUE ~ NA_character_)
+      ) %>% 
+      convertRtToSPIM(name,modelExpr = paste0("EpiEstim/",source),modelTypeExpr = modelType, version="0.02"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/4NationsCases", version="0.02"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Deaths", version="0.02"),
     rtConfig %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/Triage", version="0.02"),
     
-    export28day %>%
+    export28dayGrowth %>%
       ungroup() %>%
-      filter(!is.na(`Median(R)`)) %>% 
-      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source), version="0.02")
+      filter(!is.na(`Median(R)`)) %>% mutate(
+        modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", TRUE ~ NA_character_)
+      ) %>% 
+      convertGrowthRateToSPIM(name,modelExpr = paste0("EpiEstim/",source),modelTypeExpr = modelType, version="0.02")
     # cfg %>% convertSerialIntervalToSPIM(modelName = "EpiEstim/PHETrackerCases")
   )
   

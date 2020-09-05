@@ -114,12 +114,12 @@ plotRibbons = function(meanVar, sdVar, colourExpr, ...) {
         ymin=(!!meanVar-q[1]*!!sdVar),
         ymax=(!!meanVar+q[4]*!!sdVar),
         ... #!!!dots
-      ),fill=colourExpr,colour = NA,alpha = 0.1,show.legend = FALSE),
+      ),fill=colourExpr,colour = NA,fill="black",alpha = 0.05,show.legend = FALSE),
       geom_ribbon(aes(
         ymin=(!!meanVar+q[2]*!!sdVar),
         ymax=(!!meanVar+q[3]*!!sdVar),
         ... #!!!dots
-      ),fill=colourExpr,colour = NA,alpha = 0.15,show.legend = FALSE)
+      ),fill=colourExpr,colour = NA,fill="black",alpha = 0.065,show.legend = FALSE)
     ))
   } else {
     return(list(
@@ -127,15 +127,15 @@ plotRibbons = function(meanVar, sdVar, colourExpr, ...) {
       geom_ribbon(aes(
         ymin=(!!meanVar-q[1]*!!sdVar),
         ymax=(!!meanVar+q[4]*!!sdVar),
-        fill=!!colourExpr,
+        group=!!colourExpr,
         ... #!!!dots
-      ),colour = NA,alpha = 0.1,show.legend = FALSE),
+      ),colour = NA,fill="black",alpha = 0.05,show.legend = FALSE),
       geom_ribbon(aes(
         ymin=(!!meanVar+q[2]*!!sdVar),
         ymax=(!!meanVar+q[3]*!!sdVar),
-        fill=!!colourExpr,
+        group=!!colourExpr,
         ... #!!!dots
-      ),colour = NA,alpha = 0.15,show.legend = FALSE)
+      ),colour = NA, fill="black",alpha = 0.065,show.legend = FALSE)
     ))
   }
 }
@@ -184,3 +184,11 @@ NULL
 # `%>%`.R6 = function(r6,fn) {
 # 
 # }
+
+
+mode <- function(x) {
+    tmp = density(x,n = 8192)
+    round(tmp$x[tmp$y==max(tmp$y)],3)
+#   ux <- unique(x)
+#   ux[which.max(tabulate(match(x, ux)))]
+}

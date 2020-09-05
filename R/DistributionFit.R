@@ -24,12 +24,13 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     invisible(self)
   },
   
-  fromUncensoredData = function(groupedDf, valueExpr = value, truncate = TRUE, bootstraps=100) {
+  fromUncensoredData = function(groupedDf, valueExpr = value, truncate = TRUE, bootstraps=100,seed=101,...) {
+    dots = rlang::list2(...)
     self$censored = FALSE
     self$groupedDf = groupedDf
     self$grps = grps = groupedDf %>% groups()
     valueExpr=enexpr(valueExpr)
-    
+    errors = NULL
     self$fitData = groupedDf %>% mutate(value = !!valueExpr) %>% mutate(value = value+self$shifted) %>% select(!!!grps,value) %>% group_by(!!!grps)
     #TODO: cache this?
     out = self$fitData %>% group_modify( function(d,g,...) {
@@ -48,19 +49,22 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
           values = round(values)
         }
         
-        if (length(m$fix.arg)>0) {
-          dist = suppressWarnings({
-            tryCatch(fitdistrplus::fitdist(values, m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
-          })
-        } else {
-          dist = suppressWarnings({
-            tryCatch(fitdistrplus::fitdist(values, m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
-          })
-        }
+        arg = dots
+        arg$data = values 
+        arg$distr = m$name
+        arg$start = m$start
+        arg$lower=unlist(m$lower)
+        #browser()
+        if (length(m$fix.arg)>0) {arg$fix.arg=m$fix.arg}
+        
+        dist = suppressWarnings({
+          tryCatch(do.call(fitdistrplus::fitdist, args=arg), error = function(e) {errors <<- c(errors,e$message);NULL})
+        })
+        
         if (is.null(dist)) {
           message("No fit for ",m$name)
         } else {
-          res = self$extractFitted(dist, isCensored = FALSE, bootstraps = bootstraps)
+          res = self$extractFitted(dist, isCensored = FALSE, bootstraps = bootstraps,seed = seed)
           tmp = tmp %>% bind_rows(res$fittedModels)
           # nasty hack coming up....
           bstr = res$bootstraps %>% full_join(g, by = character())
@@ -71,12 +75,15 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     })
     self$fittedModels = distributionsDefinition(out)
     self$samples = NULL
+    warning(unique(errors))
     invisible(self)
   },
   
-  fromCensoredData = function(groupedDf, lowerValueExpr, upperValueExpr, truncate = TRUE, bootstraps = 100) {
+  fromCensoredData = function(groupedDf, lowerValueExpr, upperValueExpr, truncate = TRUE, bootstraps = 100, seed=101,...) {
     lowerValueExpr=enexpr(lowerValueExpr)
     upperValueExpr=enexpr(upperValueExpr)
+    dots = rlang::list2(...)
+    errors=NULL
     
     self$censored = TRUE
     self$groupedDf = groupedDf
@@ -105,21 +112,23 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
             right = round(right),
           )
         }
+        arg = dots
+        arg$censdata = as.data.frame(values)
+        arg$distr = m$name
+        arg$start = m$start
+        arg$lower=unlist(m$lower)
+        #browser()
+        if (length(m$fix.arg)>0) {arg$fix.arg=m$fix.arg}
         
-        if (length(m$fix.arg)>0) {
-          dist = suppressWarnings({
-            tryCatch(fitdistrplus::fitdistcens(values %>% as.data.frame(), m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
-          })
-        } else {
-          dist = suppressWarnings({
-            tryCatch(fitdistrplus::fitdistcens(values %>% as.data.frame(), m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
-          })
-        }
+        dist = suppressWarnings({
+          tryCatch(do.call(fitdistrplus::fitdistcens, args=arg), error = function(e) {errors <<- c(errors,e$message);NULL})
+        })
+        
         #browser()
         if (is.null(dist)) {
           message("No fit for ",m$name)
         } else {
-          res = self$extractFitted(dist, isCensored = TRUE, bootstraps = bootstraps)
+          res = self$extractFitted(dist, isCensored = TRUE, bootstraps = bootstraps, seed=seed)
           tmp = tmp %>% bind_rows(res$fittedModels)
           # nasty hack coming up....
           bstr = res$bootstraps %>% full_join(g, by = character())
@@ -128,8 +137,10 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
       }
       return(tmp)
     })
+    
     self$fittedModels = distributionsDefinition(out)
     self$samples = NULL
+    warning(unique(errors))
     invisible(self)
   },
   
@@ -148,11 +159,14 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   # },
   
   withSingleDistribution = function(dist, paramDf, bootstraps = 1000, epiestimMode = FALSE, ...) {
+    dots = rlang::list2(...)
     distParams = names(DistributionFit$conversionFrom[[dist]])
-    if (all(distParams %in% paramDf$param)) {
-      # use native parameters.
+    # is the distribution fully specified?
+    if (all(distParams %in% paramDf$param) & !any(is.na(c(paramDf$mean,paramDf$sd,paramDf$lower,paramDf$upper)))) {
+      # use native parameters. Assume a truncated normal.
       tmp_bootstraps = paramDf %>% group_by(param) %>% group_modify(function(d,g,..) {
         if(nrow(d) > 1) stop(paste0("param ",g$param," is not unique"))
+        print(list(mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper))
         return(tibble(
           bootstrapNumber = 1:bootstraps,
           value = msm::rtnorm(n=bootstraps, mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper)
@@ -165,59 +179,95 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
       converted = DistributionFit$convertParameters(dist = dist, paramDf = paramDf, bootstraps = bootstraps, epiestimMode = epiestimMode, ...)
       self$bootstraps = self$bootstraps %>% bind_rows(converted$bootstraps %>% mutate(...))
       self$fittedModels = self$fittedModels %>% bind_rows(converted$fittedModels %>% mutate(...))
-      dots = rlang::list2(...)
-      if (identical(self$grps,NULL))  self$grps = sapply(names(dots),as.symbol)
-      #TODO: could formally check for intersection of previous and new groups, or that dots contains all the correct args.
+      # TODO: could formally check for intersection of previous and new groups, or that dots contains all the correct args.
       # TODO: rethink what is fit data here - we ought to be able to generate a single "mid market" sample: self$fitData = self$samples
       # I think we only need it for plotting. maybe better to disable that part of plotting if it is not present.
     } else {
       stop("paramDf does not define mean and sd, or other distribution parameters")
     }
+    if (identical(self$grps,NULL))  self$grps = sapply(names(dots),as.symbol)
     self$censored = FALSE
     invisible(self)
     
   },
   
-  fromBootstrappedData = function(bootstrappedDf, valueExpr = value, truncate = TRUE) {
+  #' @param fittedModels a dataframe of fitted models with columns dist, param, value plus other columns if desired
+  fromBootstrappedDistributions = function(fittedDistributions, confint=c(0.025,0.975), ...) {
+    self$setModels(unique(fittedDistributions$dist))
+    cols = colnames(fittedDistributions)
+    grps = sapply(cols[!(cols %in% c("bootstrapNumber","dist","param","value"))], as.symbol)
+    self$bootstraps = fittedDistributions
+    self$fittedModels = fittedDistributions %>% group_by(!!!grps,dist,param) %>% summarise(mean=mean(value),sd=sd(value),lower=quantile(value,confint[1]),upper=quantile(value,confint[2]))
+    self$censored = FALSE
+  },
+  
+  fromBootstrappedData = function(bootstrappedDf, valueExpr = value, truncate = TRUE,...) {
+    dots = rlang::list2(...)
     valueExpr = ensym(valueExpr)
+    errors = NULL
     grps = bootstrappedDf %>% groups()
     self$grps = grps
     self$groupedDf = bootstrappedDf
+    #browser()
     self$bootstraps = bootstrappedDf %>% ensurer::ensure_that("bootstrapNumber" %in% colnames(.) ~ "bootstrapDf must have a bootstrapNumber column") %>%
       group_by(!!!grps, bootstrapNumber) %>% 
       group_modify(function(d,g,...) {
-        tmpBootstrap = NULL
+        tmpBootstrap = tibble(dist=NA_character_,param=NA_character_,value=NA_real_) %>% filter(!is.na(dist))
         for (m in self$models) {
-          #browser()
           values = d %>% mutate(x = !!valueExpr) %>% pull(x)
           values = values+self$shifted
           if (truncate) {
             #if (any(values>m$support[2]|values<m$support[1])) message("Truncating data for ",m$name)
             values = values[values<=m$support[2] & values>=m$support[1]]
           }
-          if (length(m$fix.arg)>0) {
-            dist2 = suppressWarnings({
-              tryCatch(fitdistrplus::fitdist(values, m$name, start = m$start, fix.arg=m$fix.arg, lower=unlist(m$lower), ...), error = function(e) NULL)
-            })
-          } else {
-            dist2 = suppressWarnings({
-              tryCatch(fitdistrplus::fitdist(values, m$name, start = m$start, lower=unlist(m$lower), ...), error = function(e) NULL)
-            })
+          if(m$discrete) {
+            values = round(values)
           }
+          
+          #control=list(trace=1, REPORT=1)
+          arg = dots
+          arg$data = values 
+          arg$distr = m$name
+          arg$start = m$start
+          arg$lower=unlist(m$lower)
+          #browser()
+          if (length(m$fix.arg)>0) {arg$fix.arg=m$fix.arg}
+          
+          dist2 = suppressWarnings({
+            tryCatch(do.call(fitdistrplus::fitdist, args=arg), error = function(e) {errors <<- c(errors,e$message);NULL})
+          })
+          
           if (!is.null(dist2)) {
             # build a bootstraps entry
             #browser()
-            tmpBootstrap = tmpBootstrap %>% bind_rows(tibble(
-              dist = dist2$distname,
-              param = names(dist2$estimate),
-              value = dist2$estimate
-            ))
+            tmpBootstrap = tmpBootstrap %>% bind_rows(
+              tibble(
+                dist = dist2$distname,
+                param = names(dist2$estimate),
+                value = dist2$estimate,
+                n = dist2$n,
+                loglik = dist2$loglik,
+                aic = dist2$aic,
+                bic = dist2$bic
+              )
+            )
+            if(length(m$fix.arg)>0) {
+              tmpBootstrap = tmpBootstrap %>% bind_rows(
+                tibble(
+                  dist = dist2$distname, 
+                  param = names(m$fix.arg),
+                  value = unlist(m$fix.arg),
+                  n = dist2$n,
+                  loglik = dist2$loglik,
+                  aic = dist2$aic,
+                  bic = dist2$bic
+                )
+              )
+            }
           }
         }
         return(tmpBootstrap)
-        
-        
-      })
+      }) %>% group_by(!!!grps)
     
     self$fittedModels = self$bootstraps %>% group_by(!!!grps,dist,param) %>%
       summarise(
@@ -225,20 +275,28 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
         sd = sd(value,na.rm = TRUE),
         lower = quantile(value, 0.025),
         upper = quantile(value, 0.975),
-      )
-      
+        n = sum(n),
+        loglik = mean(loglik),
+        aic = mean(aic),
+        bic = mean(bic)
+      ) %>% group_by(!!!grps)
+    
+    self$bootstraps = self$bootstraps %>% select(!!!grps,bootstrapNumber,dist,param,value)
+    
     # self$groupedDf = bootstrappedDf %>% group_by(!!!grps) %>% summarise(
     #   !!paste0("Mean.",as_label(valueExpr) := mean(!!valueExpr)))
-    
     self$fitData =  bootstrappedDf %>% mutate(
       value = !!valueExpr+self$shifted) %>%
       select(!!!grps,value)
-      
+    
+    self$samples = bootstrappedDf %>% mutate(value = !!valueExpr) %>% 
+      select(!!!grps, bootstrapNumber, value) %>% group_by(!!!grps, bootstrapNumber) %>% mutate(sampleNumber = row_number(), dist="empirical")
     self$censored = FALSE
-    #browser()
+    if (!identical(errors,NULL)) warning(unique(errors))
+    invisible(self)
   },
   
-  plot = function(xlim, binwidth = 1) {
+  plot = function(xlim, binwidth = 1, summary=FALSE, pts=8) {
     
     #TODO: attribute fractions of survivalDf to different times based on left and right censoring.
     # This needs a review of structure fo whole thing
@@ -250,6 +308,9 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     
     grps = self$grps
     
+    
+    
+    
     p1 = ggplot()
     if(!self$censored & !identical(self$fitData,NULL)) p1 = p1 + geom_histogram(data=self$fitData, aes(x=value-self$shifted, y=..density..),fill=NA,colour = "grey50",binwidth = binwidth)
     
@@ -259,8 +320,12 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     if(nrow(cont) > 0) {
     p1 = p1 +  geom_line(data = cont, aes(x=value-self$shifted,y=Mean.density,colour = dist), size = 1) +
       geom_ribbon(data = cont, aes(x=value-self$shifted, ymin=Quantile.0.025.density,ymax=Quantile.0.975.density,fill = dist),colour=NA,alpha=0.1)+
-      geom_ribbon(data = cont, aes(x=value-self$shifted, ymin=Quantile.0.25.density,ymax=Quantile.0.75.density,fill = dist),colour=NA,alpha=0.15)+
-      coord_cartesian(xlim = xlim)
+      geom_ribbon(data = cont, aes(x=value-self$shifted, ymin=Quantile.0.25.density,ymax=Quantile.0.75.density,fill = dist),colour=NA,alpha=0.15)
+    }
+    
+    if(summary) {
+      labels = self$printDistributionSummary() %>% group_by(!!!self$grps) %>% summarise(label = paste0(dist," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+      p1 =p1 + geom_label(data=labels, aes(x = Inf, y = Inf, label = label), fill=NA, label.size=0, label.padding = unit(2, "lines"), hjust="inward", vjust="inward", size=pts/ggplot2:::.pt/(96/72))
     }
     
     discont = pdfs %>% filter(dist %in% names(disc)[disc])
@@ -286,15 +351,16 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     
     grps = self$grps
     if (length(grps) == 2) {
-      p1 = p1 + facet_grid(rows = grps[[1]], cols = grps[[2]], scales="free") 
+      p1 = p1 + facet_grid(rows = vars(!!grps[[1]]), cols = vars(!!grps[[2]]), scales="free") 
     } else if(length(grps) != 0) {
       p1 = p1 + facet_wrap(facets = grps, scales="free")
     }
     return(p1)
   },
   
-  extractFitted = function(distFit, isCensored, bootstraps = 100) {
+  extractFitted = function(distFit, isCensored, bootstraps = 100, seed=101) {
     if (!is.null(distFit)) {
+      set.seed(seed)
       if (isCensored) {
         dist2 = suppressWarnings(fitdistrplus::bootdistcens(distFit,silent = TRUE,niter = bootstraps,ncpus = 3))
         #browser()
@@ -303,20 +369,39 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
       }
     }
     #browser()
-    return(
-      list(
-        fittedModels=distributionsDefinition(tibble(
+    m=DistributionFit$standardDistributions[[dist2$fitpart$distname]]
+    fittedModels=tibble(
+        n=distFit$n,
+        aic=distFit$aic,
+        bic=distFit$bic,
+        loglik=distFit$loglik,
+        dist = dist2$fitpart$distname,
+        param = names(distFit$estimate),
+        mean = unname(sapply(dist2$estim,mean, na.rm=TRUE)), #dist$estimate,
+        sd = unname(sapply(dist2$estim,sd, na.rm=TRUE)), #dist$sd,
+        lower = matrix(dist2$CI,ncol=3)[,2],
+        upper = matrix(dist2$CI,ncol=3)[,3]
+      )
+    if(length(m$fix.arg)>0) {
+      fittedModels = fittedModels %>% bind_rows(
+        tibble(
           n=distFit$n,
           aic=distFit$aic,
           bic=distFit$bic,
           loglik=distFit$loglik,
           dist = dist2$fitpart$distname,
-          param = names(distFit$estimate),
-          mean = unname(sapply(dist2$estim,mean, na.rm=TRUE)), #dist$estimate,
-          sd = unname(sapply(dist2$estim,sd, na.rm=TRUE)), #dist$sd,
-          lower = matrix(dist2$CI,ncol=3)[,2],
-          upper = matrix(dist2$CI,ncol=3)[,3]
-        )),
+          param = names(m$fix.arg),
+          mean = unlist(m$fix.arg),
+          sd = 0,
+          lower = unlist(m$fix.arg),
+          upper = unlist(m$fix.arg)
+        )
+      )
+    }
+      
+    return(
+      list(
+        fittedModels=distributionsDefinition(fittedModels),
         # TODO: a goodness of fit measure here would be reassuring, but how this woudl integrate with the rest of the 
         # code is a bit of a mystery. Problem is that some bootstraps may be a terrible fit but they are treated the same 
         # as those that are a good fit. Could I suppose dispose of a certain fraction of bootstraps that are a poor fit...
@@ -328,10 +413,10 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   },
   
   filterModels = function(...) {
-    self$fittedModels = self$fittedModels %>% filter(...)
-    self$bootstraps = self$bootstraps %>% semi_join(self$fittedModels, by=c(sapply(self$grps,as_label),"dist"))
+    self$fittedModels = self$fittedModels %>% group_by(!!!self$grps) %>% filter(...)
+    self$bootstraps = self$bootstraps %>% semi_join(self$fittedModels, by=unlist(c(sapply(self$grps,as_label),"dist")))
     if (!identical(self$samples,NULL))
-      self$samples = self$samples %>% semi_join(self$fittedModels, by=c(sapply(self$grps,as_label),"dist"))
+      self$samples = self$samples %>% semi_join(self$fittedModels, by=unlist(c(sapply(self$grps,as_label),"dist")))
     invisible(self)
   },
   
@@ -371,10 +456,11 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   #'   invisible(self)
   #' },
   
-  generateSamples = function(sampleExpr = 1000) {
+  generateSamples = function(sampleExpr = 1000, seed = 101) {
     sampleExpr = enexpr(sampleExpr)
     if(identical(self$bootstraps, NULL)) self$bootstraps = self$fittedModels %>% dplyr::mutate(value = mean, bootstrapNumber=0)
     grps = self$grps
+    set.seed(seed)
     bootstrapSamples = self$bootstraps %>% 
       mutate(tmp_samples = !!sampleExpr) %>% 
       group_by(!!!grps,dist,bootstrapNumber,tmp_samples) %>% 
@@ -422,7 +508,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     tmp = self$bootstraps %>% group_by(!!!grps,dist,bootstrapNumber) %>% group_modify(function(d,g,...) {
       func = paste0("p",g %>% pull(dist))
       if (DistributionFit$standardDistributions[[g$dist]]$discrete) {
-        q = round(min(q)):round(max(q))
+        q = round(q)
       }
       params2 = d %>% select(param,value) %>% tibble::deframe()
       pdfs = tibble(
@@ -435,7 +521,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     else return(tmp)
   },
   
-  #' @description calculates a set of pdfs from bootstrapped distributions
+  #' @description calculates a set of quantiles from bootstrapped distributions
   #' @param support - the range of values of X for which to calculate the density.
   #' @return a list of randomly selected bootstraps from the fitted models.
   calculateQuantiles = function(p, summarise=TRUE) {
@@ -503,7 +589,8 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     tmp = tmp %>% dplyr::mutate( #self$fittedModels %>% bind_rows(tmp) %>% mutate(
       `Distribution` = purrr::map_chr(dist, ~ self$models[[.x]][["print"]]),
       shift = self$shifted,
-      !!(sprintf("Mean \U00B1 SD (%1d%% CI)",ci)) := sprintf("%1.2f \U00B1 %1.2f (%1.2f; %1.2f)",mean,sd,lower,upper)
+      #!!(sprintf("Mean \U00B1 SD (%1d%% CI)",ci)) := sprintf("%1.2f \U00B1 %1.2f (%1.2f; %1.2f)",mean,sd,lower,upper)
+      !!(sprintf("Mean (%1d%% CI)",ci)) := sprintf("%1.2f (%1.2f; %1.2f)",mean,lower,upper)
     ) %>% mutate(
       `Distribution` = ifelse(shift>0, paste0(`Distribution`, "(shifted ",shift,")"), `Distribution`)
     )
@@ -528,7 +615,6 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     if ("n" %in% names(tmp)) tmp = tmp %>% mutate(n = first(na.omit(n)))
     if ("bic" %in% names(tmp)) tmp = tmp %>% mutate(bic= first(na.omit(bic)))
     if ("loglik" %in% names(tmp)) tmp = tmp %>% mutate(loglik= first(na.omit(loglik)))
-    
     return(tmp)
   },
   
@@ -676,10 +762,10 @@ DistributionFit$standardDistributions = list(
   weibull = list(name = "weibull", print = "weibull", start = list(shape =1 , scale=10), fix.arg = list(), lower=list(shape=0,scale=0), support=c(0,Inf), discrete=FALSE),
   gamma = list(name = "gamma", print = "gamma", start = list(shape =1 , rate=0.1), fix.arg = list(), lower=list(shape=0,rate=0), support=c(0,Inf), discrete=FALSE),
   lnorm = list(name = "lnorm", print = "log-normal", start = list(meanlog=1 , sdlog=1), fix.arg = list(), lower=list(meanlog=-Inf, sdlog=-Inf), support=c(0,Inf), discrete=FALSE),
-  exp = list(name = "exp", print = "exponential", start = list(rate=0.5), fix.arg = list(), lower=list(rate=0.000001), support=c(0.000001,Inf), discrete=FALSE),
+  exp = list(name = "exp", print = "exponential", start = list(rate=0.5), fix.arg = list(), lower=list(rate=0.000001), support=c(.Machine$double.xmin, Inf), discrete=FALSE),
   norm = list(name = "norm", print = "normal", start = list(mean = 1, sd = 0.1), fix.arg = list(), lower=list(sd=0), support=c(-Inf,Inf), discrete=FALSE),
   tnorm = list(name = "tnorm", print = "truncated normal", start = list(mean = 1, sd = 0.1), fix.arg = list(lower=0,upper=Inf), support=c(0,Inf), lower=list(mean=0,sd=0.001), discrete=FALSE),
-  nbinom = list(name = "nbinom", print = "negative binomial", start = list(size = 1, prob = 0.1), fix.arg = list(), lower=list(size=0,prob=0), support=c(0,Inf), discrete=TRUE),
+  nbinom = list(name = "nbinom", print = "negative binomial", start = list(size = 1, prob = 0.1), fix.arg = list(), lower=list(size=.Machine$double.xmin, prob=0), support=c(0,Inf), discrete=TRUE),
   pois = list(name = "pois", print = "poisson", start = list(lambda = 1), fix.arg = list(), lower=list(lambda=0), support=c(0,Inf), discrete=TRUE)
 )
 
@@ -687,6 +773,7 @@ DistributionFit$conversionFrom = list(
   gamma = list(
     scale = function(mean,sd) sd^2/mean,
     shape = function(mean,sd) mean^2/sd^2
+    #rate = function(mean,sd) sd^2/mean^2
   ),
   lnorm = list(
     meanlog = function(mean,sd) log(mean/sqrt(1+(sd^2)/(mean^2))),
@@ -695,6 +782,12 @@ DistributionFit$conversionFrom = list(
   norm = list(
     mean = function(mean,sd) mean,
     sd = function(mean,sd) sd
+  ),
+  tnorm = list(
+    mean = function(mean,sd) mean,
+    sd = function(mean,sd) sd,
+    lower = function(mean,sd) 0,
+    upper = function(mean,sd) Inf
   ),
   weibull = list(
     shape = function(mean,sd) (sd/mean)^-1.086,
@@ -714,8 +807,8 @@ DistributionFit$conversionFrom = list(
 
 DistributionFit$conversionTo = list(
   gamma = list(
-    mean = function(shape,scale = 1/rate,rate=1/scale) shape*scale,
-    sd = function(shape,scale = 1/rate,rate=1/scale) sqrt(shape*scale^2)
+    mean = function(shape,scale = 1/rate, rate=1/scale) shape*scale,
+    sd = function(shape,scale = 1/rate, rate=1/scale) sqrt(shape*(scale^2))
   ),
   lnorm = list(
     mean = function(meanlog,sdlog) exp(meanlog+(sdlog^2)/2),
@@ -724,6 +817,10 @@ DistributionFit$conversionTo = list(
   norm = list(
     mean = function(mean,sd) mean,
     sd = function(mean,sd) sd
+  ),
+  tnorm = list(
+    mean = function(mean,sd,lower,upper) mean,
+    sd = function(mean,sd,lower,upper) sd
   ),
   weibull = list(
     mean = function(scale, shape) scale*gamma(1+1/shape),
@@ -803,8 +900,8 @@ DistributionFit$convertParameters = function(
       # browser()
       sdOfSd = 0
     } else {
-      fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=shape, scale=meanOfSd/shape), data = tibble( x=c(confint[1],confint[2]), y=c(lowerOfSd, upperOfSd) )))
-      sdShape = summary(fit.sd.gamma)$parameters[["shape",1]]
+      fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=tmp_shape, scale=meanOfSd/tmp_shape), data = tibble( x=c(confint[1],confint[2]), y=c(lowerOfSd, upperOfSd) )))
+      sdShape = summary(fit.sd.gamma)$parameters[["tmp_shape",1]]
       sdScale = meanOfSd/sdShape
       sdOfSd = sqrt(sdShape*sdScale^2)
     }
@@ -822,7 +919,7 @@ DistributionFit$convertParameters = function(
         boot_sd = meanOfSd
       } else {
         sdShape = meanOfSd^2/sdOfSd^2
-        sdScale = sdOfSd^2/meanOfSd # this shoudl maybe hard limited to 2
+        sdScale = sdOfSd^2/meanOfSd # this should maybe hard limited to 2 - as SD is chisq distributed and chisq is gamma with scale 2 (or rate 0.5).
         boot_sd = rgamma(bootstraps,shape = sdShape,scale = sdScale)
       }
     } else {

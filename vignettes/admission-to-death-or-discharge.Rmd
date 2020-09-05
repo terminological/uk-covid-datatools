@@ -93,7 +93,7 @@ tmpSurv = admissionToDischargeOrDeath %>% rename(age = ageCat) %>% mutate(status
 fitByAgeCat = survfit(Surv(time,status) ~ age, tmpSurv)
 plot = survminer::ggsurvplot(
   fitByAgeCat, conf.int = TRUE
-)+ylab("P(inpatient)")
+)+ylab("P(inpatient)")+coord_cartesian(xlim=c(0,50))
 
 (plot$plot+standardPrintOutput::defaultFigureLayout()) %>% 
   standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/admission-to-discharge/Fig1_kaplanMeierByAge")
@@ -123,6 +123,25 @@ censoredAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% srv$gene
 ) %>% select(
   caseid, status, trustcode, finaloutcome, time, ageCat, sex
 )
+
+#TODO: this is "newer
+admissionToDeath = CHESSClean %>% 
+  filter(age>10 & !is.na(hospitaladmissiondate) & !is.na(finaloutcomedate)) %>% 
+    mutate(
+      transition = "onset to death",
+      time = as.integer(finaloutcomedate - hospitaladmissiondate),
+      ageCat = tsp$cutByAge(age,ageBreaks = seq(10,90,10))
+    ) %>% select(caseid,transition,time,ageCat, finaloutcome) %>% filter(time < 100 & time > 0) %>% group_by(finaloutcome,ageCat)
+
+admissionToDeathFit = DistributionFit$new(distributions = c("lnorm","gamma"))$fromUncensoredData(admissionToDeath, valueExpr = time, truncate = TRUE, bootstraps = 100)
+p=admissionToDeathFit$plot(xlim = c(0,60))+xlab("time delay")
+p
+admissionToDeathFit$printDistributionSummary() %>% filter(dist=="lnorm" & param=="mean")
+
+#tables$onsetToDeath = onsetToDeathFit$printDistributionDetail() %>% arrange(aic,dist,param)
+
+
+
 ```
 
 # Parameter fitting goodness of fit test for single age group

@@ -335,6 +335,10 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
                           "Address Line 5",  "Postcode",  "Open Date",  "Close Date",  "Null 1",  "Organisation SubType Code",  "Parent Organisation Code",  "Null 2",  "Null 3",  "Contact Telephone Number",
                           "Null 4",  "Null 5",  "Null 6",  "Amended Record Indicator",  "Null 7",  "GOR Code",  "Null 8",  "Null 9",  "Null 10")
       
+      # https://digital.nhs.uk/services/organisation-data-service/data-downloads/other-nhs-organisations
+      # has all these links plus more
+      # particularly wales LHB
+      
       etr = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",
                             col_names = standardFormat,
                             col_types = readr::cols(.default=readr::col_character())) %>% 

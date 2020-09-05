@@ -17,43 +17,30 @@ SerialIntervalProvider = R6::R6Class("SerialIntervalProvider", inherit=CovidTime
   
   
   getSummary = function(confint = c(0.025,0.975)) {stop("abstract definition")},
+  #getQuantiles = function(q = c(0.025,0.25,0.5,0.75,0.975)) {stop("abstract definition")},
   isUncertain = function() {stop("abstract definition")},
   
   printSerialInterval = function(confint = c(0.025,0.975)) {
     ci = floor((confint[2]-confint[1])*100)
     sum = self$getSummary(confint)
     if(self$isUncertain()) {
-      return(paste0(
-        sum$distName, 
-        sprintf(" distribution, with a mean plus %1d%% credible interval of %1.2f \U00B1 %1.2f (%1.2f; %1.2f), ",ci, 
-                sum$meanOfMean, sum$sdOfMean, sum$minOfMean, sum$maxOfMean),
-        sprintf("and a standard deviation of %1.2f \U00B1 %1.2f (%1.2f; %1.2f)",
-                sum$meanOfSd, sum$sdOfSd, sum$minOfSd, sum$maxOfSd)
-      ))
+        sprintf("%s distribution, with a mean plus %1d%% credible interval of %1.2f days (%1.2f; %1.2f), and a standard deviation of %1.2f days (%1.2f; %1.2f)",
+                sum$distName, ci, 
+                sum$meanOfMean, sum$minOfMean, sum$maxOfMean,
+                sum$meanOfSd, sum$minOfSd, sum$maxOfSd)
+        # sprintf(" distribution, with a mean plus %1d%% credible interval of %1.2f \U00B1 %1.2f (%1.2f; %1.2f), ",ci, 
+        #         sum$meanOfMean, sum$sdOfMean, sum$minOfMean, sum$maxOfMean),
+        # sprintf("and a standard deviation of %1.2f \U00B1 %1.2f (%1.2f; %1.2f)",
+        #         sum$meanOfSd, sum$sdOfSd, sum$minOfSd, sum$maxOfSd)
+        # ))
     } else {
-      return(sprintf("The mean of the serial interval is %1.2f, and the standard deviation is %1.2f", sum$meanOfMean, sum$meanOfSd))
+      return(sprintf("%s distribution, with a mean of the serial interval of %1.2f days, and the standard deviation of %1.2f days", sum$distName, sum$meanOfMean, sum$meanOfSd))
     }
-  },
-  
-  adjustDateOutputs = function(covidRtResult, offset = self$offset) {
-    return(covidRtResult %>% covidStandardGrouping() %>% mutate(
-      # Shift Rt result backwards by self$offset days
-      # TODO: Check exists first?
-      `Mean(R)` = lead(`Mean(R)`,n = offset),
-      `Std(R)` = lead(`Std(R)`,n = offset),
-      `Quantile.0.025(R)` = lead(`Quantile.0.025(R)`,n = offset),
-      `Quantile.0.05(R)` = lead(`Quantile.0.05(R)`,n = offset),
-      `Quantile.0.25(R)` = lead(`Quantile.0.25(R)`,n = offset),
-      `Median(R)` = lead(`Median(R)`,n = offset),
-      `Quantile.0.75(R)` = lead(`Quantile.0.75(R)`,n = offset),
-      `Quantile.0.95(R)` = lead(`Quantile.0.95(R)`,n = offset),
-      `Quantile.0.975(R)` = lead(`Quantile.0.975(R)`,n = offset),
-    ))
   }
-  
-  
-  
+
 ))
+
+## Fitted SI provider ----
 
 FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inherit=SerialIntervalProvider, public = list(
   
@@ -67,24 +54,28 @@ FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inher
     self$dfit = dfit
   },
   
-  getSummary = function(confint = c(0.025,0.975)) {
+  getSummary = function(confint = c(0.025,0.975),distName = "gamma") {
     if (identical(self$summary,NULL) | any(self$confint != confint)) {
-      self$summary = self$dfit$printDistributionSummary(confint = confint) %>% filter(dist == "gamma")
+      self$summary = self$dfit$printDistributionSummary(confint = confint) %>% filter(dist == distName)
       self$confint = confint
     }
     tmp = self$summary
-    return(list(
-      distName = "gamma",
-      meanOfMean = tmp %>% filter(param=="mean") %>% pull(mean), 
-      sdOfMean = tmp %>% filter(param=="mean") %>% pull(sd),
-      minOfMean = tmp %>% filter(param=="mean") %>% pull(lower),
-      maxOfMean = tmp %>% filter(param=="mean") %>% pull(upper),
-      meanOfSd = tmp %>% filter(param=="sd") %>% pull(mean), 
-      sdOfSd = tmp %>% filter(param=="sd") %>% pull(sd), 
-      minOfSd = tmp %>% filter(param=="sd") %>% pull(lower), 
-      maxOfSd = tmp %>% filter(param=="sd") %>% pull(upper)
+    return(tibble_row(
+      distName = distName,
+      meanOfMean = tmp %>% filter(param=="mean") %>% pull(mean) %>% mean(), 
+      sdOfMean = tmp %>% filter(param=="mean") %>% pull(sd) %>% mean(),
+      minOfMean = tmp %>% filter(param=="mean") %>% pull(lower) %>% mean(),
+      maxOfMean = tmp %>% filter(param=="mean") %>% pull(upper) %>% mean(),
+      meanOfSd = tmp %>% filter(param=="sd") %>% pull(mean) %>% mean(), 
+      sdOfSd = tmp %>% filter(param=="sd") %>% pull(sd) %>% mean(), 
+      minOfSd = tmp %>% filter(param=="sd") %>% pull(lower) %>% mean(), 
+      maxOfSd = tmp %>% filter(param=="sd") %>% pull(upper) %>% mean()
     ))
   },
+  
+  # getQuantiles = function(q = c(0.025,0.25,0.5,0.75,0.975)) {
+  #   self$dfit$calculateQuantiles(q) %>% filter(dist=="gamma") %>% select(probability,Mean.quantile)
+  # },
   
   getBasicConfig = function(priorR0=1, priorR0Sd=2, quick=TRUE,...) {
     tmp = self$getSummary(...)
@@ -93,7 +84,7 @@ FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inher
         mean_si = tmp$meanOfMean, 
         std_si = tmp$meanOfSd, 
         mean_prior = priorR0,
-        std_prior = priorR0Sd), method= "parametric_si")
+        std_prior = priorR0Sd, seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)), method= "parametric_si")
       method= "parametric_si"
     } else {
       cfg = EpiEstim::make_config(list(
@@ -107,10 +98,58 @@ FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inher
         max_std_si = tmp$maxOfSd, 
         mean_prior = priorR0,
         std_prior = priorR0Sd,
-        n1 = 100),method = "uncertain_si")
+        n1 = 100, seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)),method = "uncertain_si")
       method = "uncertain_si"
     }
-    return(list(config = cfg, method = method))
+    return(list(cfg = cfg, method = method))
+  },
+  
+  getCustomConfigs = function(period=40, priorR0=1, priorR0Sd=2, quick=TRUE, ...) {
+    
+    if(!self$isUncertain() | quick) {
+      
+      tmp = self$dfit$discreteProbabilities(q = 0:(period-1), summarise = TRUE)
+      tmp = tmp %>% bind_rows(
+        tmp %>% group_by(!!!self$dfit$grps) %>% summarise(
+          value = max(value)+1,
+          Mean.discreteProbability=1-sum(Mean.discreteProbability)
+        )
+      )
+      
+      out = tmp %>% group_by(!!!self$dfit$grps) %>% summarise(config = list(list(
+        cfg = EpiEstim::make_config(list(
+          si_distr = Mean.discreteProbability,
+          mean_prior = priorR0,
+          std_prior = priorR0Sd, seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)), method= "non_parametric_si"),
+        method= "non_parametric_si",
+        si_sample = NULL 
+      )))
+    
+    } else {
+      
+      tmp = self$dfit$discreteProbabilities(q = 0:(period-1), summarise = FALSE)
+      tmp = tmp %>% bind_rows(
+        tmp %>% group_by(!!!self$dfit$grps, dist, bootstrapNumber) %>% summarise(
+          value = max(value)+1,
+          discreteProbability=1-sum(discreteProbability)
+        )
+      )
+      browser()
+      out = tmp %>% group_by(!!!self$dfit$grps) %>% group_modify(function(d,g,...) {
+        tmp2 = d %>% arrange(value) %>% pull(discreteProbability) %>% matrix(ncol = max(tmp$bootstrapNumber), byrow=TRUE)
+        tmp3 = list(
+          cfg = EpiEstim::make_config(list(
+            mean_prior = priorR0,
+            std_prior = priorR0Sd,
+            n1 = max(tmp$bootstrapNumber), seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)),method = "si_from_sample"),
+          method = "si_from_sample",
+          si_sample = tmp2
+        )
+        return(tibble(config = list(tmp3)))
+      })
+      
+    }
+    return(out)
   },
   
   isUncertain = function() TRUE
@@ -131,11 +170,11 @@ ParametricSerialIntervalProvider = R6::R6Class("ParametricSerialIntervalProvider
   
   initialize = function(providerController, dist, paramDf, offset=0, epiestimMode = TRUE, ...) {
     fitter = DistributionFit$new()
-    #stop("TODO: add in constrint that sigma < mu or shape>1")
-    fitter$withSingleDistribution(dist = dist, paramDf = parameterDefinition(paramDf), epiestimMode = epiestimMode, ...)
+    paramDf = ukcovidtools::parameterDefinition(paramDf)
+    fitter$withSingleDistribution(dist = dist, paramDf = paramDf, epiestimMode = epiestimMode, ...)
     shapeFilter = fitter$bootstraps %>% filter(dist=="gamma" & param=="shape" & value > 1) %>% pull(bootstrapNumber)
     fitter$bootstraps = fitter$bootstraps %>% filter(bootstrapNumber %in% shapeFilter)
-    self$paramDf = parameterDefinition(paramDf)
+    self$paramDf = paramDf
     self$dist = dist
     # self$dfit = fitter
     super$initialize(providerController, offset = offset, dfit= fitter, ...)
@@ -154,10 +193,11 @@ ParametricSerialIntervalProvider = R6::R6Class("ParametricSerialIntervalProvider
       mean = first(na.omit(mean)),
       sd = first(na.omit(sd)),
       lower = first(na.omit(lower)),
-      upper = first(na.omit(upper))
+      upper = first(na.omit(upper)), 
+      .groups="drop"
     )
     
-    return(list(
+    return(tibble_row(
       distName = self$dist,
       meanOfMean = tmp %>% filter(param=="mean") %>% pull(mean), 
       sdOfMean = tmp %>% filter(param=="mean") %>% pull(sd),
@@ -185,27 +225,120 @@ NonParametricSerialIntervalProvider = R6::R6Class("NonParametricSerialIntervalPr
   
   initialize = function(providerController, samples, offset=0,...) {
     
-    if(!is.data.frame(samples)) stop("must be dataframe")
-    if(!"bootstrapNumber" %in% colnames(samples)) stop("must have a bootstrapNumber column")
+    if(!is.data.frame(samples)) samples = tibble(value=samples)
+    if(!"bootstrapNumber" %in% colnames(samples)) samples = samples %>% mutate(bootstrapNumber = 1)
     if(!"value" %in% colnames(samples)) stop("must have a value column")
-    
-    dfit = DistributionFit$new(distributions = c("norm","gamma"), shifted = 0) #offset)
+    if(any(is.na(samples$value))) stop("NAs in samples")
+    #browser()
+    # even though this is non parametric we will fit a set of estimates to the data.
+    dfit = DistributionFit$new(distributions = c("norm","gamma","nbinom"), shifted = 0) #offset)
     dfit$models$gamma$start$shape = 1.1
     dfit$models$gamma$lower$shape = 1
+    dfit$models$gamma$support = c(.Machine$double.xmin,Inf)
+    dfit$models$nbinom$support = c(.Machine$double.xmin,Inf)
     dfit$fromBootstrappedData(samples %>% ungroup() %>% select(bootstrapNumber, value))
-    shapeFilter = dfit$bootstraps %>% filter(dist=="gamma" & param=="shape" & value > 1) %>% pull(bootstrapNumber)
-    dfit$bootstraps = dfit$bootstraps %>% filter(bootstrapNumber %in% shapeFilter)
-    #browser()
     super$initialize(providerController,offset,dfit,...)
+    self$bootstrapSamples = samples
     self$uncertain = length(unique(samples$bootstrapNumber))>1
   },
   
-  isUncertain = function() {self$uncertain}
+  isUncertain = function() {self$uncertain},
+  
+  getSummary = function(confint = c(0.025,0.975)) {
+    self$bootstrapSamples %>% ungroup() %>% #TODO: allow differently grouped estimates
+      group_by(bootstrapNumber) %>% 
+      filter(value > 0) %>%
+      summarise(mean1 = mean(value), sd1=sd(value), .groups="drop") %>%
+      summarise(
+        meanOfMean = mean(mean1), 
+        sdOfMean = sd(mean1),
+        minOfMean = quantile(mean1,confint[1]),
+        maxOfMean = quantile(mean1,confint[2]),
+        meanOfSd = mean(sd1), 
+        sdOfSd = sd(sd1),
+        minOfSd = quantile(sd1,confint[1]),
+        maxOfSd = quantile(sd1,confint[2]), 
+        .groups="drop"
+      ) %>%
+      mutate(distName = "truncated empirical")
+  },
+  
+  getBasicConfig = function(priorR0=1, priorR0Sd=2, quick=TRUE,...) {
+    tmp = self$getCustomConfigs(period = floor(quantile(self$bootstrapSamples$value,0.95)),priorR0, priorR0Sd, quick,....)
+    return(tmp$config[[1]])
+  },
+  
+  getCustomConfigs = function(
+      period=floor(quantile(self$bootstrapSamples$value,0.95)), 
+      priorR0=1, priorR0Sd=2, quick=TRUE, ...) {
+    
+    boots = 1:max(self$bootstrapSamples$bootstrapNumber)
+    bins = 0:period
+    
+    if(!self$isUncertain() | quick) {
+      
+      tmp = self$bootstrapSamples %>% ungroup() %>%
+        filter(value > 0 & value < period) %>%
+        #group_by(bootstrapNumber) %>%
+        mutate(bin = ceiling(value)) %>%
+        group_by(bin) %>%
+        summarise(discreteCount = n(), .groups="drop") %>%
+        mutate(discreteProbability = discreteCount/sum(discreteCount)) %>%
+        tidyr::complete(bin = bins,fill=list(discreteProbability=0))
+        
+      si_distr = tmp %>% pull(discreteProbability)
+      
+      tmp3 = list(list(
+        cfg = EpiEstim::make_config(list(
+          si_distr = si_distr,
+          mean_prior = priorR0,
+          std_prior = priorR0Sd, seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)), method= "non_parametric_si"),
+        method= "non_parametric_si",
+        si_sample = NULL 
+      ))
+      
+    } else {
+      
+      tmp = self$bootstrapSamples %>% ungroup() %>%
+        filter(value > 0 & value < period) %>%
+        mutate(bin = ceiling(value)) %>%
+        group_by(bootstrapNumber,bin) %>%
+        summarise(discreteCount = n(), .groups="drop") %>%
+        group_by(bootstrapNumber) %>%
+        mutate(discreteProbability = discreteCount/sum(discreteCount))
+      
+      si_distr = tibble(bootstrapNumber = boots) %>% 
+        left_join(
+          tibble(bin = bins), by=character()
+        ) %>% left_join(
+          tmp %>% select(-discreteCount), by = c("bootstrapNumber","bin")
+        ) %>% mutate(
+          discreteProbability = ifelse(is.na(discreteProbability),0,discreteProbability)
+        )
+  
+      tmp2 = si_distr %>% arrange(bin, bootstrapNumber) %>% pull(discreteProbability) %>% matrix(ncol = max(tmp$bootstrapNumber), byrow=TRUE)
+      
+      #TODO: groupings???
+      tmp3 = list(list(
+        cfg = EpiEstim::make_config(list(
+          mean_prior = priorR0,
+          std_prior = priorR0Sd,
+          n1 = max(tmp$bootstrapNumber), seed=101, mcmc_control = EpiEstim::make_mcmc_control(seed=101)),method = "si_from_sample"),
+        method = "si_from_sample",
+        si_sample = tmp2
+      ))
+      
+      
+    }
+    return(tibble(
+      statistic = "case",
+      config = tmp3
+    ))
+  }
   
 ))
 
-
-
+#### Static defintions ----
   
 SerialIntervalProvider$printSerialIntervalSources = function() {
   serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
@@ -227,125 +360,104 @@ SerialIntervalProvider$printSerialIntervalSources = function() {
 }
   
 
-SerialIntervalProvider$resampledSerialInterval = function(providerController, shortestCredibleSI = -7, longestCredibleSI = 28, samples=100, ...) {
-  
-  out = providerController$getSaved("SERIAL-INTERVAL-RESAMPLE",...,orElse = function() {
-    serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-    boot.samples = NULL
-    set.seed(101)
-    # bootIterations = 250
-    
-    dfit = DistributionFit$new()
-    
-    parameterisedSIs = serialIntervals %>% 
-      filter(
-        estimate_type %>% stringr::str_starts("serial") &
-        !assumed_distribution %in% c("empirical","unknown"),
-      ) %>% 
-      group_by(i = row_number()) %>% 
-      group_modify(function(d,g,...) {
-        paramDf = tribble(
-          ~param, ~mean, ~sd, ~lower, ~upper,
-          "mean", d$mean_si_estimate, NA, d$mean_si_estimate_low_ci, d$mean_si_estimate_high_ci,
-          "sd", d$std_si_estimate, NA, d$std_si_estimate_low_ci, d$std_si_estimate_high_ci
-        )
-        dfit$withSingleDistribution(dist = d$assumed_distribution, paramDf = paramDf, bootstraps = samples, N=d$sample_size, source = g$i)
-        tibble()
-        # side effect in group modify. This deserves 100 Hail Mary's
-    })
-    
-    dfit$generateSamples(sampleExpr = N)
-    sampleDf = dfit$samples %>% select(bootstrapNumber, value)
-    
-    # include raw data for Xu et al, who did not produce parameterised estimates - only empirical distribution.
-    # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7276042/bin/73153-2020.03.02.20029868-1.xlsx
-    xuXls = DataProvider$new(providerController)$download(id = "XU_SERIAL_INTERVAL",url = "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7276042/bin/73153-2020.03.02.20029868-1.xlsx", type = "xlsx")
-    xuData = readxl::read_excel(xuXls)
-    xuSamples = suppressWarnings(xuData %>% mutate(dt = as.integer(`p_Date of onset`)-as.integer(`s_Date of onset`)) %>% filter(!is.na(dt)) %>% pull(dt))
-    xuSrc = max(sampleDf$source)+1
-    N = length(xuSamples)*0.9
-    for(i in 1:samples) {
-        # raw data also available from Du et al
-        # https://github.com/MeyersLabUTexas/COVID-19/blob/master/Table%20S5%20medrxiv.xlsx?raw=true
-        # their analysis is included though as resulted in normal distribution
-        # N.B. it is probably the same data as Xu
-        sampleDf = sampleDf %>% bind_rows(tibble(
-          bootstrapNumber = i, 
-          value = sample(xuSamples, size=N),
-          N = N,
-          source = xuSrc
-        ))
-    }
-    
-    # We can now: 
-    # use this to directly estimate a parameterised distribution for the serial interval with or without shift
-    # Or create a set of discretised empirical distributions for epiestim to explore.
-    return(sampleDf %>% group_by(N,source))
-  })
-  out = out %>% filter(value > shortestCredibleSI & value <= longestCredibleSI)
-  npsip = NonParametricSerialIntervalProvider$new(providerController = providerController,samples = out) 
-    # including an offset in here causes issues.
-    #,offset = (-shortestCredibleSI))
+SerialIntervalProvider$resampledSerialInterval = function(providerController, resamples = ukcovidtools::serialIntervalResampling, ...) {
+  npsip = NonParametricSerialIntervalProvider$new(providerController = providerController,samples = force(resamples)) 
   return(npsip)
 }
           
+SerialIntervalProvider$metaAnalysis = function(providerController, metaDf = ukcovidtools::serialIntervalMetaAnalysis, epiestimMode = FALSE, ...) {
+  psip = ParametricSerialIntervalProvider$new(providerController, dist="gamma",paramDf = force(metaDf), offset = 0, bootstraps=10000, epiestimMode = epiestimMode)
+  return(psip)
+}
 
+
+SerialIntervalProvider$generationInterval = function(providerController, bootstrapsDf = ukcovidtools::generationIntervalSimulation, epiestimMode = FALSE, ...) {
+  genIntFit = DistributionFit$new()
+  genIntFit$fromBootstrappedDistributions(fittedDistributions = bootstrapsDf)
+  psip = FittedSerialIntervalProvider$new(providerController, dfit = genIntFit)
+  return(psip)
+}
   
-SerialIntervalProvider$midmarketSerialInterval = function(providerController, epiestimMode = TRUE, ...) {
-    #out = providerController$getSaved("SERIAL-INTERVAL-MIDMARKET",...,orElse = function() {
-      serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-      
-      unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
-      conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
-      
-      # Estimate the mean serial intervals,
-      wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial")) %>% summarise(
-        mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
-        min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
-        max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
-        std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
-        min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
-        max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
-      )
-      
-      # SD should be distributed as chsqd which is a gamma with scale=2
-      # fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=shape, scale=2), data = tibble( x=c(0.025,0.5,0.975), y=c(wtSIs$min_std_si, wtSIs$std_si, wtSIs$max_std_si)) ))
-      # sd_shape = summary(fit.sd.gamma)$parameters[["shape",1]]
-      # std_std_si = sqrt(sd_shape*4) # shape*scale^2
-      # # ultimately this is going to be modelled by epiestim as a normal.
-      
-      std_mean_si = (wtSIs$max_mean_si-wtSIs$min_mean_si)/3.92 #confidence intervals all 95%
-      
-      paramDf = tribble(
-        ~param, ~mean, ~sd, ~lower, ~upper,
-        "mean", wtSIs$mean_si, NA, wtSIs$min_mean_si, wtSIs$max_mean_si,
-        "sd", wtSIs$std_si, NA, wtSIs$min_std_si, wtSIs$max_std_si
-      )
-      
-      #paramDf2 = DistributionFit$convertParameters(paramDf = paramDf)
-      
-      #dfit = DistributionFit$new(distributions = "gamma")
-      #dfit$models$gamma$lower$shape = 1
-      #dfit$withSingleDistribution(dist = "gamma",paramDf,bootstraps = 10000)
-      #param = dfit$printDistributionSummary() %>% select(param,mean,sd,lower,upper)
-      psip = ParametricSerialIntervalProvider$new(providerController, dist="gamma",paramDf = paramDf,offset = 0, bootstraps=10000, epiestimMode = epiestimMode)
-      return(psip)
+# SerialIntervalProvider$midmarketSerialInterval = function(providerController, epiestimMode = FALSE, ...) {
+#     #out = providerController$getSaved("SERIAL-INTERVAL-MIDMARKET",...,orElse = function() {
+#       serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
+#       
+#       unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
+#       conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
+#       
+#       # Estimate the mean serial intervals,
+#       wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial")) %>% summarise(
+#         mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
+#         min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
+#         max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
+#         std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
+#         min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
+#         max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
+#       )
+#       
+#       # SD should be distributed as chsqd which is a gamma with scale=2
+#       # fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=shape, scale=2), data = tibble( x=c(0.025,0.5,0.975), y=c(wtSIs$min_std_si, wtSIs$std_si, wtSIs$max_std_si)) ))
+#       # sd_shape = summary(fit.sd.gamma)$parameters[["shape",1]]
+#       # std_std_si = sqrt(sd_shape*4) # shape*scale^2
+#       # # ultimately this is going to be modelled by epiestim as a normal.
+#       
+#       std_mean_si = (wtSIs$max_mean_si-wtSIs$min_mean_si)/3.92 #confidence intervals all 95%
+#       
+#       paramDf = tribble(
+#         ~param, ~mean, ~sd, ~lower, ~upper,
+#         "mean", wtSIs$mean_si, NA, wtSIs$min_mean_si, wtSIs$max_mean_si,
+#         "sd", wtSIs$std_si, NA, wtSIs$min_std_si, wtSIs$max_std_si
+#       )
+#       
+#       #paramDf2 = DistributionFit$convertParameters(paramDf = paramDf)
+#       
+#       #dfit = DistributionFit$new(distributions = "gamma")
+#       #dfit$models$gamma$lower$shape = 1
+#       #dfit$withSingleDistribution(dist = "gamma",paramDf,bootstraps = 10000)
+#       #param = dfit$printDistributionSummary() %>% select(param,mean,sd,lower,upper)
+#       psip = ParametricSerialIntervalProvider$new(providerController, dist="gamma",paramDf = paramDf,offset = 0, bootstraps=10000, epiestimMode = epiestimMode)
+#       return(psip)
+# 
+#       # TODO: 
+#       # exportSimpleParameterisedConfig function to replicate old behaviour
+#       # exportQuickParameterisedConfig function to 
+#       # add in functions to serial interval provider to modify parameters over time and statistic - including priors
+#       # add in functions to DistribuitionFit to create discretised distributions for bootstrapped distributions
+#       # could do this as a distributionfit object on time delays between symptom and statistic.
+#       # EpiEstim configuration builder that is aware of offsets, priors, discretised dists and statistics
+#       
+#       # fit DistributionFit plot & work out how to do it for censored.
+#       # as an aside - could we use greta to infer a generational interval given an incubation period
+#       
+#       
+# 
+#     #})
+#   }
 
-      # TODO: 
-      # exportSimpleParameterisedConfig function to replicate old behaviour
-      # exportQuickParameterisedConfig function to 
-      # add in functions to serial interval provider to modify parameters over time and statistic - including priors
-      # add in functions to DistribuitionFit to create discretised distributions for bootstrapped distributions
-      # could do this as a distributionfit object on time delays between symptom and statistic.
-      # EpiEstim configuration builder that is aware of offsets, priors, discretised dists and statistics
-      
-      # fit DistributionFit plot & work out how to do it for censored.
-      # as an aside - could we use greta to infer a generational interval given an incubation period
-      
-      
-
-    #})
-  }
+SerialIntervalProvider$truncatedNormals = function(dataProviderController, observationIntervals = force(ukcovidtools::ukCovidObservationIntervals)) {
+  truncNorm = DistributionFit$new("tnorm")
+  observationIntervals %>% inner_join(
+    tibble(
+      between = c("test","onset","onset","death","admission","admission"),
+      statistic = c("case","symptom","triage","death","icu admission","hospital admission"),
+    ),
+    by="between"
+  ) %>% 
+  group_by(statistic) %>%
+  summarise(
+    tibble(
+      param = c("mean","sd"),
+      mean = c(meanOfMean, meanOfSd),
+      sd = c(sdOfMean, sdOfSd),
+      lower = c(lowerOfMean, lowerOfSd),
+      upper = c(upperOfMean, upperOfSd),
+    )
+  ) %>% 
+  group_walk(function(d,g,...)
+    truncNorm$withSingleDistribution(dist = "tnorm", paramDf = d, bootstraps = 100, statistic = g$statistic)
+  )
+  return(FittedSerialIntervalProvider$new(providerController = dataProviderController,offset = 0,dfit = truncNorm))
+}
   
 
 SerialIntervalProvider$fromFF100 = function(dataProviderController) {
@@ -353,7 +465,7 @@ SerialIntervalProvider$fromFF100 = function(dataProviderController) {
   ff100 = dataProviderController$spim$getFF100()
   tmp = ff100 %>% inner_join(ff100, by=c("ContactOf_FF100_ID"="FF100_ID"),suffix=c(".infectee",".infector"))
   tmp = tmp %>% select(FF100_ID,ContactOf_FF100_ID,contains("date"))
-  dfit = DistributionFit$new(distributions = "gamma")
+  dfit = DistributionFit$new(distributions = c("gamma","norm","nbinom"))
   dfit$fromUncensoredData(tmp,valueExpr = as.integer(date_onset.infectee - date_onset.infector),truncate = TRUE)
   return(FittedSerialIntervalProvider$new(providerController = dataProviderController,offset = 0,dfit = dfit))
   
@@ -361,178 +473,10 @@ SerialIntervalProvider$fromFF100 = function(dataProviderController) {
 
 SerialIntervalProvider$default = function(dataProviderController,...) {
   out = dataProviderController$getSaved("SERIAL-INTERVAL-DEFAULT",...,orElse = function() {
-    SerialIntervalProvider$resampledSerialInterval(dataProviderController)
+     SerialIntervalProvider$resampledSerialInterval(dataProviderController)
   })
+  # out = SerialIntervalProvider$metaAnalysis(dataProviderController)
   out$controller = dataProviderController
   return(out)
 }
 
-# completeTimeseries = ensurer::ensures_that(
-#   .$
-#   . %>% dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% dplyr::arrange(date) %>% dplyr::mutate(check = lead(date)==date) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be unique"
-#   . %>% dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% dplyr::arrange(date) %>% dplyr::mutate(check = lead(date)==date+1) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be contiguous"
-# )
-# 
-# nonNegativeIncidence = ensurer::ensures_that(
-#   . %>% dplyr::mutate(check = (statistic != "incidence" | !is.na(value))) %>% pull(check) %>% all() ~ "Incidence values cannot be NA",
-#   . %>% dplyr::mutate(check = (statistic != "incidence" | value >=0)) %>% pull(check) %>% all() ~ "Incidence values cannot be negative."
-# )
-# 
-# covidTimeseriesFormat = ensurer::ensures_that(
-#   +covidTimeseriesFormat,
-#   +completeTimeseries,
-#   +nonNegativeIncidence
-# )
-
-
-
-# defaultCovidSI = function() {
-#   
-#   
-#   serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
-#   unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
-#   conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
-# 
-#   #TODO: remove this from here
-#   SItable1 = serialIntervals %>% mutate(
-#     `Mean\n(95% CrI) days`=conf(mean_si_estimate,mean_si_estimate_low_ci,mean_si_estimate_high_ci),
-#     `Std\n(95% CrI) days`=conf(std_si_estimate,std_si_estimate_low_ci,std_si_estimate_high_ci),
-#   ) %>% select(-contains("si_estimate")) %>% select(
-#     `Reference`=source,
-#     `Statistic`=estimate_type,
-#     `Mean\n(95% CrI) days`,
-#     `Std\n(95% CrI) days`,
-#     `N`=sample_size,
-#     `Distribution` = assumed_distribution,
-#     `Population`=population
-#   )
-#   
-#   # Calculate the mean serial intervals
-#   
-#   wtSIs = serialIntervals %>% filter(assumed_distribution == "gamma") %>% summarise(
-#     mean_si = weighted.mean(mean_si_estimate,sample_size,na.rm = TRUE),
-#     min_mean_si = weighted.mean(mean_si_estimate_low_ci,sample_size,na.rm = TRUE),
-#     max_mean_si = weighted.mean(mean_si_estimate_high_ci,sample_size,na.rm = TRUE),
-#     std_si  = weighted.mean(ifelse(is.na(std_si_estimate_low_ci),NA,1)*std_si_estimate,sample_size,na.rm = TRUE),
-#     min_std_si  = weighted.mean(std_si_estimate_low_ci,sample_size,na.rm = TRUE),
-#     max_std_si  = weighted.mean(std_si_estimate_high_ci,sample_size,na.rm = TRUE)
-#     #total = sum(sample_size)
-#   ) %>% mutate(
-#     std_mean_si = (max_mean_si - min_mean_si) / 3.92, # TODO: fit gamma
-#     std_std_si = (max_std_si - min_std_si) / 3.92
-#   )
-#   
-#   ### TODO: Think some more about prior from Rt
-#   ### 
-#   
-#   cfg = EpiEstim::make_config(list(
-#     mean_si = wtSIs$mean_si, 
-#     std_mean_si = wtSIs$std_mean_si,
-#     min_mean_si = wtSIs$min_mean_si, 
-#     max_mean_si = wtSIs$max_mean_si,
-#     std_si = wtSIs$std_si, 
-#     std_std_si = wtSIs$std_si,
-#     min_std_si = wtSIs$min_std_si, 
-#     max_std_si = wtSIs$max_std_si,
-#     mean_prior = 1,
-#     std_prior = 0.5), method="uncertain_si")
-#   
-#   return(list(
-#     config=cfg,
-#     sources = SItable1,
-#     method = "uncertain_si",
-#     window = 7
-#   ))
-# 
-# }
-
-
-
-
-#browser()
-# Here is the big assumption:
-# Serial interval can only be positive and can be fitted using a gamma.
-# This is proven to be wrong but the question is can we do any better?
-
-#         samples = samples[samples > 0 & !is.na(samples) & samples<21]
-#           
-#           
-#           fit.gamma <- fitdistrplus::fitdist(samples, distr = "gamma", method = "mle")
-#           #summary(fit.gamma)
-#           fit.shape = fit.gamma$estimate[[1]]
-#           fit.rate = fit.gamma$estimate[[2]]
-#           fit.mean = fit.shape/fit.rate
-#           fit.sd = sqrt(fit.shape/(fit.rate)^2)
-#           fir.aic = fit.gamma$aic
-#           boot.samples = boot.samples %>% bind_rows(tibble(shape = fit.shape,rate = fit.rate,mean = fit.mean,sd=fit.sd))
-#         }))
-#       }
-#       out$estimates = boot.samples
-#       return(out)
-#     })
-#     
-#     sd_lowfit = min(bootstrap$estimates$sd)
-#     sd_highfit = max(bootstrap$estimates$sd)
-#     fit_data = bootstrap$estimates$sd
-#     
-#     #find the mode
-#     tmp_max = which.max(density(bootstrap$estimates$sd)$y)
-#     sd_mode = density(bootstrap$estimates$sd)$x[tmp_max]
-#     
-#     fit.std_as_norm = suppressWarnings(fitdistrplus::fitdist(fit_data, distr = "tnorm", fix.arg=
-#       list(
-#         lower=sd_lowfit,
-#         upper=sd_highfit,
-#         mean=sd_mode
-#       ),
-#       start = list(
-#         sd = sd(bootstrap$estimates$sd)
-#       ), lower=c(0), method="mle"))
-#     #summary(fit.gamma)
-#     fit.std_as_norm.sd = fit.std_as_norm$estimate[[1]]
-#     
-#     cfg = EpiEstim::make_config(list(
-#       mean_si = mean(bootstrap$estimates$mean), 
-#       std_mean_si = sd(bootstrap$estimates$mean), 
-#       min_mean_si = quantile(x = bootstrap$estimates$mean,confint[[1]])[[1]],
-#       max_mean_si = quantile(x = bootstrap$estimates$mean,confint[[2]])[[1]],
-#       std_si = sd_mode, #mean(bootstrap$estimates$sd), or could in theory use the mode
-#       std_std_si = fit.std_as_norm.sd, #sd(bootstrap$estimates$sd), 
-#       # The problem here is the skew of the bootstrap distribution of SD. If we use this then because epiestim resamples using truncated normal it will tend to over estimate 
-#       # this is now fixed by fitting normal distribution to bootstrapped sds, so these will be assymetrically distributed around fitted mean which is what we want.
-#       min_std_si = quantile(x = bootstrap$estimates$sd,confint[[1]])[[1]],
-#       max_std_si = quantile(x = bootstrap$estimates$sd,confint[[2]])[[1]],
-#       # min_std_si = mean(bootstrap$estimates$sd)+qnorm(confint[[1]])*sd(bootstrap$estimates$sd),
-#       # max_std_si = mean(bootstrap$estimates$sd)+qnorm(confint[[2]])*sd(bootstrap$estimates$sd),
-#       mean_prior = 1,
-#       std_prior = 0.5,
-#       n1 = 100), method="uncertain_si")
-#     
-#     bootstrap$config = cfg
-#     bootstrap$method = "uncertain_si"
-#     bootstrap$window = 7
-#     # Calculate the mean serial intervals
-#     return(bootstrap)
-# 
-
-
-
-# cfg = EpiEstim::make_config(list(
-#   mean_si = wtSIs$mean_si, 
-#   std_mean_si = wtSIs$std_mean_si,
-#   min_mean_si = wtSIs$min_mean_si, 
-#   max_mean_si = wtSIs$max_mean_si,
-#   std_si = wtSIs$std_si, 
-#   std_std_si = std_std_si, # from chisquared fit of SD - #wtSIs$std_std_si - from normal fit of SD,
-#   min_std_si = wtSIs$min_std_si, 
-#   max_std_si = wtSIs$max_std_si,
-#   mean_prior = 1,
-#   std_prior = 0.5,
-#   n1 = 100), method="uncertain_si")
-# 
-# bootstrap = list()
-# bootstrap$sources = serialIntervals
-# bootstrap$config = cfg
-# bootstrap$method = "uncertain_si"
-# bootstrap$window = 7
-# return(bootstrap)

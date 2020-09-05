@@ -62,6 +62,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by age, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
     
+    #TODO: check unequal lengths or non overlapping timeseries dates
     
     tmp= tmp %>% dplyr::mutate(ageCat=NA)
     tmp = tmp %>% 
@@ -126,7 +127,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(tmp %>% dplyr::ungroup() %>% self$trimNAs())
   }},
   
-  #' @param completeness should the mapping be complete? if the mapping is "source" complete it will only be successfull if all source codes are present when mapping to a higher region. if the mapping is target, then only if all the target codes are represented. Or both if the mapping must be complete at both ends.
+  #' @param completeness should the mapping be complete? if the mapping is "source" complete it will only be successful if all source codes are present when mapping to a higher region. if the mapping is target, then only if all the target codes are represented. Or both if the mapping must be complete at both ends.
   aggregateGeography = function(covidTimeseries, targetCodeTypes, completeness = "source", fn=sum, keepOriginal = TRUE, ...) {covidTimeseriesFormat %def% {
     tmp = covidTimeseriesFormat(covidTimeseries)
     mapping = self$codes$getTransitiveClosure() %>% 
@@ -210,7 +211,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       # message("time series has already been averaged")
       return(covidTimeseries)
     }
-    self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    ts=covidTimeseries
+    #self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       tmp = ts %>%
         covidStandardGrouping() %>%
         dplyr::mutate(
@@ -224,18 +226,20 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           ) %>% 
           dplyr::mutate(
             #logValue1 = stats::filter(logValue1,rep(1,7)/7)
-            logValue1 = signal::sgolayfilt(logValue1,p=1,n=window) 
+            logValue2 = signal::sgolayfilt(logValue1,p=1,n=window) 
           )
         }) %>%
         dplyr::mutate(
-          RollMean.value = ifelse(logValue1 < 0,0,exp(logValue1)-1),
+          Imputed.value = ifelse(logValue1 < 0,0,exp(logValue1)-1),
+          Imputed = is.na(value) & !is.na(Imputed.value),
+          RollMean.value = ifelse(logValue2 < 0,0,exp(logValue2)-1),
           Window.RollMean.value = window
         ) %>%
-        dplyr::select(-logValue1.original, -logValue1) %>%
+        dplyr::select(-logValue1.original, -logValue1, -logValue2) %>%
         dplyr::ungroup() 
       #browser(expr = self$debug)
       return(tmp)
-    }})
+    #}})
   },
   
   completeAndRemoveAnomalies = function(r0Timeseries, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001) {covidTimeseriesFormat %def% {
@@ -251,7 +255,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     tmp = tmp %>%
       dplyr::ungroup() %>%
       dplyr::mutate(!!originalValueVar := !!valueVar) %>%
-      self$complete(infer=FALSE) %>%
+      self$complete() %>%
       covidStandardGrouping() %>%
       dplyr::group_modify(function(d,g,...) {
         
@@ -283,7 +287,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         #TODO: repeat the anomaly removal stage to detect anything ?
         
         tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::rename(!!valueVar := tmp_y) 
-        # browser()
+        #browser()
         return(tmp_ts)
       }) %>% 
       dplyr::ungroup()
@@ -297,6 +301,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, window = 14,...) {covidTimeseriesFormat %def% {
     smoothExpr = enexpr(smoothExpr)
     smoothLabel = as_label(smoothExpr)
+    if (smoothLabel == "value") warning("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
     if (paste0("Est.",smoothLabel) %in% colnames(r0Timeseries)) {
       warning(smoothLabel," has already been estimated. aborting smooth and slope.")
       return(r0Timeseries)
@@ -367,7 +372,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 
   #### calculate baskets of stats ----
   
-  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,...) {covidTimeseriesFormat %def% {
+  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,...) {covidTimeseriesFormat %def% {
     valueVar = ensym(valueVar)
     
     tmp = covidTimeseriesFormat(covidTimeseries)  %>% 
@@ -384,7 +389,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       return(covidTimeseries) 
     }
     
-    tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,...)
+    tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow,...)
     
     tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
     tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
@@ -466,7 +471,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param config An object of class estimate_R_config, as returned by function EpiEstim::make_config.
   #' @param window - the width of the smoothing function applied (default 2)
   #' @return a dataframe with groupwise Rt estimates
-  estimateRtQuick = function(covidTimeseries, valueVar = "RollMean.value", window = 7) {
+  estimateRtQuick = function(covidTimeseries, valueVar = "RollMean.value", window = 7,...) {
     valueVar = ensym(valueVar)
     self$estimateRt(covidTimeseries, valueVar = !!valueVar, window = window, quick=TRUE,...) %>%
       dplyr::select(-`Quantile.0.025(R)`,-`Quantile.0.05(R)`,-`Quantile.0.25(R)`,-`Quantile.0.75(R)`,-`Quantile.0.95(R)`,-`Quantile.0.975(R)`)
@@ -478,12 +483,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param config An object of class estimate_R_config, as returned by function EpiEstim::make_config.
   #' @param dateVar - the variable containing the seqence of dates
   #' @param incidenceVar - the sequence of daily incidence
-  #' @param window - the width of the smoothing function applied (default 2)
+  #' @param window - the width of the smoothing function applied (default 7)
   #' @return a dataframe with groupwise Rt estimates
-  estimateRt = function(covidTimeseries, valueVar = "RollMean.value", window = 7, priorR0=1, priorR0Sd=2, quick=FALSE, ...) {
+  estimateRt = function(covidTimeseries, valueVar = "RollMean.value", window = 7, priorR0=1, priorR0Sd=2, quick=FALSE, serialIntervalProvider = self$serial, ...) {
     valueVar = ensym(valueVar)
+    tmpConfig = serialIntervalProvider$getBasicConfig(quick=quick, priorR0=priorR0, priorR0Sd=priorR0Sd)
     
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT", params=list(as_label(valueVar), window, quick, priorR0, priorR0Sd), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT", params=list(as_label(valueVar), window, quick, priorR0, priorR0Sd, tmpConfig), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
       if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
         if (as_label(valueVar) == "RollMean.value") {
@@ -506,9 +512,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       # tmp starts on first non zero value of I in group
       tmp2 = groupedDf %>% group_modify(function(d,g,...) {
         
-        cfg = self$serial$getBasicConfig(quick=quick, priorR0=priorR0, priorR0Sd=priorR0Sd) #, statistic = g$statistic)
-        siConfig = cfg$config
-        method = cfg$method
+        config = serialIntervalProvider$getBasicConfig(quick=quick, priorR0=priorR0, priorR0Sd=priorR0Sd) #, statistic = g$statistic)
+        siConfig = config$cfg
+        method = config$method
+        siSample = config$si_sample
         
         tmp = d %>% dplyr::select(dates=date,I)
         if (nrow(d) < 2+window) errors = paste0(ifelse(is.na(errors),"",paste0(errors,"; ")),"Not enough data to calculate R(t)")
@@ -523,7 +530,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         #TODO: https://cran.rstudio.com/web/packages/tibbletime/vignettes/TT-03-rollify-for-rolling-analysis.html
         tmp4 = #suppressWarnings(EpiEstim::estimate_R(d,method = method,config=siConfig,...))
           withCallingHandlers(
-            tryCatch(EpiEstim::estimate_R(tmp, method = method,config=siConfig), error = stop), warning= function(w) {
+            tryCatch(EpiEstim::estimate_R(tmp, method = method,config=siConfig,si_sample = siSample), error = stop), warning= function(w) {
             warn <<- w$message
             invokeRestart("muffleWarning")
           })
@@ -534,7 +541,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       })
       if(all(!is.na(tmp2$errors))) warning("Rt estimation failed - see errors column")
       if(any(!is.na(tmp2$errors))) warning("Rt estimation completed with errors")
-      return(tmp2 %>% select(-I)) 
+      return(tmp2 %>% mutate(Anomaly.R=Anomaly) %>% select(-I)) 
       
       #TODO: 
       # R_to_growth(2.18, 4, 1)  
@@ -550,13 +557,42 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   },
   
   defaultOffsetAssumptions = function() {
+    return(
+      tribble(
+        ~to, ~statistic,
+        "admission", "hospital admission",
+        "admission", "icu admission",
+        "onset", "symptom",
+        "onset", "triage",
+        "test", "case",
+        "death", "death",
+        NA, "serology",
+        NA, "test",
+        NA, "information seeking"
+      ) %>% left_join(ukcovidtools::ukCovidObservationDelays,by="to") %>% select(statistic,mean) %>% tibble::deframe()
+    )
+    # return(list(
+    #   "case"=8.22,
+    #   "death"=18.14,
+    #   "hospital admission"=14.6,
+    #   "icu admission"=15.6,
+    #   "symptom"=5.45,
+    #   "triage"=5.45,
+    #   "serology"=NA,
+    #   "test"=NA,
+    #   "information seeking"=NA
+    # )),
+    
+  },
+
+  defaultCorrectionFactor = function() {
     return(list(
-      "case"=7,
-      "death"=10+7,
-      "hospital admission"=7,
-      "icu admission"=2+7,
-      "symptom"=5,
-      "triage"=6,
+      "case"=0.75,
+      "death"=0.65,
+      "hospital admission"=0.67,
+      "icu admission"=0.67,
+      "symptom"=0.86,
+      "triage"=0.86,
       "serology"=NA,
       "test"=NA,
       "information seeking"=NA
@@ -566,36 +602,93 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   defaultR0Assumptions = function() {
     return(tibble::tribble(
       ~startDate, ~Mean.Prior.R0, ~SE.Prior.R0, ~Adj.Mean.SerialInterval, ~Adj.SD.SerialInterval,
-      as.Date("2020-01-01"), 2.5, 0.5, 1.0, 1.0,
-      as.Date("2020-03-23"), 0.7, 0.1, 1.0, 1.0,
-      as.Date("2020-07-04"), 1.2, 0.1, 1.0, 1.5,
+      as.Date("2020-01-01"), 2.5, 2, 1.0, 1.0,
+      as.Date("2020-03-23"), 1.0, 2, 1.0, 1.0
+      #as.Date("2020-07-04"), 1.2, 0.1, 1.0, 1.5,
     ))
   },
   
+  adjustRtDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
+    
+    adjustable = c(
+      "Mean(R)","Std(R)","Quantile.0.025(R)","Quantile.0.05(R)","Quantile.0.25(R)","Median(R)","Quantile.0.75(R)","Quantile.0.95(R)","Quantile.0.975(R)",
+      "Window.R","Anomaly.R","Est.Mean.SerialInterval","SE.Mean.SerialInterval","Est.SD.SerialInterval","SE.SD.SerialInterval","Prior.Mean.R0","Prior.SD.R0",
+      extraCols
+    )
+    
+    tmp7 = covidRtResult %>% group_by(statistic) %>% group_modify(function(d,g,...) {
+      #browser()
+      offset = round(window/2+offsetAssumptions[[g$statistic]])
+      tmp = d %>% covidStandardGrouping(statistic) %>% group_modify(function(d2,g2,...) {
+      
+        d2 = tibble(date = as.Date((min(d2$date)-offset):(min(d2$date)-1),"1970-01-01")) %>% bind_rows(d2)
+        cols = colnames(d2)[colnames(d2) %in% adjustable]
+        for (col in cols) {
+          col = as.symbol(col)
+          d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+        }
+        return(d2)
+        
+      })
+      return(tmp)
+      
+    })
+    
+    return(tmp7)
+  },
+  
+  adjustRtCorrFac = function(covidRtResult, window=7, correctionFactor = self$defaultCorrectionFactor(), extraCols=NULL) {
+    
+    adjustable = c(
+      "Mean(R)","Std(R)","Quantile.0.025(R)","Quantile.0.05(R)","Quantile.0.25(R)","Median(R)","Quantile.0.75(R)","Quantile.0.95(R)","Quantile.0.975(R)",
+      extraCols
+    )
+    
+    tmp7 = covidRtResult %>% group_by(statistic) %>% group_modify(function(d,g,...) {
+      #browser()
+      corrFac = correctionFactor[[g$statistic]]
+      cols = colnames(d)[colnames(d) %in% adjustable]
+      for (col in cols) {
+        col = as.symbol(col)
+        d = d %>% mutate(!!col := !!col*corrFac)
+      }
+      return(d %>% mutate(`correctionFactor(R)` = corrFac))
+    })
+    
+    return(tmp7)
+  },
+  
   estimateRtWithAssumptions = function(covidTimeseries, 
-              valueVar = "RollMean.value", window = 7, quick=FALSE,
-              r0Assumptions = self$defaultR0Assumptions(), 
-              offsetAssumptions = self$defaultOffsetAssumptions(),
+              valueVar = "RollMean.value", 
+              window = 7,
+              period = 28,
+              quick=FALSE,
+              r0Assumptions = self$defaultR0Assumptions(),
+              serialIntervalProvider = self$serial,
               dateRange = as.Date(c(min(covidTimeseries$date),max(covidTimeseries$date)),"1970-01-01"), 
               ...) {
     
     valueVar = ensym(valueVar)
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT-ASSUM", params=list(as_label(valueVar), window, r0Assumptions, offsetAssumptions, dateRange, quick), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    tmpConfig = serialIntervalProvider$getBasicConfig(quick=quick, priorR0=NA, priorR0Sd=NA)
+    
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-RT-ASSUM", params=list(as_label(valueVar), window, period, r0Assumptions, dateRange, quick, tmpConfig), ... , orElse = function (ts, ...) {
       
-        if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
-          if (as_label(valueVar) == "RollMean.value") {
-            covidTimeseries = covidTimeseries %>% self$imputeAndWeeklyAverage()
-          } else if (as_label(valueVar) == "Est.value") {
-            covidTimeseries = covidTimeseries %>% self$logIncidenceStats()
-          } else {
-            stop("can't estimate Rt, ",as_label(valueVar)," is not defined")
-          }
+      if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
+        if (as_label(valueVar) == "RollMean.value") {
+          covidTimeseries = covidTimeseries %>% self$imputeAndWeeklyAverage()
+        } else if (as_label(valueVar) == "Est.value") {
+          covidTimeseries = covidTimeseries %>% self$logIncidenceStats()
+        } else {
+          stop("can't estimate Rt, ",as_label(valueVar)," is not defined")
         }
+      }
       
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
         dplyr::filter(type == "incidence") %>%
-        dplyr::mutate(I = !!valueVar) %>%
+        dplyr::mutate(
+          I = !!valueVar
+        ) %>%
         self$describeErrors(I) 
       
       r0Assumptions = r0Assumptions  %>% 
@@ -612,69 +705,105 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           startDate < dateRange[[2]]
         ) 
       
+      #browser()
+      configs = serialIntervalProvider$getCustomConfigs(quick=quick,priorR0=NA,priorR0Sd=NA,period=period)
+      basicConfig = self$serial$getBasicConfig(quick=quick, priorR0=NA, priorR0Sd=NA)
+      #TODO: calculate period based on SD of distributions?
+      #browser()
+      #r0Assumptions2 = r0Assumptions %>% left_join(configs,by=character())
       
-      tmp7 = r0Assumptions %>% rowwise() %>% do({
-        
-        cfg = self$serial$getBasicConfig(quick=quick,priorR0=.$Mean.Prior.R0,priorR0Sd=.$SE.Prior.R0) #, statistic = g$statistic)
-        siConfig = cfg$config
-        method = cfg$method
-        
-        startDate = .$startDate
-        endDate = .$endDate
-        
-        groupedDf = groupedDf %>%
-          covidStandardGrouping()
-        
-        tmp2 = groupedDf %>% group_modify(function(d,g,...) {
-          d = d %>% dplyr::arrange(date) %>% dplyr::mutate(seq_id=row_number())
-          tmp = d %>% dplyr::select(dates=date,I,seq_id)
-          if (nrow(d) < 2+window) errors = paste0(ifelse(is.na(errors),"",paste0(errors,"; ")),"Not enough data to calculate R(t)")
-          if (any(!is.na(d$errors))) {return(d)}
+      
+      
+      # r0Assumptions2 = r0Assumptions2 %>% group_by(across(-config)) %>% group_modify(function(d,g,..) {
+      #   tmp = d$config[[1]]
+      #   tmp$cfg$mean_prior = g$Mean.Prior.R0
+      #   tmp$cfg$std_prior = g$SE.Prior.R0
+      #   return(tibble(config = list(tmp)))  
+      # })
+      
+      groupedDf2 = groupedDf %>% covidStandardGrouping() %>% inner_join(r0Assumptions, by=character()) %>% filter(date >= startDate & date <= endDate)
+      groupedDf2 %>% covidStandardGrouping()
+      allTs = groupedDf2 %>% group_modify(function(d,g,...) {
           
-          tmpStartDate = startDate
-          tmpEndDate = endDate
+        tmpConfig = NULL
+        
+        if ("statistic" %in% names(configs)) {  
+          tmp = configs %>% filter(statistic==g$statistic)
+          if(nrow(tmp) == 1) tmpConfig = tmp$config[[1]]
+          if(nrow(tmp) > 1) d = d %>% mutate(errors = paste0("Multiple configurations for ",g$statistic))
+        }
+        
+        if(is.null(tmpConfig)) {
+          d = d %>% mutate(warnings = paste0("No config for ",g$statistic," using default basic config"))
+          tmpConfig = basicConfig
+        }   
+        
+        siConfig = tmpConfig$cfg
+        method = tmpConfig$method
+        si_sample = tmpConfig$si_sample
+          
+          
+        d = d %>% dplyr::arrange(date) %>% dplyr::mutate(seq_id=row_number())
+        data = d %>% dplyr::select(dates=date,I,seq_id)
+        if (nrow(d) < 2+window) d$errors = paste0(ifelse(is.na(d$errors),"",paste0(d$errors,"; ")),"Not enough data to calculate R(t)")
+        if (any(!is.na(d$errors))) {return(d)}
+        
+        groupedTs = d %>% group_by(startDate, endDate, Mean.Prior.R0, SE.Prior.R0) %>% group_modify(function(d2,g2,...) {
+          
+          tmpStartDate = g2$startDate
+          tmpEndDate = g2$endDate
           if(tmpStartDate < min(d$date)+1+window) tmpStartDate = min(d$date)+1+window
           if(tmpEndDate > max(d$date)) tmpEndDate = max(d$date)
           
-          t_end = tmp %>% filter(dates >= tmpStartDate & dates <= tmpEndDate) %>% pull(seq_id)
+          t_end = d2 %>% pull(seq_id)
           t_start = t_end-window
-          tmp6 = tibble()
+          t_end = t_end[t_start >= 2]
+          t_start = t_start[t_start >= 2]
           
-          
-          if (length(t_end) > 0) {
-          
+          if (length(t_end) == 0) {
+            return(tibble())
+            
+          } else {
             siConfig$t_end = t_end
             siConfig$t_start = t_start
+            siConfig$mean_prior = g2$Mean.Prior.R0
+            siConfig$std_prior = g2$SE.Prior.R0
             
             warn = NA
             
             #TODO: https://cran.rstudio.com/web/packages/tibbletime/vignettes/TT-03-rollify-for-rolling-analysis.html
             tmp4 = #suppressWarnings(EpiEstim::estimate_R(d,method = method,config=siConfig,...))
               withCallingHandlers(
-                tryCatch(EpiEstim::estimate_R(tmp, method=method, config=siConfig), error = browser), warning= function(w) {
+                tryCatch(EpiEstim::estimate_R(data, method=method, config=siConfig, si_sample = si_sample), error = stop), warning= function(w) {
                   warn <<- w$message
                   invokeRestart("muffleWarning")
                 })
             tmp5 = tmp4$R %>% mutate(
               seq_id=t_end, 
-              errors=NA, 
-              `Window.R`=window,
+              Window.R=window,
               Est.Mean.SerialInterval = siConfig$mean_si,
               SE.Mean.SerialInterval = siConfig$std_mean_si,
               Est.SD.SerialInterval = siConfig$std_si, 
               SE.SD.SerialInterval = siConfig$std_std_si,
-              Prior.Mean.R0 = siConfig$mean_prior,
-              Prior.SD.R0 = siConfig$std_prior
-              ) #warn)
-            tmp6 = d %>% dplyr::select(-errors) %>% dplyr::inner_join(tmp5, by="seq_id") %>% select(-seq_id)
-            tmp6 = tmp6 %>% self$serial$adjustDateOutputs(offset = offsetAssumptions[[g$statistic]])
+              warnings = warn
+            )
+            tmp6 = d2 %>% dplyr::inner_join(tmp5, by="seq_id") %>% select(-seq_id)
+            return(tmp6)
+          
           }
-          return(tmp6)
-        })
+          
+          
+        }) 
+        
+        return(groupedTs %>% ungroup() %>% select(-startDate,-endDate))
+        
       })
+      
+      if(quick) allTs = allTs %>% select(-`Quantile.0.025(R)`,-`Quantile.0.05(R)`,-`Quantile.0.25(R)`,-`Quantile.0.75(R)`,-`Quantile.0.95(R)`,-`Quantile.0.975(R)`)
+      
       # TODO: this truncates timeseries into values that only have an R_t this is different behaviour from others. 
-      return(tmp7)
-    }})
+      return(allTs %>% mutate(Anomaly.R=Anomaly) )
+    })
   },
   
   #' @description calculate a volatility statistic for the timeseries based on previous N days
@@ -714,7 +843,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param features - 
   #' @param rtlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
-  plotRt = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rtlim=c(0.5,2.5), dates="2020-03-01", 
+  plotRt = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rtlim=c(0.5,2.5), dates=NULL, 
                     ribbons=("Quantile.0.025(R)" %in% colnames(covidRtTimeseries)), ...) {
     df = covidRtTimeseries
     if (!("Median(R)" %in% colnames(covidRtTimeseries))) {
@@ -729,23 +858,26 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
       if(ribbons) {
         p2 = p2 + 
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`,...),alpha=0.1,show.legend = FALSE)+
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`,...), alpha=0.15,show.legend = FALSE)
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`,...),alpha=0.05,fill="black",show.legend = FALSE)+
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`,...),alpha=0.065,fill="black",show.legend = FALSE)
       }
       p2 = p2 + 
         geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,...))+
-        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
       
     } else {
       
       if(ribbons) {
         p2 = p2 + 
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`, fill=!!colour,...),alpha=0.1,show.legend = FALSE)+
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill=!!colour,...),alpha=0.15,show.legend = FALSE)
+          # geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`, fill=!!colour,...),alpha=0.1,show.legend = FALSE)+
+          # geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill=!!colour,...),alpha=0.15,show.legend = FALSE)
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`,group=!!colour,  ...),alpha=0.05,fill="black",show.legend = FALSE)+
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`,group=!!colour, ...),alpha=0.065,fill="black",show.legend = FALSE)
+          
       }
       p2 = p2 +
         geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,colour=!!colour,...))+
-        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
       
     }
     p2 = p2 + geom_hline(yintercept = 1,colour="grey50")
@@ -758,7 +890,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param rlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
   #' @param ribbons - display the confidence limit as ribbons
-  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates="2020-03-01", ribbons=TRUE, ...) {
+  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, ...) {
     df = covidRtTimeseries %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
@@ -785,7 +917,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param rlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
   #' @param ribbons - display the confidence limit as ribbons
-  plotWindowedGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates="2020-03-01", ribbons=TRUE, ...) {
+  plotWindowedGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, ...) {
     df = covidRtTimeseries %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
@@ -806,10 +938,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotDefault = function(data, events = dpc$datasets$getSignificantDates() %>% filter(Significance==1), dates="2020-03-01", ylim=NULL) {
+  plotDefault = function(data, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL) {
     p = ggplot(data, aes(x=date))
-    dates = as.Date(dates)
-    if (length(dates) == 1) dates = c(dates,Sys.Date())
+    if (identical(dates,NULL)) {
+      dates = as.Date(c(min(data$date),max(data$date)),"1970-01-01")
+    } else {
+      dates = as.Date(dates)
+      if (length(dates) == 1) dates = c(dates,Sys.Date())
+    }
     rects = events %>% filter(!is.na(`End date`))
     p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
     lines = events %>% filter(is.na(`End date`))
@@ -829,7 +965,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
 
-  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NA, colour=NULL, events = dpc$datasets$getSignificantDates() %>% filter(Significance==1), dates="2020-03-01", ribbons=TRUE, ylim=NULL, ...) {
+  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NA, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=NULL, ...) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
@@ -852,16 +988,20 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     if(!identical(colour,NULL)) {
       if(ribbons) p2 = p2 + 
-        geom_ribbon(aes(ymin=yMin1, ymax=yMax1, fill=!!colour, ...),colour = NA,alpha=0.1,show.legend = FALSE) + 
-        geom_ribbon(aes(ymin=yMin2, ymax=yMax2, fill=!!colour,...), colour = NA,alpha=0.15,show.legend = FALSE)
+        # geom_ribbon(aes(ymin=yMin1, ymax=yMax1, fill=!!colour, ...),colour = NA,alpha=0.1,show.legend = FALSE) + 
+        # geom_ribbon(aes(ymin=yMin2, ymax=yMax2, fill=!!colour,...), colour = NA,alpha=0.15,show.legend = FALSE)
+          geom_ribbon(aes(ymin=yMin1, ymax=yMax1, group=!!colour, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
+          geom_ribbon(aes(ymin=yMin2, ymax=yMax2, group=!!colour, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
         geom_line(aes(y=yMid,colour=!!colour,...)) +
         geom_point(aes(y=y,colour=!!colour),size=0.5, alpha=0.5, shape=16,show.legend = FALSE)+
         geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
     } else {
       if(ribbons) p2 = p2 + 
-        geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,alpha=0.1,show.legend = FALSE) + 
-        geom_ribbon(aes(ymin=yMin2, ymax=yMax2, ...),colour = NA,alpha=0.15,show.legend = FALSE)
+        # geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,alpha=0.1,show.legend = FALSE) + 
+        # geom_ribbon(aes(ymin=yMin2, ymax=yMax2, ...),colour = NA,alpha=0.15,show.legend = FALSE)
+        geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
+        geom_ribbon(aes(ymin=yMin2, ymax=yMax2, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
         geom_line(data=df,mapping=aes(x=date,y=yMid,...)) +
         geom_point(aes(y=y),colour="black",size=0.5, alpha=0.5, shape=16,show.legend = FALSE)+
@@ -870,7 +1010,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NA, events = dpc$datasets$getSignificantDates() %>% filter(Significance==1), dates="2020-03-01", ylim=NULL, ...
+  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NA, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, ...
   ) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
@@ -891,7 +1031,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       geom_line(aes(y=yMid,...),alpha=0.5)+
       geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
     return(p2)
-  }
+  }#,
+  
+  # ## convert to sts ----
+  # toSts = function(covidTimeseries, valueExpr) {
+  #   
+  # }
+  
   
 ))
 

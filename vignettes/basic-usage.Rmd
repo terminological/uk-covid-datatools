@@ -15,19 +15,33 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-# devtools::load_all("~/Git/uk-covid-datatools/")
-devtools::install_github("terminological/uk-covid-datatools", force = TRUE)
+devtools::load_all("~/Git/uk-covid-datatools/")
+#devtools::install_github("terminological/uk-covid-datatools", force = TRUE)
 
-library(ukcovidtools)
-library(ggplot2)
-library(EpiEstim)
+dpc = tsp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  # chp <<- dpc$chessProcessor()
+  # srv <<- dpc$survivalProcessor()
+  # mwp <<- dpc$metawardProcessor()
+}
+
+reload()
+
+
+
 ```
 
 # Get data and cleanse:
 
 ```{r}
-UK = ukcovidtools::getUKCovidTimeseries()
-cleanRegional = UK$tidyUKRegional %>% ukcovidtools::normaliseAndCleanse()
+
+testData = dpc$datasets$getPHEApi()
+
 ```
 
 timeseries has UK region, England NHS region, and England Unitary Authority
@@ -36,13 +50,21 @@ timeseries has UK region, England NHS region, and England Unitary Authority
 
 ```{r}
 
-siConfig = EpiEstim::make_config(list(
-      mean_si = 4.7, 
-      std_si = 2.9
-))
 
-regionalRt = cleanRegional %>% ukcovidtools::tidyEstimateRt(siConfig)
-ggplot(regionalRt %>% filter(!is.na(`Median(R)`)), aes(x=date,y=`Median(R)`,ymin=`Quantile.0.05(R)`,ymax=`Quantile.0.95(R)`,fill=uk_region,colour=uk_region))+
-  geom_ribbon(alpha=0.2, colour=NA)+geom_line()+geom_hline(yintercept = 1, colour="red")+expand_limits(y=0)
+testData %>% tsp$plotIncidenceQuantiles(colour = statistic)
 
+
+```
+```{r}
+
+reload()
+tn = SerialIntervalProvider$truncatedNormals(dpc)
+tsp$serial = tn
+
+
+```
+
+```{r}
+tmp = testData %>% tsp$estimateRtWithAssumptions(period = 60,quick=TRUE,nocache=TRUE)
+tmp %>% tsp$adjustRtDates() %>% tsp$adjustRtCorrFac() %>% tsp$plotRt(colour=statistic, rtlim = c(0,10), dates = "2020-02-01")
 ```

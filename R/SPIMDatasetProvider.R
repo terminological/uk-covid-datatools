@@ -1,13 +1,34 @@
 #' SPIM private data
 #' @export
 SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseriesProvider, public = list(
-    
+  
+  
     directory=NULL,
     
     initialize = function(providerController, path, ...) {
       self$directory = path.expand(path)
       super$initialize(providerController, ...)
     },
+    
+    ### filters ----
+    
+    filter=list(
+      chess="CHESS COVID19", #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
+      lineList="Anonymised .*Line List",
+      rcgp="RCGP",
+      deathsLineList="COVID19 Deaths",
+      ff100="FF100",
+      chessSummary="CHESS Aggregate Report",
+      oneOneOne = "SPIM-111-999",
+      onsWeekly = "SPIM_ONS",
+      aeSitrep = "AESitrep",
+      trust = "SPIM_trust",
+      seroprevalence = "seroprev",
+      negPillar1 = "Negatives pillar1",
+      negPillar2 = "Negatives pillar2",
+      oneOneOneLineList = "111telephony_CLEANSED",
+      fourNationsCases = "Casedata_AllNations"
+    ),
     
     #### Get raw file paths ----
     
@@ -21,35 +42,55 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       path = self$directory
       return(self$getDaily("DATAFILES", ..., orElse = function (...) {
         tmp = list.files(path=path,recursive = TRUE)
+        return(tmp)
         
-        fn = function(search) {
-          tmp2 = tmp %>% stringr::str_subset(search)
-          tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove("-")
-          tmp3 = tmp2[tmp2Date == max(tmp2Date)]
-          if(length(tmp3)==0) {
-            warning("Missing file: ",search)
-            return(NA)
-          }
-          return(paste0(path,"/",tmp3))
-        }
         
-        paths=list(
-          chess=fn("CHESS COVID19"), #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
-          lineList=fn("Anonymised .*Line List"),
-          rcgp=fn("RCGP"),
-          deathsLineList=fn("COVID19 Deaths"),
-          ff100=fn("FF100"),
-          chessSummary=fn("CHESS Aggregate Report"),
-          oneOneOne = fn("SPIM-111-999"),
-          onsWeekly = fn("SPIM_ONS"),
-          aeSitrep = fn("AESitrep"),
-          trust = fn("SPIM_trust"),
-          seroprevalence = fn("seroprev")
-          # sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx"
-        )
-        if(any(is.na(paths))) stop("Missing files")
-        return(paths)
+        # paths=list(
+        #   chess=fn("CHESS COVID19"), #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
+        #   lineList=fn("Anonymised .*Line List"),
+        #   rcgp=fn("RCGP"),
+        #   deathsLineList=fn("COVID19 Deaths"),
+        #   ff100=fn("FF100"),
+        #   chessSummary=fn("CHESS Aggregate Report"),
+        #   oneOneOne = fn("SPIM-111-999"),
+        #   onsWeekly = fn("SPIM_ONS"),
+        #   aeSitrep = fn("AESitrep"),
+        #   trust = fn("SPIM_trust"),
+        #   seroprevalence = fn("seroprev"),
+        #   negPillar1 = fn("Negatives pillar1"),
+        #   negPillar2 = fn("Negatives pillar2"),
+        #   fullList = tmp
+        #   # sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx"
+        # )
+        # if(any(is.na(paths))) stop("Missing files")
+        # return(paths)
       }))
+    },
+    
+    getLatest = function(search) {
+      tmp2 = self$getPaths() %>% stringr::str_subset(search)
+      tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-")
+      tmp3 = tmp2[tmp2Date == max(tmp2Date)]
+      if(length(tmp3)==0) {
+        warning("Missing file: ",search)
+        return(NA)
+      }
+      return(paste0(self$directory,"/",tmp3))
+    },
+    
+    getNewerThan = function(search, date = as.Date("2020-01-01")) {
+      return(self$getSpecificDates(search,(date+1):Sys.Date()))
+    },
+    
+    getSpecificDates = function(search, dates) {
+      tmp2 = self$getPaths() %>% stringr::str_subset(search)
+      tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-") %>% as.Date("%Y%m%d")
+      tmp3 = tmp2[tmp2Date %in% dates]
+      if(length(tmp3)==0) {
+        warning("Missing file: ",search)
+        return(NA)
+      }
+      return(paste0(self$directory,"/",tmp3))
     },
     
     #### Get raw SPIM files ----
@@ -61,12 +102,12 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw line list data set
     
     getDeathsLineList = function(...) {
-      path = self$getPaths()$deathsLineList
+      path = self$getLatest(self$filter$deathsLineList)
       self$getDaily("DEATHS-LINE-LIST", ..., orElse = function (...) {
         tmp = readxl::read_excel(path.expand(path), 
                                  col_types = "text")
-        datecols = c("symptom_onset_date","dateswab_NHSE","dateofresult_NHSE","specimen_date","lab_report_date","dateadmission","dod",
-                     "NHSdeathreportdate","DBSdeathreportdate", "HPTdeathreportdate", "ONS_death_registration_date")
+        datecols = c(colnames(tmp) %>% stringr::str_subset("date"),"dod")
+        
         for(datecol in datecols) {
           tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
         }
@@ -85,7 +126,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw line list data set
     
     getLineList = function(...) {
-      path = self$getPaths()$lineList
+      path = self$getLatest(self$filter$lineList)
       self$getDaily("LINE-LIST", ..., orElse = function (...) {
         tmp = readxl::read_excel(path.expand(path), 
                                  col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
@@ -98,6 +139,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           )
         return(tmp %>% dplyr::ungroup())
       })
+      
+      # TODO: https://github.com/sarahhbellum/NobBS
     },
     
     #' @description Load the seroprevalance file
@@ -106,7 +149,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw FF100 data set
     
     getSeroprevalence = function(...) {
-      path = self$getPaths()$seroprevalence
+      path = self$getLatest(self$filter$seroprevalence)
       self$getDaily("SEROPREV", ..., orElse = function (...) {
         # ID	Barcode	surv	age	age_m	Sex	Region	Location	sample_region	SampleDate	isoweek_sample	EuroImm_outcome	EuroImm_Units	RBD_outcome	RBD_Units
         
@@ -150,7 +193,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw FF100 data set
     
     getFF100 = function() {
-      path = self$getPaths()$ff100
+      path = self$getLatest(self$filter$ff100)
       readr::read_csv(path,
                       col_types = readr::cols(
                         FF100_ID = readr::col_integer(),
@@ -1082,7 +1125,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @param path - a path to the chess csv file
     #' @return raw CHESS data set
     getCHESS = function() {
-      path = self$getPaths()$chess
+      path = self$getLatest(self$filter$chess)
       out = readr::read_csv(path.expand(path), col_types = readr::cols(.default = col_character()))
       for (col in colnames(out)) {
         if (stringr::str_detect(col, "date")) {
@@ -1101,7 +1144,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw FF100 data set
     
     getCHESSSummary = function() {
-      path = self$getPaths()$chessSummary
+      path = self$getLatest(self$filter$chessSummary)
       read_csv(path, col_types = readr::cols(
         DateRange = readr::col_date("%d-%m-%Y"),
         DateOfAdmission = readr::col_date("%d-%m-%Y"),
@@ -1198,11 +1241,11 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         
         out = out %>% 
           dplyr::mutate(source="line list",statistic = "case", type="incidence") %>%
-          self$complete() %>%
+          self$fillAbsent() %>%
           #tidyr::complete(tidyr::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
           dplyr::ungroup()
         
-        return(out %>% self$fixDatesAndNames(4, naIsZero=TRUE))
+        return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
       }))
     },
     
@@ -1255,11 +1298,11 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         
         out = out %>% 
           dplyr::mutate(source="deaths line list",statistic = "death", type="incidence") %>%
+          self$fillAbsent() %>%
+          self$fixDatesAndNames(4) %>% 
           self$complete() %>%
-          #tidyr::complete(tidyr::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
           dplyr::ungroup()
-        
-        return(out %>% self$fixDatesAndNames(4, naIsZero=TRUE))
+        return(out)
       }))
     },
     
@@ -1307,7 +1350,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           #tidyr::complete(tidy::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
           dplyr::ungroup()
         
-        return(out %>% self$fixDatesAndNames(0, naIsZero=TRUE))
+        return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
       }))
     },
     
@@ -1317,9 +1360,27 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return a covidTimeseriesFormat dataframe
     
     getOneOneOne = function(...) {
-      path = self$getPaths()$oneOneOne
+      path = self$getLatest(self$filter$oneOneOne)
       self$getDaily("SPIM-111", ..., orElse = function (...) covidTimeseriesFormat({
+        
         oneoneone <- readxl::read_excel(path.expand(path), sheet = "Extracted Data", col_types = "text")
+        
+        # make zeros explicit
+        
+        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-Outcome")]) {
+        #   outcome = as.symbol(outcome)
+        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
+        # }
+        # 
+        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("999-Outcome")]) {
+        #   outcome = as.symbol(outcome)
+        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`999-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
+        # }
+        # 
+        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-ONLINE") & colnames(oneoneone) != "111-ONLINE-Total Result"]) {
+        #   outcome = as.symbol(outcome)
+        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-ONLINE-Total Result`) & is.na(!!outcome),0,!!outcome))
+        # }
         
         ts111 = oneoneone %>% 
           dplyr::mutate(Geography = ifelse(Geography=="England: Unknown", "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
@@ -1360,21 +1421,71 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             )
           ) %>%
           dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
-        
+        #browser()
         ts111 = ts111 %>% 
+          dplyr::filter(!is.na(value)) %>%
           dplyr::rename(note = category) %>%
           dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
-          dplyr::summarise(value = sum(value,na.rm=TRUE), note = paste0(note, collapse = "; "))
+          dplyr::summarise(
+            value = sum(value), 
+            note = paste0(note, collapse = "; "))
         
-        return(ts111 %>% self$fixDatesAndNames(0, naIsZero = FALSE))
+        return(ts111 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
       }))
     },
+    
+    getFourNationsCases = function(...) {
+      path = self$getLatest(self$filter$fourNationsCases)
+      self$getDaily("SPIM-4-NATIONS", ..., orElse = function(...)  covidTimeseriesFormat({
+        tmp = readxl::read_excel(path, sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+        tmp2 = tmp %>% 
+          tidyr::pivot_longer(
+            cols=c(-DateVal,-Day,-Month,-Year,-Geography),
+            names_to = "variable",
+            values_to = "value"
+          ) %>% dplyr::mutate(
+            date = suppressWarnings(as.Date(DateVal)),
+            value = suppressWarnings(as.numeric(value))
+          ) %>% dplyr::select(-Day,-Month,-Year) %>%
+          dplyr::mutate(Geography = ifelse(Geography %in% c("England: Unknown","England: Other"), "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
+          dplyr::rename(name= Geography) %>% 
+          self$codes$findCodesByName(codeTypes = c("CTRY","PSEUDO")) %>%
+          dplyr::mutate(
+            statistic = "case",
+            type = case_when(
+              stringr::str_detect(variable,"umula") ~ "cumulative",
+              TRUE ~ "incidence"
+            ),
+            source = "casedata allnations",
+            subgroup = variable
+          )
+        tmp3 = tmp2 %>% dplyr::select(-DateVal,-name.original, -variable) %>% mutate(ageCat=NA,gender=NA)
+        tmp4 = tmp3 %>% filter(!is.na(value)) %>% self$fillAbsentRegional() %>% self$fixDatesAndNames(4) %>% self$complete()
+        return(tmp4)
+        
+        # CHESS_LL_lab_date_cases_P1
+        # CHESS_LL_specimen_date_cases_P1
+        # CHESS_LL_lab_date_cases_P2
+        # CHESS_LL_specimen_date_cases_P2
+        # RCGP_Pos_cases
+        # RCGP_Neg_cases
+        # Admitted Patients with Lab Confirmed COVID19
+        # Dashboard_daily_confirmed - wales
+        # Dashboard_cumulative_confirmed - wales
+        # Positives_Spec_Date - scotland
+        # Positives_Cumulative_Spec_Date - scotland
+        # SitRep_Daily_Positive_tests - n ireland
+        # SitRep_Cumulative_Positive_tests - n ireland
+        
+      }))
+    },
+    
     
     #' @description Load the SPI-M aggregated data spreadsheet
     #' @return a covidTimeseriesFormat dataframe
     # TODO: fix Couldn't match the following names: England: Unknown, England: Other, Golden Jubilee National Hospital, Velindre University NHS Trust
     getSPIMextract = function(...) {
-      path = self$getPaths()$trust
+      path = self$getLatest(self$filter$trust)
       self$getDaily("SPIM-TRUST", ..., orElse = function (...) covidTimeseriesFormat({
         tmp = readxl::read_excel(path, sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
         tmp2 = tmp %>% 
@@ -1438,8 +1549,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           dplyr::filter(!is.na(TrustCode)) %>%
           self$codes$findNamesByCode(TrustCode,outputNameVar = name) %>%
           dplyr::mutate(name= ifelse(is.na(name), "Unknown NHS trust", name)) %>% 
-          dplyr::select(-TrustName, -TrustCode,-Geography,-ReportLevel,-DateVal) %>%
-          dplyr::rename(note=variable)
+          dplyr::select(-TrustName, -Geography,-ReportLevel,-DateVal) %>%
+          dplyr::rename(note=variable,code = TrustCode)
         
         
         tmp6 = tmp4 %>% 
@@ -1451,8 +1562,10 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           dplyr::select(-name.original, -TrustCode,-Geography,-ReportLevel,-DateVal) %>%
           dplyr::rename(note=variable) %>%
           dplyr::filter(!is.na(code)) # 2 missing hospital trusts - Velindre and Golden jubilee
+        #browser()
+        tmp7 = dplyr::bind_rows(tmp5,tmp6) %>% self$fillAbsentRegional() %>% self$fixDatesAndNames(4) %>% self$complete()
         
-        return(dplyr::bind_rows(tmp5,tmp6) %>% self$fixDatesAndNames(4))
+        return(tmp7)
       })) 
     },
     
@@ -1480,18 +1593,21 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
 #' @param df - the dataframe with Rt estimates
 #' @param geographyExpr - the derivation of the geographic name
 #' @param modelName - the model
+#' @param modelTypeExpr: ModelType - Multiple, Deaths, Cases, Survey, Emergency, Pillar Two Testing
 #' @param dateVar - the column with dates
 #' @param groupName - the group submitting the estimate
 #' @return a tibble of the formatted estimates
 #' @export
-convertRtToSPIM = function(df, geographyExpr, modelExpr, dateVar = "date", groupName = "Exeter", version="0.1") {
+convertRtToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, dateVar = "date", groupName = "Exeter", version="0.1") {
   dateVar = ensym(dateVar)
   geographyExpr = enexpr(geographyExpr)
   modelExpr = enexpr(modelExpr)
+  modelTypeExpr = enexpr(modelTypeExpr)
   return(
     df %>% mutate(
       `Group`=groupName,
       `Model`=!!modelExpr,
+      `ModelType`=!!modelTypeExpr,
       `Version`=version,
       `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
       `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
@@ -1521,7 +1637,7 @@ convertRtToSPIM = function(df, geographyExpr, modelExpr, dateVar = "date", group
       `Quantile 0.9` = NA,	
       `Quantile 0.95` = `Quantile.0.95(R)`,# %>% round(2)
     ) %>% select(
-      `Group`,`Model`,`Version`,`Creation Day`,`Creation Month`,
+      `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
       `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,
       `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
       `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.35`,	
@@ -1541,16 +1657,17 @@ convertRtToSPIM = function(df, geographyExpr, modelExpr, dateVar = "date", group
 
 #' @return a tibble of the formatted estimates
 #' @export
-convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, growthVar = "Growth.windowed.value", growthSEVar = "Growth.windowed.SE.value",  dateVar = "date", groupName = "Exeter", version="0.1") {
+convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, growthVar = "Growth.windowed.value", growthSEVar = "Growth.windowed.SE.value",  dateVar = "date", groupName = "Exeter", version="0.1") {
   dateVar = ensym(dateVar)
   growthVar = ensym(growthVar)
   growthSEVar = ensym(growthSEVar)
   geographyExpr = enexpr(geographyExpr)
   modelExpr = enexpr(modelExpr)
-  
+  modelTypeExpr = enexpr(modelTypeExpr)
   df %>% mutate(
     `Group`=groupName,
     `Model`=!!modelExpr,
+    `ModelType`=!!modelTypeExpr,
     `Version`=version,
     `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
     `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
@@ -1580,7 +1697,7 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, growthVar = "Gr
     `Quantile 0.9` = NA,	
     `Quantile 0.95` = qnorm(0.95, !!growthVar, !!growthSEVar),# %>% round(2)
   ) %>% select(
-    `Group`,`Model`,`Version`,`Creation Day`,`Creation Month`,
+    `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
     `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,
     `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
     `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.35`,	
@@ -1599,13 +1716,14 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, growthVar = "Gr
 
 #' @return a tibble of the formatted estimates
 #' @export
-convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter", version="0.1") {
+convertSerialIntervalToSPIM = function(serial, modelName, groupName = "Exeter", version="0.1") {
+  cfg = serial$getSummary()
   quant = function(q) {
-    m = msm::qtnorm(q, cfg$mean_si, cfg$std_mean_si, lower=cfg$min_mean_si, upper=cfg$max_mean_si)
-    v = msm::qtnorm(q, cfg$std_si, cfg$std_std_si, lower=cfg$min_std_si, upper=cfg$max_std_si)
+    m = msm::qtnorm(q, cfg$meanOfMean, cfg$sdOfMean, lower=cfg$minOfMean, upper=cfg$maxOfMean)
+    v = msm::qtnorm(q, cfg$meanOfSd, cfg$sdOfSd, lower=cfg$minOfSd, upper=cfg$maxOfSd)
     
-    k_mean = (cfg$std_si / cfg$mean_si)^2
-    k_sd = sdFromRatio(mu_x = cfg$std_si, sig_x = cfg$std_std_si, mu_y = cfg$mean_si, sig_y = cfg$std_mean_si ) ^ 2
+    k_mean = (cfg$meanOfMean / cfg$meanOfSd)^2
+    k_sd = sdFromRatio(mu_x = cfg$meanOfSd, sig_x = cfg$sdOfSd, mu_y = cfg$meanOfMean, sig_y = cfg$sdOfMean ) ^ 2
     
     k = qnorm(q, k_mean, k_sd)
     
@@ -1617,6 +1735,7 @@ convertSerialIntervalToSPIM = function(cfg, modelName, groupName = "Exeter", ver
   return(tibble(
     `Group`=groupName,
     `Model`=modelName,
+    `ModelType`="Multiple",
     `Version`=version,
     `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
     `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),

@@ -32,10 +32,21 @@ devtools::load_all("~/Git/standard-print-output/")
 devtools::load_all("~/Git/uk-covid-datatools/")
 library(tidyverse)
 library(patchwork)
-standardPrintOutput::setDefaults()
-paths = findDatafile()
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 
-source("./lockdown-impact-data.R")
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+reload()
 ```
 
 Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Leon Danon ^3,4^
@@ -60,61 +71,81 @@ The NHS 111 data includes information on people who contacted the emergency serv
 # Results
 
 ```{r load111}
-ts111 = getOneOneOne(paths$oneOneOne)
-  
-ts111_2 = ts111 %>% group_by(level,region,category, route, result) %>% mutate(date = as.Date(date)) %>% arrange(date) %>% filter(!is.na(incidence))
-
-grps = ts111_2 %>% groups()
-
-tmpDates = ts111_2 %>% group_modify(function(d,f,...) {
-  tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
-})
-
-ts111_3 = tmpDates %>% left_join(ts111_2, by=c(sapply(grps,as_label),"date"))
-
-# ts111_4 = ts111_3 %>% mutate(incidence = ifelse(is.na(incidence),0,incidence))
+ts111 = dpc$spim$getOneOneOne(nocache=TRUE)
+events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","Anti-racism demos","Hotels and bars reopen"))
 ```
 
 Table 1 shows the breakdown of the different outcomes of contacts to 111, 999 and 111 online, in England (?does this include Wales) and Scotland.
 
 ```{r}
-ts111 %>% filter(!is.na(incidence) & level=="National") %>% group_by(`Region` = region,`Route`=route,`Result`=result) %>% summarise(
+ts111 %>% filter(codeType=="CTRY" & type=="incidence" & statistic=="triage" & name=="England") %>% group_by(`Route`=source,`Outcome`=subgroup) %>% summarise(
   `Date range` = paste0(as.Date(min(date),"1970-01-01"), " to ", as.Date(max(date),"1970-01-01")),
-  `Contacts` = sprintf("%1.0f",sum(incidence, na.rm = TRUE))
+  `Contacts` = sprintf("%1.0f",sum(value, na.rm = TRUE))
 ) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/NHS-111-rt/Table1_111Summary")
 ```
 
 Restricting analysis from here on to England data specific to COVID-19.
 
 ```{r}
-source("./covid-serial-interval.R")
+triageCTRY = ts111 %>% 
+    filter(statistic == "triage" & codeType == "CTRY" & name=="England") %>% 
+    tsp$aggregateSubgroup() %>%
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$estimateRt()
 
-plotByGroup = function(df, group) {
-  group = ensym(group)
-  p1 = ggplot(df,aes(x=date, y=incidence,colour=!!group))+
-    geom_rect(xmin=as.Date("2020-04-10"),xmax=as.Date("2020-04-14"),ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")+
-    geom_line()+geom_point(size=0.5,show.legend = FALSE)+
-    scale_y_log10()+standardPrintOutput::narrower()+#standardPrintOutput::hideX()+
-    geom_vline(xintercept = as.Date("2020-03-23"),colour="black",linetype="dashed")+
-    
-    scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")+
-    coord_cartesian(xlim=c(as.Date("2020-03-16"),Sys.Date()))+standardPrintOutput::narrower()
+triageCTRY_111_999 = ts111 %>% 
+    filter(statistic == "triage" & codeType == "CTRY" & name=="England" & source %in% c("111","999")) %>% 
+    tsp$aggregateSource(fn=sum, na.rm=TRUE) %>% 
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$estimateRt()
+
+
+triageCTRY_final = ts111 %>% 
+    filter(statistic == "triage" & name!="Scotland" & source %in% c("111") & subgroup %in% c("urgent clinical review","emergency ambulance")) %>% 
+    filter(name != "Unknown (England)" & codeType %in% c("CTRY","NHSER")) %>%
+    tsp$aggregateSource(fn=sum, na.rm=TRUE) %>%
+    tsp$aggregateSubgroup() %>%
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$logIncidenceStats(smoothingWindow = 21) %>%
+    tsp$estimateRtWithAssumptions(valueVar = Est.value)
+
+  ### Cases - NHSER ----
+  casesEngland = dpc$spim$getLineListIncidence(specimenOrReport = "specimen") %>% 
+    filter(subgroup == "Pillar 1" & codeType %in% c("CTRY","NHSER")) %>% 
+    tsp$aggregateAge() %>%
+    tsp$aggregateGender() %>% 
+    tsp$aggregateSubgroup() %>%
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$logIncidenceStats(smoothingWindow = 21) %>%
+    tsp$estimateRtWithAssumptions(valueVar = Est.value)
   
-  p2 = plotRt(df, group=!!group)
+  ### Deaths - NHSER ----
+  deathsEngland = dpc$spim$getDeathsLineListIncidence(deathOrReport = "death") %>% 
+    filter(name != "Unknown (England)" & codeType %in% c("CTRY","NHSER")) %>%
+    tsp$aggregateAge() %>% 
+    tsp$aggregateGender() %>% 
+    tsp$aggregateSubgroup(fn=sum) %>%
+    filter(date >= "2020-03-15") %>%
+    dpc$demog$findDemographics() %>%
+    tsp$logIncidenceStats(smoothingWindow = 21) %>%
+    tsp$estimateRtWithAssumptions(valueVar = Est.value)
 
-  return(
-    ((p1+p2)/patchwork::guide_area())+
-      patchwork::plot_annotation(tag_levels = "A")+
-      patchwork::plot_layout(guides="collect", heights = c(1,0.1))
-  )
-}
+  
+
 ```
 
 ```{r fig1, fig.cap="The incidence of contact events for 111 online, 111 and 999 services in England, and R(t) estimates based on those contact events as a proxy for cases."}
-ts111_5 = ts111_3 %>% filter(result != "other") %>% group_by(route,date) %>% summarise(incidence = sum(incidence, na.rm = TRUE)) %>% filter(incidence != 0) %>% ungroup() %>% group_by(route) %>% 
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
 
-plotByGroup(ts111_5, route) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure1_111byRoute")
+p1 = tsp$plotIncidenceQuantiles(triageCTRY, denominatorExpr = population/1000000, events = events, colour=source)+
+    facet_wrap(vars(name))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")+standardPrintOutput::hideX()+scale_color_brewer(palette = "Dark2",aesthetics = c("colour","fill"))
+p2 = tsp$plotRt(triageCTRY,events = events,colour = source, rtlim = c(0.5,1.5))+scale_color_brewer(palette = "Dark2",aesthetics = c("colour","fill"))
+  
+(p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,1))) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure1_111byRoute")
 ```
 
 
@@ -135,10 +166,13 @@ Panel B:
 
 
 ```{r fig2, fig.cap="The incidence of 111 & 999 contact events with different outcomes, and R(t) estimates based on those contact events as a proxy for cases."}
-ts111_6 = ts111_3 %>% filter(result != "other") %>% group_by(result,date) %>% summarise(incidence = sum(incidence, na.rm = TRUE)) %>% filter(incidence != 0) %>% ungroup() %>% group_by(result) %>% 
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7)
-
-plotByGroup(ts111_6, result) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure2_111byResult")
+triageCTRY_111_999 = triageCTRY_111_999 %>% filter(subgroup != "other")
+p1 = tsp$plotIncidenceQuantiles(triageCTRY_111_999, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+    facet_wrap(vars(name))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")+standardPrintOutput::hideX()
+p2 = tsp$plotRt(triageCTRY_111_999,events = events,colour = subgroup, rtlim = c(0.5,1.5))
+  
+(p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,1))) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure2_111And999byOutcome")
 ```
 
 Figure 2 shows numbers of contact events by outcome where self care expected to be mild cases, clinical review moderate or severe, and emergency ambulance for life threatening.
@@ -155,24 +189,16 @@ Panel B:
 * estimates of transmission using emergency ambulance and urgent clinical review fell rapidly following lock down, becoming less than 1 around the 3rd April. Reached a minimal value on 15th April of about 0.7 and has been gradually increasing since, to a value of about 0.95.
 
 ```{r fig3, fig.cap="R(t) estimates based on 111 & 999 calls with urgent outcome (red), versus estimates based on publicly available cases (green) and deaths (blue) for England."}
-final111 = ts111_3 %>% filter(level == "National" & result %in% c("urgent clinical review","emergency ambulance") & route %in% c("111 call","999 call")) %>% 
-  group_by(date) %>% summarise(incidence = sum(incidence, na.rm=TRUE)) %>% ungroup() %>% 
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7) %>%
-  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="111 & 999, severe cases")
 
-finalCases = ts$r0UKRegional %>% filter(uk_region == "England") %>% ungroup() %>% 
-  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="PHE confirmed cases") %>%
-  filter(date < Sys.Date()-4)
-
-finalDeaths = ts$r0UKRegionalDeaths %>% filter(uk_region == "England") %>% ungroup() %>% 
-  select(`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="PHE deaths") %>%
-  filter(date < Sys.Date()-4)
-
-final = bind_rows(
-  final111, finalCases, finalDeaths
+comparison = bind_rows(
+  triageCTRY_final, casesEngland, deathsEngland
 )
 
-plotRt(final, source, rtlim=c(0.5,2.5), dates="2020-03-16") %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure3_ComparisonVsDeathsAndCases")
+p1 = tsp$plotIncidenceQuantiles(comparison %>% filter(name=="England"), denominatorExpr = population/1000000, events = events, colour=statistic)+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")+standardPrintOutput::hideX()
+p2 = tsp$plotRt(comparison %>% filter(name=="England"),events = events,rtlim = c(0.5,1.5), colour=statistic)
+  
+(p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,1))) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure3_111VersusCasesAndDeaths")
 
 ```
 
@@ -184,24 +210,21 @@ Figure 3 shows R(t) from calculated from 111 & 999 calls which required ambulanc
 
 
 ```{r fig4, fig.cap="R(t) estimates based on 111 & 999 calls with urgent outcome (red), versus estimates based on publicly available cases (blue) for the NHS regions of England."}
-regional111 = ts111_3 %>% filter(level == "Region" & region != "England: Unknown" & result %in% c("urgent clinical review","emergency ambulance") & route %in% c("111 call","999 call")) %>% 
-  group_by(date,region) %>% summarise(incidence = sum(incidence, na.rm=TRUE)) %>% ungroup() %>% group_by(region) %>%
-  ukcovidtools::tidyEstimateRt(config = cfg, dateVar = date, incidenceVar = incidence, window = 7) %>%
-  select(region,`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="111 & 999, severe cases")
+p1 = tsp$plotIncidenceQuantiles(comparison %>% filter(codeType=="NHSER"), denominatorExpr = population/1000000, events = events, colour=statistic)+
+    facet_wrap(vars(name))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")
+p2 = tsp$plotRt(comparison %>% filter(codeType=="NHSER"),events = events, rtlim = c(0.5,1.5), colour=statistic)+facet_wrap(vars(name))
+  
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure4_Regional111")
 
-regionalCases = ts$r0EnglandNHS %>% rename(region = england_nhs_region) %>% ungroup() %>% 
-  select(region,`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`,date) %>% mutate(source="NHS confirmed cases") %>%
-  filter(date < Sys.Date()-4)
-
-regional = bind_rows(
-  regional111, regionalCases
-)
-
-plotRt(regional, group = source, facetVars = vars(region), rtlim=c(0.5,2), dates="2020-03-16") %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure4_RegionalComparisonVsCases")
 
 ```
 
-Figure 4 shows R(t) estimated on a regional basis using both 111 and 999 calls with urgent outcome, compared to estimates derived from cases. We do not have a regional breakdown of deaths.
+Figure 4 & 5 shows R(t) estimated on a regional basis using both 111 and 999 calls with urgent outcome, compared to estimates derived from cases & deaths. We do not have a regional breakdown of deaths.
+
+```{r}
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-rt/Figure5_Regional111Rt")
+```
 
 * Estimates of R(t) using 111 & 999 start higher in London and through the South East and reduce over time with a similar pattern observed above. 
 * As with above, in general the current estimates of R(t) based on calls are increasing, particularly in the South West and possibly other region with an elderly population. 

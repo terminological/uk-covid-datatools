@@ -32,6 +32,20 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
      return(csvfile)
    },
    
+   downloadAndUntar = function(id, url, pattern) {
+      onsZip = paste0(self$wd,"/",id,".tar.gz")
+      unzipDir = paste0(self$wd,"/",id)
+      if(!file.exists(onsZip)) {
+         download.file(url, destfile = onsZip)
+      } 
+      if (!dir.exists(unzipDir)) {
+         dir.create(unzipDir)
+         untar(onsZip, exdir=unzipDir) #, junkpaths = TRUE)
+      }
+      csvfile = paste0(unzipDir,"/",list.files(unzipDir,recursive = TRUE,pattern = pattern))
+      return(csvfile)
+   },
+   
    download = function(id, url, type="csv") {
      onsZip = paste0(self$wd,"/",id,".",type)
      if(!file.exists(onsZip)) {

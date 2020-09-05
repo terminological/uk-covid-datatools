@@ -1,5 +1,5 @@
 ---
-title: "COVID-19 Serial Intervals"
+title: "Impact of serial interval uncertainty on estimates of the reproduction number for COVID 19"
 output: 
   pdf_document :
     fig_caption: yes
@@ -8,11 +8,11 @@ header-includes:
  \floatplacement{figure}{H}    
 
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/serial-interval/", output_file='serial-intervals.pdf') })
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.pdf')) })
 fig_width: 7
 fig_height: 5
 out.width: "100%"
-bibliography: current-rt.bib
+bibliography: serial-interval.bib
 csl: current-rt.csl
 vignette: >
   %\VignetteIndexEntry{COVID-19 Serial Intervals}
@@ -27,7 +27,9 @@ knitr::opts_chunk$set(
   comment = "#>",
   echo = FALSE,
   warning = FALSE,
-  message = FALSE
+  message = FALSE,
+  error = TRUE,
+  fig.align="center"
 )
 ```
 
@@ -37,16 +39,25 @@ library(tidyverse)
 # devtools::load_all("~/Git/uk-covid-datatools/")
 # devtools::install_github("terminological/uk-covid-datatools")
 # library(ukcovidtools)
-library(rgdal)
+# library(rgdal)
 library(ggplot2)
-library(ggspatial)
-library(rgeos)
-library(maptools)
-library(lubridate)
 library(patchwork)
-library(sp)
 devtools::load_all("~/Git/standard-print-output/")
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
 
 dpc = tsp = chp = srv = mwp = NULL
 
@@ -60,27 +71,119 @@ reload = function() {
   mwp <<- dpc$metawardProcessor()
 }
 
+options("usethis.quiet"=TRUE)
+
 reload()
 ```
 
-Robert Challen ^1,2^; Leon Danon ^3,4^
+Robert Challen ^1,2^; Ellen Brooks-Pollock^3^; Leon Danon ^4,5^; Krasimira Tsaneva-Atanasova^1,3^
 
 1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
 2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
-3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
-4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+3) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK.
+4) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
 
 Report date: `r Sys.Date()`
 
-# Background
+# Abstract
 
-* Estimates of R(t) depend on a knowledge of the time between infected infectee pairs. 
-* Previous work in many different countries / settings
-* Literature review conducted
-* Assessment of serial intervals in the UK
-* Aggregate of serial intervals estimate in literature
+***Determining the reproduction number for an outbreak typically depends on estimating the serial interval, which is commonly interpreted as the time between the onset of symptoms in sequentially infected individuals within a chain of transmission. Other key quantities include the incubation period, the generation interval (the time between sequential infections) and time delays between infection and the observations associated with monitoring an outbreak such as confirmed cases, hospital admissions and deaths. Estimates of the these quantities are often based on small data sets from early contact tracing and are subject to  considerable uncertainty. In this paper we estimate these key quantities for COVID-19 for the UK, including a meta-analysis of early estimates of serial interval. We then quantify the impact that the uncertainty surrounding the serial interval has on the subsequent estimation of the reproduction number. Furthermore, with our estimates of the times delay from infection to case identification, hospital admission, and deaths, we infer unobserved infection incidence from a UK data set and discuss challenges and the practical implications of using these distributions in the estimation of values of the reproduction number from the observation of confirmed cases, admissions and deaths.***
 
-```{r}
+Keywords : COVID-19; SARS-CoV-2; reproduction number; regional variation;
+
+Competing interests: Support for RC and KTA’s research is provided by the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of the NHS Global Digital Exemplar programme (GDE); no financial relationships with any organisations that might have an interest in the submitted work in the previous three years, no other relationships or activities that could appear to have influenced the submitted work.
+
+Funding: RCh and KTA gratefully acknowledges the financial support of the EPSRC via grant EP/N014391/1 and NHS England, Global Digital Exemplar programme. LD and KTA gratefully acknowledges the financial support of The Alan Turing Institute under the EPSRC grant EP/N510129/1. 
+
+Authors contributions: All authors discussed the concept of the article and RC wrote the initial draft. KTA, EB-P and LD commented and made revisions. All authors read and approved the final manuscript. RC is the guarantor. The views presented here are those of the authors and should not be attributed to TSFT or the GDE.
+
+# Introduction
+
+During the first wave of the COVID-19 outbreak in the UK the University of Exeter has been supporting the work of the Scientific Pandemic Influenza group for Modelling (SPI-M) [@ScientificPandemicInfluenza] by providing national and regional estimates of the time varying reproduction number ($R_t$) of SARS-CoV-2 [@NumberGrowthRate]. The methodology for this is described in detail elsewhere but uses the Cori method [@coriEstimateTimeVarying] as implemented in the R EpiEstim library [@coriNewFrameworkSoftware2013a;@rcoreteamLanguageEnvironmentStatistical2017;@thompsonImprovedInferenceTimevarying2019].
+
+`r ref$fig("infection-timeline")` represents the key events in sequentially infected individuals (infector and infectee) in a chain of transmission. As described by Svensson et al. [@svenssonNoteGenerationTimes2007] the generation interval is defined as the time between the infection of an infector and infectee, and in practice is not easy to observe, as an infection goes through some latent period, during which it is undetectable[@haoReconstructionFullTransmission2020], and a pre-symptomatic phase during which an individual may be infectious, and possibly detectable through screening, before the disease manifests with clinical symptoms. The latent period and pre-symptomatic phase are together usually referred to as the incubation period ($T_{incubation}$). From the onset of symptoms, the diagnosis will be confirmed by some canonical test after some time delay ($T_{onset \rightarrow test}$), later the patient may require admission to hospital ($T_{onset \rightarrow admission}$), or may die ($T_{onset \rightarrow death}$). These subsequent events clearly may not happen in that order, and even diagnosis may occur after death. The time between these key events (onset of symptoms, test confirmation of case, hospital admission, and death) for two sequentially infected people in a chain of transmission are described as serial intervals [@svenssonNoteGenerationTimes2007], although in general usage, and in the rest of this paper, the term "serial interval" is taken to mean the interval between onset of symptoms ($SI_{onset}$). In `r ref$fig("infection-timeline")` and the rest of this paper we use the terms "case interval" ($SI_{case}$), "admission interval" ($SI_{admission}$), and "death interval" ($SI_{death}$) to describe the other intervals. The generation interval is by definition a non-negative quantity, but all the other measures may be negative if the variation of the delay from the event of infection from person to person exceeds the period between infections. This is more likely for death interval than for serial interval, and for diseases with long presymptomatic periods, for example HIV [@beckerMethodNonparametricBackprojection1991].
+
+![](InfectionTimeline.pdf) 
+
+`r cap$fig("infection-timeline","A timeline of events associated with a single infector-infectee pair in a transmission chain")`
+
+The Cori method is predicated on a time series of infections, and on a measure of the probability that a secondary infection occurred on a specific day after the primary case, given a secondary infection occurred, which is described as the "infectivity profile" [@coriEstimateTimeVarying]. Neither of these are quantities that are easy to observe experimentally, although in theory prospective serial sampling with viral culture of exposed individuals could be used to define the infectivity profile. The infectivity profile is closely related to the probability distribution of the generation interval, but this is also difficult to directly observe. In both the original [@coriNewFrameworkSoftware2013a] and revised [@thompsonImprovedInferenceTimevarying2019] implementations of the Cori method, the authors acknowledge the pragmatic use of the serial interval distribution, as proxy measure for the infectivity profile, and incidence of symptom onset or case identification as a proxy for the incidence of infection, with the caveat that these introduce a time lag into the estimates of $R_t$. (N.b. In the software implementation of the Cori method the infectivity profile is consistently referred to as the serial interval.) It has been noted by various authors that use of the serial interval as a proxy for infectivity profiles can introduce a bias into estimates of $R_t$ [@brittonEstimationEmergingEpidemics2019; @gosticPracticalConsiderationsMeasuring2020a]. 
+
+In the COVID-19 outbreak a limited number estimates of the serial interval are available from studies of travelers from infected areas, and early contact tracing studies (detailed in `r ref$tab("lit-review")`). The infectivity profile is a non negative quantity by definition. However as described above the serial interval can be negative if the person-to-person variation of incubation period is significant for a particular infection. Use of a negative serial interval as a proxy for infectivity profile is not possible with the Cori method, but this has been noted as a feature in at least one estimate of the serial interval of SARS-CoV-2 to date [@xuHouseholdTransmissionsSARSCoV22020]. In this event we can either pragmatically truncate the serial interval distribution at zero or more formally try and estimate the generation interval distribution, which, like the infectivity profile, is by definition non-negative.
+
+Due to the scale of the outbreak, information on symptom onset is not available for the majority of cases, and the data available for estimating $R_t$ are a time series of confirmed cases (test results confirming diagnosis), hospital admissions, and deaths, rather than infection or onset. As depicted in `r ref$fig("infection-timeline")` these events occur after infection, but delayed by a variable amount of time. The observed time series of cases is a result of the unobserved time series of infections convolved by the probability distribution of the time delay from infection to case identification.
+
+Since the Cori method is predicated on infections best practice would be to infer the unobserved incidence of infection from the observations we have [@gosticPracticalConsiderationsMeasuring2020a] using back propagation or de-convolution [@beckerMethodNonparametricBackprojection1991]. A simple-but-incorrect alternative that has been suggested [@gosticPracticalConsiderationsMeasuring2020a] is to simply correct the time delay between infection and cases by shifting our observed cases in time. To do either of these things we need estimates of the time delays between infection and symptom onset (incubation period), infection and case identification (test), infection and admission, and between infection and death, and their probability distributions. 
+
+The purpose of this paper is determine the best estimates for the parameters we need to calculate $R_t$ for the UK using the Cori method. We also wish to understand the degree and nature of bias introduced by informal approaches using truncated serial interval distributions as approximations for infectivity profile [@brittonEstimationEmergingEpidemics2019], and case numbers as proxy for infection incidence, compared to the more formal methods of using generation intervals and inferred infection numbers [@gosticPracticalConsiderationsMeasuring2020a]. To do this we investigate estimates for the serial interval, the incubation period, and then time between symptom onset and case identification, admission or death, in the UK. From these we infer the generation interval, and time between infection and case identification, admission and death. With all these estimates available we then compare the effects of the pragmatic and more formal approaches to estimating $R_t$.
+
+# Methods
+
+## Serial interval estimation
+
+We derived three estimates for the serial interval using different methods. Firstly we use data collected under the "First Few Hundred" (FF100) case protocol by Public Health England[@publichealthenglandFirstFewHundred; @boddingtonCOVID19GreatBritain2020] which provides a limited number of linked cases of proven transmission, mostly within households, and interval censored symptom onset dates. To this data we fitted a normal, gamma and negative binomial distributions using R library fitdistrplus [@rcoreteamLanguageEnvironmentStatistical2017; @delignette-mullerFitdistrplusPackageFitting2015a], using maximum likelihood estimation. When fitting gamma and negative binomial distributions we truncated the data at zero, to prevent negative values, and for the gamma distributions we required that the shape parameter had a lower bound of 1, which enforces that the distribution density is zero at time zero. 
+
+Secondly we conducted a literature review for studies that describe serial interval estimates using PubMed and the search terms "(SARS-CoV-2 or COVID-19) and 'Serial interval'" and reviewed the abstracts relevant original research papers. These were compared to papers reported on the MIDAS Online Portal for COVID-19 Modeling Research [@MIDASOnlinePortal], and with existing meta-analyses [@zhangMetaanalysisSeveralEpidemic2020]. 
+
+From these papers, serial interval mean and standard deviation estimates were extracted, along with information about assumed statistical distributions, and the sample size of the study. A random effects meta-analysis was conducted [@beathMetaplusPackageAnalysis2016a] on the subset of papers that reported confidence intervals, and which assumed gamma distributions for their estimates of serial interval. This excluded a number of larger studies, and we had concerns over potential violations of the assumptions underpinning the meta-analysis, most notable the assumption of normal distribution of effect size [@jacksonWhenShouldMetaanalysis2018; @tierneyPracticalMethodsIncorporating2007; @veronikiMethodsEstimateBetweenstudy2016], so we also undertook a re-sampling exercise, as described below.
+
+For studies that reported a probability distribution for the serial interval, we randomly selected one hundred probability distributions consistent with those reported in each paper, assuming a normally distributed mean (central limit), and a chi-squared distributed standard deviation with degrees of freedom determined by the sample size of the study. From this family of probability distributions we created random samples based on the original sample size [@adamsResamplingTestsMetaAnalysis1997; @chuangHybridResamplingMethods2000]. For empirical data reported in the studies we obtained the data where available and used 100 random bootstrap sub-samples with replacement, to a relative size determined by the original sample size of the study. The empirical and distribution based samples were combined into 100 groups of samples, with each group containing representation of each source article with numbers proportional to the size of the original study. A normal, negative binomial and gamma probability distributions were then fitted to these 100 groups using the same methodology as above, giving us both parametric probability distribution estimates and 100 empirical probability distributions estimates of the combination of all the source studies (from here on referred to as the "re-sampled serial interval estimate").
+
+## Incubation period estimation
+
+The incubation period has been previously estimated by Lauer et al. and Sanche et al. [@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] for China in the early phase of the epidemic, but as the FF100 data also contains interval censored exposure data coupled to symptom onset, we investigated whether a UK specific estimate was valuable. The Open COVID-19 Data Working Group [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] provides an large international data set which includes some travel history and symptom onset data. As the incubation period is a key quantity in the analysis we felt it beneficial to repeat earlier estimates [@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] of the incubation period with this larger data set. In both cases we fitted gamma, weibull, log normal, and negative binomial probability distributions to the intervals between putative exposure and symptom onset, accounting for censoring where present, to estimate the incubation period distribution. 
+
+## Generation interval estimatation
+
+With serial interval ($SI_{onset}$) distribution, incubation period distribution, the defining constraint that the generation interval is a non negative quantity, and the assumption that the generation interval is gamma distributed, we were able to make some inference about the shape of that gamma distribution. Using our the best estimate of the incubation period distribution from the Open COVID-19 Data Working Group data set, we combined random samples from a parameterised probability distribution for generation interval with two samples from the incubation period to satisfy the following relationship, thus simulating the serial interval:
+
+$$
+\begin{aligned}
+SI_{onset,A\rightarrow B} &= SI_{infection,A\rightarrow B} + T_{incubation,B} - T_{incubation,A}\\
+E[SI_{onset}] &= E[SI_{infection} + T_{incubation} - T_{incubation}]
+\end{aligned}
+$$
+
+The mean and standard deviation of the simulated serial interval distribution was then compared to the empirical re-sampled serial interval distributions we estimated in an earlier stage. The parameters for the generation interval distribution were then optimized by a recursive linear search on the standard deviation, with the constraints that the mean of the simulated and empirical distributions must be the same [@brittonEstimationEmergingEpidemics2019], and the standard deviation must be smaller than the mean (ensuring the gamma function scale parameter is larger than one and hence the density is zero at time zero). The minimization function we employed was the absolute difference in inter-quartile ranges of simulated and observed distributions. This process was repeated for 100 different simulated samples which were compared to the 100 different empirical re-sampled serial interval estimates from the previous stage of our analysis to get confidence limits on our estimates of the generation interval distribution.
+
+## Impact of using the serial interval on estimation of $R_t$
+
+With various estimates of serial interval and generation interval we wished to understand the qualitative impact this variation might have on our estimates of $R_t$. To investigate this we used the R library EpiEstim [@thompsonImprovedInferenceTimevarying2019a; @coriEstimateTimeVarying; @coriNewFrameworkSoftware2013a] to calculate estimates of $R_t$ for 4 time points representative of the ascending phase, the peak, the early descending phase and the late descending phase, of the first wave of the COVID-19 infections in England. This was performed using data retrieved from the Public Health England API [@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa]. For this analysis we assume the infectivity profile can be represented using a parameterised gamma distribution, and estimate $R_t$ for a wide range of combinations of mean and standard deviation, using a fixed calculation window of 7 days, at each of our four time points. The resulting relationship between $R_t$, mean infectivity profile, and standard deviation of infectivity profile were compared visually.
+
+## Time delays from infection to case identification, admission, and death
+
+Estimation of the time delay from onset of symptoms to the observations of positive test result, hospital admission, and death was performed ($T_{onset \rightarrow test}$, $T_{onset \rightarrow admission}$, and $T_{onset \rightarrow death}$) using the CHESS data set [@CoronavirusCOVID19Using]. The CHESS data set is hospital based, and was initially limited to intensive care admissions, but a subset of hospitals have reported all admissions, and this is what we focused on. Within the CHESS data set there are a set of patients who have symptom onset dates recorded, dates that a specimen was taken that subsequently was tested positive, hospital admission date, and date of death, if the patient died. The time delays from symptom onset to the different observations ($T_{onset \rightarrow test}$,$T_{onset \rightarrow admission}$ and $T_{onset \rightarrow death}$) were calculated and fitted to probability distributions using the R library fitdistrplus [@delignette-mullerFitdistrplusPackageFitting2015a] as described above.
+
+Estimating the time delay from infection to observation was obtained by combining our estimate of the incubation period distribution from the Open COVID-19 Data Working Group data set [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] with onset to observation delays from the CHESS data set [@CoronavirusCOVID19Using] using the following relationship.
+
+$$
+\begin{aligned}
+T_{infection \rightarrow observation} &= T_{infection \to onset} + T_{onset \rightarrow observation} \\
+&= T_{incubation} + T_{onset \rightarrow observation}
+\end{aligned}
+$$
+We combined the incubation period and onset to observation distributions using a random sampling approach, assuming independence of the two variables. These random samples were then estimated as parameterised statistical distributions in the same manner as above, with the constraint that all the time delays from infection to observation are non-negative quantities, and their probability is zero at time zero.
+
+## Impact of deconvolution
+
+In the final piece of our analysis we sought to qualitatively compare estimates of $R_t$ based on data for England from the Public Health England API [@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa], in each of the following two scenarios.
+
+Firstly we based $R_t$ estimates on observational data (cases, admissions, deaths) as a proxy for infection events, and used truncated serial interval distribution as a proxy for infectivity profile. A simple-but-incorrect adjustment to the dates of these $R_t$ estimates was made to align the estimate to date of infection rather than date of observation.
+
+Secondly, using the time delay distributions from the previous stage, we used de-convolution to infer a set of time series of infections from the same observational data and used our estimate of the generation interval as a proxy for the infectivity profile. This second approach is that recommended by Gostic et al. [@gosticPracticalConsiderationsMeasuring2020a]. To do this we applied a non parametric back projection algorithm from the surveillance R package [@meyerSpatioTemporalAnalysisEpidemic2017], based on work by Becker et al. [@beckerMethodNonparametricBackprojection1991] and Yip et al. [@yipReconstructionInfectionCurve2008], to infer three putative infection time series from observed cases, admissions or deaths. The inferred time series were then used to estimate $R_t$ through EpiEstim using the parametric gamma distributed estimate of the generation interval from above. In applying the de-convolution we discovered it requires a full time series beginning with zero cases for sensible results and this required we impute the early part of the hospital admission time series, which we did by assuming an early constant exponential growth phase.
+
+The resulting $R_t$ time series were compared qualitatively.
+
+# Results
+
+## Serial interval estimation
+
+Our PubMed search retrieved 62 search hits of which 12 were original research articles containing estimates of serial intervals [@biEpidemiologyTransmissionCOVID192020a; @ceredaEarlyPhaseCOVID192020a; @duSerialIntervalCOVID192020; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleEvidenceTransmissionCOVID192020; @xiaTransmissionCoronaVirus2020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimevaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhaoPreliminaryEstimationBasic2020a]. The mean and standard deviation of parameterised distributions were extracted and are presented in `r ref$tab("lit-review")`. The estimates of the mean range from 3.95 days to 7.5 days. The majority of studies provided their results as gamma distributions defined by mean and standard deviation. Some studies, particularly Xu et al. [@xuHouseholdTransmissionsSARSCoV22020] noted that the serial interval was not infrequently negative.
+
+`r cap$tab("lit-review","Sources of serial interval estimates from a literature search")`
+
+```{r table1}
 
 # serialIntervals2 = serialIntervals %>% bind_rows(tibble(
 #   mean_si_estimate = calcGammaMean("est")[["mean"]],
@@ -97,291 +200,435 @@ Report date: `r Sys.Date()`
 #   note = "none"
 # ))
 
-
-
 defaultSI = SerialIntervalProvider$default(dpc)
 
 SerialIntervalProvider$printSerialIntervalSources() %>%
   group_by(`Reference`) %>% 
-  standardPrintOutput::saveTable("~/Dropbox/covid19/serial-intervals/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
+  standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
 
 ```
-
-# Methods
-
-* EpiEstim
-* FF100 data source - description
-* Fitting gamma to FF100 using epiestim MCMC
-* Fitting gamma to resampled from literature distributions (distrfitplus)
-* 
-
-# Results
-
-## Serial intervals in the UK
-
-* Figure 1 - Panel A -In the UK most commonly infections occur 2 days after individual infected person begins to show symptoms, but significant range. 
-* Some negative values observed (citation here)
-* Gamma fitted in panel B
-
-```{r fig1, fig.cap="Days between infected infectee disease onset"}
-
-si3 = SerialIntervalProvider$fromFF100(dpc)
-
-```
-
-
 
 ```{r}
-#tmp2 = si3$dfit$groupedDf %>% mutate(
-#  SL = as.integer(date_onset.infectee - date_onset.infector))
+
+serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
+
+## Meta-analysis: ----
+
+metaParams = dpc$getSaved("SERIAL-INTERVAL-META", orElse = function() {
+  tmp = serialIntervals %>% mutate(yi = mean_si_estimate, sei = (mean_si_estimate_high_ci-mean_si_estimate_low_ci)/3.92) %>% filter(!is.na(sei)) %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial"))
+  meanfit = suppressWarnings(metaplus::metaplus(tmp$yi, tmp$sei, slab=tmp$label, random="mixture"))
+      
+  tmp2 = serialIntervals %>% mutate(yi = std_si_estimate, sei = (std_si_estimate_high_ci-std_si_estimate_low_ci)/3.92) %>% filter(!is.na(sei)) %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial"))
+  sdfit = suppressWarnings(metaplus::metaplus(tmp2$yi, tmp2$sei, slab=tmp2$label, random="mixture"))
   
-#panel1 = ggplot(tmp2) + geom_bar(width=0.7,aes(x=SL)) + xlab("days")
+  serialIntervalMetaAnalysis = tribble(
+    ~param, ~mean, ~sd, ~lower, ~upper,
+    "mean", meanfit$results["muhat",1], NA, meanfit$results["muhat",2], meanfit$results["muhat",3],
+    "sd", sdfit$results["muhat",1], NA, sdfit$results["muhat",2], sdfit$results["muhat",3]
+  ) %>% mutate(dist="gamma")
+  
+  # save the data:
+  usethis::use_data(serialIntervalMetaAnalysis, overwrite = TRUE)
+  return(
+    serialIntervalMetaAnalysis
+  )
+})
 
-# tmp2 = ff100 %>% mutate(
-#   EL = 0L, 
-#   ER = as.integer(date_exposure_last - date_exposure_first),
-#   SL = as.integer(date_onset - date_exposure_first),
-#   SR = as.integer(date_onset - date_exposure_first+1),
-#   type=0L) %>% mutate(ER = ifelse(ER>SL,SL,ER)) %>% select(EL,ER,SL,SR,type) %>% filter(SL>0)
-# tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
+si2 = SerialIntervalProvider$metaAnalysis(dpc, metaDf = metaParams)
 
-# tmp2 = tmp2 %>% filter(SL>0)
-# tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")])
-# 
-# MCMC_seed <- 1
-# overall_seed <- 2
-# mcmc_control <- EpiEstim::make_mcmc_control(seed = MCMC_seed, 
-#                                   burnin = 1000)
-# dist <- "G" # fitting a Gamma dsitribution for the SI
-# config <- EpiEstim::make_config(list(si_parametric_distr = dist,
-#                            mcmc_control = mcmc_control,
-#                            seed = overall_seed, 
-#                            n1 = 50, 
-#                            n2 = 50))
-# 
-# # rm(`%in%`) = function(x,y) {
-# #   return(sapply(x, function(x1) {any(y == x1)}))
-# # }
-# 
-# ## first estimate the SI distribution using function dic.fit.mcmc fron 
-# ## coarseDataTools package:
-# n_mcmc_samples <- config$n1*mcmc_control$thin
-# 
-# SI_fit = coarseDataTools::dic.fit.mcmc(dat = tmp3,
-#                   dist = "G",#off1G",
-#                   init.pars = EpiEstim::init_mcmc_params(tmp2, dist),
-#                   burnin = mcmc_control$burnin,
-#                   n.samples = n_mcmc_samples,
-#                   seed = mcmc_control$seed)
-# 
-# si_sample <- EpiEstim::coarse2estim(SI_fit, thin = mcmc_control$thin)$si_sample
-# 
-# calcGammaMean = function(x) {
-#   shape = SI_fit@ests["shape",x]
-#   scale = SI_fit@ests["scale",x]
-#   out = list()
-#   out$mean = shape*scale
-#   out$sd = sqrt(shape*scale^2)
-#   return(out)
-# }
-# 
-# UKSIConfig = EpiEstim::make_config(
-#   mean_si = calcGammaMean("est")[["mean"]],
-#   std_si = calcGammaMean("est")[["sd"]],
-#   min_mean_si = calcGammaMean("CIlow")[["mean"]],
-#   min_std_si = calcGammaMean("CIlow")[["sd"]],
-#   max_mean_si = calcGammaMean("CIhigh")[["mean"]],
-#   max_std_si = calcGammaMean("CIhigh")[["sd"]],
-#   #TODO: the following are not going to be used unless we apply this
-#   std_mean_si = (calcGammaMean("CIhigh")[["mean"]]-calcGammaMean("CIlow")[["mean"]])/3.96, 
-#   std_std_si = (calcGammaMean("CIhigh")[["sd"]]-calcGammaMean("CIlow")[["sd"]])/3.96,
-#   method = "uncertain_si"
-# )
-# 
-# gammaMean = sprintf("%1.2f (%1.2f-%1.2f)",
-#   calcGammaMean("est")[["mean"]],
-#   calcGammaMean("CIlow")[["mean"]],
-#   calcGammaMean("CIhigh")[["mean"]]
-# )
-# 
-# gammaShape = sprintf("%1.2f (%1.2f-%1.2f)",
-#   SI_fit@ests["shape","est"],
-#   SI_fit@ests["shape","CIlow"],
-#   SI_fit@ests["shape","CIhigh"]
-# )
-# 
-# gammaScale = sprintf("%1.2f (%1.2f-%1.2f)",
-#   SI_fit@ests["scale","est"],
-#   SI_fit@ests["scale","CIlow"],
-#   SI_fit@ests["scale","CIhigh"]
-# )
-# 
-# gammaSd = sprintf("%1.2f (%1.2f-%1.2f)",
-#   calcGammaMean("est")[["sd"]],
-#   calcGammaMean("CIlow")[["sd"]],
-#   calcGammaMean("CIhigh")[["sd"]]
-# )
-# 
-# panel2 = (ggplot(tmp2, aes(x=SL)) + geom_histogram(aes(y=..density..),fill=NA,colour = "black", binwidth=1)+ #,width=0.7) +
-#     geom_line(data = tibble(
-#       x=seq(0,10,length.out = 101),
-#       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","est"], scale = SI_fit@ests["scale","est"])
-#     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue")+
-#     geom_line(data = tibble(
-#       x=seq(0,10,length.out = 101),
-#       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIlow"], scale = SI_fit@ests["scale","CIlow"])
-#     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
-#     geom_line(data = tibble(
-#       x=seq(0,10,length.out = 101),
-#       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIhigh"], scale = SI_fit@ests["scale","CIhigh"])
-#     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+
-#     annotate("text", x = 10, y = 0.5, label = paste0("Mean: ",gammaMean,"\nSD: ",gammaSd,"\nShape: ",gammaShape,"\nScale: ",gammaScale),hjust="inward",vjust="inward")+
-#     xlab("days")
-# ) 
-label = si3$dfit$printDistributionDetail() %>% summarise(label = paste0(param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
-fig1 = si3$dfit$plot(xlim=c(-7,10))+guides(fill="none",colour="none")+
+```
+
+The random effects meta-analysis on the subset of studies which reported gamma distributions, resulted in an overall estimate of the serial interval that follows a `r si2$printSerialInterval()` (for more details see `r ref$sfig("meta-analysis")`). 
+
+In `r ref$fig("si-estimates")` panel A we present the distribution of the 50 linked cases in the FF100 data set for which onset dates are available for both infector and infectee. For the gamma and negative binomial distribution fit the data is truncated at zero, and hence shows a poorer fit against the whole distribution (full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-ff100")`). Supporting the observations of Xu et al. [@xuHouseholdTransmissionsSARSCoV22020], the FF100 data shows evidence of negative serial intervals. The mean of the serial interval from FF100 data was 3.54 days when parameterised with a gamma distribution and data truncated to exclude negative serial intervals, and 2.09 days when a normal distribution used, with no truncation. This is on the lower end of the values reported in the literature.
+
+```{r}
+## FF100: ----  
+
+si3 = SerialIntervalProvider$fromFF100(dpc)
+label = si3$dfit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(dist," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+panel1 = si3$dfit$plot(xlim=c(-7,10))+guides(fill="none",colour="none")+
      standardPrintOutput::cornerAnnotation(label)+
      xlab("days")
 
-#fig1 = panel1+panel2+ patchwork::plot_annotation(tag_levels = "A")+plot_layout(ncol=2)
-
-fig1 %>% saveThirdPageFigure("~/Dropbox/covid19/serial-intervals/Fig1_UKSerialInterval")
-
 ```
-<!-- ## Fit using truncated normal -->
 
-<!-- ```{r} -->
 
-<!-- tmp2 = tmp %>% mutate( -->
-<!--   EL = 0L, ER = 1L, -->
-<!--   SL = as.integer(date_onset.infectee - date_onset.infector), -->
-<!--   SR = as.integer(date_onset.infectee - date_onset.infector +1), -->
-<!--   type=0L) %>% select(EL,ER,SL,SR,type) -->
-
-<!-- panel1 = ggplot(tmp2) + geom_bar(width=0.7,aes(x=SL)) + xlab("days") -->
-<!-- tmp3 = fitdistrplus::fitdist(tmp2 %>% filter(SL>-3) %>% pull(SL), "tnorm", start=list(mean=3,sd=1), fix.arg = list(lower=-3, upper=Inf)) -->
-<!-- tmp4 = fitdistrplus::bootdist(tmp3) -->
-<!-- mean = mean(tmp4$estim[["mean"]]) -->
-<!-- sd = mean(tmp4$estim[["sd"]]) -->
-
-<!-- mean_sd = sd(tmp4$estim[["mean"]]) -->
-<!-- sd_sd = sd(tmp4$estim[["sd"]]) -->
-<!-- mean_lowerCI = tmp4$CI["mean","2.5%"] -->
-<!-- mean_upperCI = tmp4$CI["mean","97.5%"] -->
-<!-- sd_lowerCI = tmp4$CI["sd","2.5%"] -->
-<!-- sd_upperCI = tmp4$CI["sd","97.5%"] -->
-<!-- offset = -3 -->
-<!-- sprintf("%1.2f \u00B1 %1.2f (%1.2f-%1.2f)", mean, mean_sd, mean_lowerCI, mean_upperCI) -->
-<!-- sprintf("%1.2f \u00B1 %1.2f (%1.2f-%1.2f)", sd, sd_sd, sd_lowerCI, sd_upperCI) -->
-<!-- ``` -->
-
-## Weighted averages of serial interval literature
-
-* SIs assumed principally gamma distributed.
-* Observations from same underlying distribution so cannot be combined mathematically
-* Initial pragmatic approach to take weighted averages of published moments and associated confidence intervals of gamma distributed SIs
 
 ```{r}
-si2 = SerialIntervalProvider$midmarketSerialInterval(dpc)
-resampledMean = si2$dfit$printDistributionDetail() %>% filter(param=="mean") %>% pull(`Mean ± SD (95% CI)`)
-resampledSd = si2$dfit$printDistributionDetail() %>% filter(param=="sd") %>% pull(`Mean ± SD (95% CI)`)
+## Resampling: ----
+#rm(tmp,tmp2,tmp3)
 
-```
-* results in a `r si2$printSerialInterval()`.
-* Translating these uncertain published moments into gamma distributions requires a sampling process. Following logic in EpiEstim we generate distributions from truncated normal samples from mean and Sd, with caveat that the shape parameter must be larger than 1 (mean > sd). This resampling process is noted to produce a biased set of samples and reassembling them results in a gamma distribution with mean `r resampledMean` and standard deviation `r resampledSd`. 
+resamples = dpc$getSaved("SERIAL-INTERVAL-RESAMPLE", orElse = function() {
 
-## Resampling serial interval estimates
+  shortestCredibleSI = -7
+  longestCredibleSI = 28
+  samples=100
+  boot.samples = NULL
+  set.seed(101)
+      # bootIterations = 250
+      
+  dfit = DistributionFit$new()
+      
+  parameterisedSIs = serialIntervals %>% 
+    filter(
+      estimate_type %>% stringr::str_starts("serial") &
+      !assumed_distribution %in% c("empirical","unknown"),
+    ) %>% 
+    group_by(i = row_number()) %>% 
+    group_modify(function(d,g,...) {
+      paramDf = tribble(
+        ~param, ~mean, ~sd, ~lower, ~upper,
+        "mean", d$mean_si_estimate, (d$mean_si_estimate_high_ci - d$mean_si_estimate_low_ci)/3.96, d$mean_si_estimate_low_ci, d$mean_si_estimate_high_ci,
+        "sd", d$std_si_estimate, NA, d$std_si_estimate_low_ci, d$std_si_estimate_high_ci
+      )
+      dfit$withSingleDistribution(dist = d$assumed_distribution, paramDf = paramDf, bootstraps = samples, N=d$sample_size, source = g$i)
+      tibble()
+      # side effect in group modify. This deserves 100 Hail Mary's
+  })
+      
+  dfit$generateSamples(sampleExpr = N, seed=101)
+  sampleDf = dfit$samples %>% select(bootstrapNumber, value, N, source)
+      
+  # include raw data for Xu et al, who did not produce parameterised estimates - only empirical distribution.
+  # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7276042/bin/73153-2020.03.02.20029868-1.xlsx
+  xuXls = dpc$datasets$download(id = "XU_SERIAL_INTERVAL",url = "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7276042/bin/73153-2020.03.02.20029868-1.xlsx", type = "xlsx")
+  xuData = readxl::read_excel(xuXls)
+  xuSamples = suppressWarnings(xuData %>% mutate(dt = as.integer(`p_Date of onset`)-as.integer(`s_Date of onset`)) %>% filter(!is.na(dt)) %>% pull(dt))
+  xuSrc = max(sampleDf$source)+1
+  
+  # bootstrapping 90% of total into 100 samples
+  N = length(xuSamples)*0.9
+  set.seed(101)
+  for(i in 1:samples) {
+    # raw data also available from Du et al
+    # https://github.com/MeyersLabUTexas/COVID-19/blob/master/Table%20S5%20medrxiv.xlsx?raw=true
+    # their analysis is included though as resulted in normal distribution
+    # N.B. it is probably the same data as Xu
+    sampleDf = sampleDf %>% bind_rows(tibble(
+      bootstrapNumber = i, 
+      value = sample(xuSamples, size=N),
+      N = N,
+      source = xuSrc
+    ))
+  }
+      
+  # We can now: 
+  # use this to directly estimate a parameterised distribution for the serial interval with or without shift
+  # Or create a set of discretised empirical distributions for epiestim to explore.
+  out = sampleDf %>% ungroup() #group_by(N,source)
+  serialIntervalResampling = out %>% filter(value > shortestCredibleSI & value <= longestCredibleSI)
+  usethis::use_data(serialIntervalResampling, overwrite = TRUE)
+  return(out)
+})
 
-Limiting to gamma distributions misses some of the larger studies 
+si1 = SerialIntervalProvider$resampledSerialInterval(dpc, resamples=resamples)
 
-* distributions from table 1. 
-* Random samples from those specifying a probability distribution - number of samples based on sample size of original study
-* Sample means drawn from normal distribution (central limit theorem). Sample SD chisqd distributed (assumes underlying distributions are normal as approximation). 
-* Sampled distributions, gamma log normal or truncated normal instead of normal distribution. Empirical data obtained and used directly as sample.
-* Fitted normal and gamma distribution to weighted samples - for gamma samples truncated to be > 0 & shape parameter limited to be > 1
-* Bootstrapped 250 times to generate mean, sd and quantiles/credible interval of gamma mean, sd, shape and rate parameters
-
-```{r}
-si1 = SerialIntervalProvider$resampledSerialInterval(dpc)
-
-```
-The result of this resampling is a `r si1$printtSerialInterval()`. Figure 2 shows the distribution of the parameters for the gamma distribution in the bootstrapped sample and the resulting mean and sd distributions.
-
-```{r fig2, fig.cap="Estimates of serial interval from weighted resampling of the literature"}
-label2 = si1$dfit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
-fig2 = si1$dfit$plot(xlim = c(-7,21))+guides(fill="none",colour="none")+
+label2 = si1$dfit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+panel2 = si1$dfit$plot(xlim = c(-7,21))+guides(fill="none",colour="none")+
      standardPrintOutput::cornerAnnotation(label2)+
      xlab("days")
 
-fig2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-intervals/Fig2_ResampledSerialInterval")
+```
+
+```{r}
+# fig1 %>% saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig1_UKSerialInterval")
+# fig2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig2_ResampledSerialInterval")
+
+fig1 = panel1+panel2+ patchwork::plot_annotation(tag_levels = "A")+plot_layout(ncol=2)
+fig1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig1_SerialIntervalEstimates")
 
 ```
 
+`r cap$fig("si-estimates","Panel A Days between infected infectee disease onset bassed on FF100 data and panel B Estimates of serial interval from a resampling of published estimates from the literature. The histogram in panel B shows the density of all our sets of samples combined.")`
 
+In `r ref$fig("si-estimates")`, panel B we present the results of the re-sampled serial interval estimate. The histogram shows the empirical distribution of the combination of all the studies, reinforcing the finding of a substantial proportion of the serial interval being negative. As with the FF100 the parameterised versions of this are based on truncated data for negative binomial and gamma distributions, and for the full data for the normal distribution, with mean values of 5.59 (gamma), 5.53 (negative binomial) or 4.88 (normal) days. Full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-resample")`. 
 
-## Impact of serial interval estimates on R(t)
+However as noted in the methods, the re-sampling process allow us to estimate the serial interval as an empirical distribution. Within EpiEstim, our chosen framework for estimating $R_t$ however the use of negative serial intervals are not supported as a proxy for the infectivity profile. Pragmatically we therefore decided to truncate the empirical distribution at zero. Our adopted estimate therefore has a mode of 4.8 days, in line with the normal distribution parameterisation but is a `r si1$printSerialInterval()`, in line with the gamma distribution parameterisation.
 
-Investigate impact of varying the serial interval on estimates of R
+## Incubation period estimation
 
-* methodology of estimating R 
-* Figure shows the epidemic curve for the UK based on publicly published cases and 4 time points 
+`r ref$fig("incub-period")` and `r ref$tab("incub-period-gof")` show the results of estimating a parametric probability distribution to data from FF100 and data from the the Open COVID-19 Data Working Group. Histograms of the data are not shown as it is interval censored, which is not straightforward to represent graphically. There are only a small number of records from the FF100 data which suggest the mean of the incubation period is between 1.8 and 2 days. The data from the Open COVID-19 Data Working Group suggests the incubation period is longer with a mean around 5.5 days depending on the distribution chosen, and this agrees better with other estimates in the literature [@lauerIncubationPeriodCoronavirus2020; @zhangMetaanalysisSeveralEpidemic2020;@sancheHighContagiousnessRapid]. The best fit to the Open COVID-19 data is obtained with a log normal distribution as seen in `r ref$tab("incub-period-gof")` (Full details of the fitting parameters are in `r ref$stab("incub-period-detail")`). This incubation period is by definition the infection to onset period ($T_{infection \rightarrow onset}$).
 
-```{r fig3, fig.cap="Epidemic curve for cases in the UK. Red lines show significant dates..."}
+```{r fig5}
 
-ends = as.Date(c("2020-04-01","2020-05-01","2020-06-01","2020-07-01"))
+latestDataFile = dpc$datasets$downloadAndUntar(id = "BE-OUTBREAK-PREPARED",url = "https://github.com/beoutbreakprepared/nCoV2019/raw/master/latest_data/latestdata.tar.gz", pattern = "latestdata.csv")
+latestdata <- readr::read_csv(
+  latestDataFile,
+  col_types = readr::cols(.default = readr::col_character())
+)
 
-ukts = dpc$datasets$getPHEDashboard() %>% 
-  filter(name=="England" & type=="incidence") %>%
-  tsp$smoothAndSlopeTimeseries(smoothExpr = value, window=14) 
+latestdata2 = latestdata %>% filter(!is.na(date_onset_symptoms) & !is.na(travel_history_dates))
+latestdata2 = latestdata2 %>% select(date_onset_symptoms,travel_history_dates) %>% 
+  mutate(
+    date_onset_symptoms = as.Date(date_onset_symptoms, "%d.%m.%Y"),
+  ) %>% separate(
+    travel_history_dates, into=c("travel.from","travel.to"),sep="[^0-9\\.]+", fill="left"
+  ) %>%
+  mutate(
+    travel.from = as.Date(travel.from, "%d.%m.%Y"),
+    travel.to = as.Date(travel.to, "%d.%m.%Y")
+  ) %>%
+  mutate(
+    travel.from = ifelse(is.na(travel.from),travel.to,travel.from),
+    left = as.integer(date_onset_symptoms - travel.to),
+    right = as.integer(date_onset_symptoms - travel.from)
+  )
 
-(ggplot(ukts,aes(x=date,y=Est.value))+geom_line()+geom_point(aes(y=value))+geom_vline(xintercept = ends,colour="red")) %>% saveSixthPageFigure("~/Dropbox/covid19/serial-intervals/Fig3_EpidemicCurve")
+bopFit = DistributionFit$new(c("gamma","lnorm","nbinom","weibull"))
+bopFit$models$weibull$lower$shape = 1
+bopFit$models$weibull$start$shape = 1.1
+bopFit$models$gamma$lower$shape = 1
+bopFit$models$gamma$start$shape = 1.1
+bopFit$fromCensoredData(latestdata2,lowerValueExpr = left, upperValueExpr = right,truncate = TRUE,bootstraps = 200)
+
+# lauerFit$printDistributionDetail()
+label3 = bopFit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+fig5b = bopFit$plot(xlim = c(0,15))+
+     standardPrintOutput::cornerAnnotation(label3)+
+     xlab("days")+ylab("density")+standardPrintOutput::narrowAndTall()
+
+# and from FF100
+
+ff100 = dpc$spim$getFF100()
+
+censIncub = ff100 %>% filter(!is.na(date_exposure_first)) %>% select(date_exposure_first,date_exposure_last,date_onset) %>%
+  mutate(
+    right = as.numeric(date_onset-date_exposure_first), 
+    left = as.numeric(date_onset-date_exposure_last)) %>%
+  mutate( 
+    left = ifelse(left<=0,NA_integer_,left)
+  ) %>% filter( right > 0)
+
+incubFF100Fit = DistributionFit$new(distributions = c("weibull","lnorm","gamma","nbinom"))
+incubFF100Fit$models$weibull$lower$shape = 1
+incubFF100Fit$models$weibull$start$shape = 1.1
+incubFF100Fit$models$gamma$lower$shape = 1
+incubFF100Fit$models$gamma$start$shape = 1.1
+incubFF100Fit$fromCensoredData(censIncub,lowerValueExpr = left,upperValueExpr = right,truncate = TRUE, bootstraps = 200)
+#incubFF100Fit$plot(xlim=c(0,7))
+
+label4 = incubFF100Fit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(dist," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+fig5a = incubFF100Fit$plot(xlim = c(0,15))+
+     standardPrintOutput::cornerAnnotation(label4)+
+     xlab("days")+ylab("density")+standardPrintOutput::narrowAndTall()
+#fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/Fig6_ff100Incubation")
+
+fig5 = (fig5a|fig5b)/patchwork::guide_area()+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides = "collect", heights=c(6,1))
+
+fig5 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig5_IncubationPeriodsBeOutbreakPreparedAndFF100")
 ```
+
+`r cap$fig("incub-period","Incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data")`
+
+
+`r cap$tab("incub-period-gof","Goodness of fit statistics for incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data")`
+
+```{r}
+bind_rows(
+  incubFF100Fit$printDistributionDetail() %>% mutate(source = "FF100"),
+  bopFit$printDistributionDetail() %>% mutate(source = "Open COVID-19 Data Working Group")
+) %>% ungroup() %>% select(Source = source, N = n, AIC = aic, BIC = bic, `Log-likelihood`=loglik, Distribution) %>% distinct() %>% 
+  group_by(Source,N) %>% arrange(AIC, Distribution) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table_IncubationPeriodFitQuality",colWidths = c(2,1,2,2,2,2),defaultFontSize = 8)
+```
+
+## Generation interval estimation
+
 
 
 ```{r}
-I = ukts %>% filter(!is.na(Est.value)) %>% pull(Est.value)
-dates = ukts %>% filter(!is.na(Est.value)) %>% pull(date)
+incubFit = bopFit$clone()
+incubFit$filterModels(aic == min(aic))
+incubFit$bootstraps = incubFit$bootstraps %>% filter(bootstrapNumber <= 100)
+
+# generate a set of samples from best fitting incubation period distribution
+# get samples from incubation and split into 2 groups - one for index patient and one for affected patient
+incubFit$generateSamples(sampleExpr = 2000,seed = 101)
+incubSamples = incubFit$samples %>%
+  mutate(sampleCat = (sampleNumber-1) %/% 1000 + 1, sampleNumber = ((sampleNumber-1) %% 1000)+1) %>%
+  pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "incub")
+incubDist = incubSamples %>% mutate(delayOffset = incub2, incubError = incub1-incub2, transition = "infection to onset", from="infection", to = "onset")
 
 
+actualSI = si1$bootstrapSamples %>% select(bootstrapNumber,value)
+errorGItoSI = incubDist %>% filter(incub1 < 14 & incub2 < 14)  %>% select(bootstrapNumber, error=incubError) 
 
-out = NULL
+simSi = function(shape, rate, errors) {
+  N = length(errors)
+  genSim = rgamma(N*100,shape,rate = rate)+rep(errors,100)
+  return(genSim)
+}
 
-for(endDate in ends) {
+errorFunction = function(simulated, actuals) {
+  return(
+    #abs(mean(actuals)-mean(simulated))+
+    abs(IQR(actuals)-IQR(simulated))
+  )
+}
 
-  start = match(endDate,dates) - 7
-  end = match(endDate,dates)
-  
-  for (siMean in seq(2,8,0.25)) {
-    #siMean = 4
-    for (siSd in seq(0.25,8,0.25)) {
-    #siSd = 4  
-      
-      cfg_tmp = EpiEstim::make_config(mean_si = siMean, std_si = siSd, t_end = end, t_start = start, method="parametric_si")
-      rEst = EpiEstim::estimate_R(I, method="parametric_si", config = cfg_tmp)
-      out = bind_rows(
-        out,
+minimise = function(shape, rate, errors, actuals) {
+  simulated = simSi(shape,rate,errors)
+  out = errorFunction(simulated, actuals)
+  return(out)
+}
+
+estimateParams = function(errors,actuals) {
+
+  mu = mean(actuals)
+  search = function(sdLim=c(mu/5,mu), grid = NULL) {
+    #browser()
+    sdWidth=(sdLim[2]-sdLim[1])/10
+    if(sdWidth<0.00001) return(grid)
+    for(sd in seq(sdLim[1]+sdWidth,sdLim[2]-sdWidth,length.out = 5)) {
+      shape = mu^2/sd^2
+      rate = mu/sd^2
+      grid = grid %>% bind_rows(
         tibble(
-          startDate = as.Date(endDate-7,"1970-01-01"),
-          endDate = as.Date(endDate,"1970-01-01"),
-          siMean = siMean,
-          siSd = siSd,
-          medianR = rEst$R$`Median(R)`
-        )                    
+          mean = mu,
+          sd = sd,
+          shape=shape,
+          rate=rate,
+          error=minimise(shape,rate,errors,actuals)
+        )
       )
     }
+    gridmin = grid %>% filter(error==min(error))
+    grid = gridmin %>% group_modify(function(d,g,..) {
+      return(search(
+        d$sd+c(-1,1)*sdWidth,
+        grid
+      ))
+    })
+    return(grid %>% distinct())
   }
-  
+
+  return(search() %>% filter(error == min(error)))
 }
+
+
+expt = actualSI %>% group_by(bootstrapNumber) %>% nest(actual=value) %>% inner_join(
+  errorGItoSI %>% group_by(bootstrapNumber) %>% nest(error=error),
+  by="bootstrapNumber")
+
+
+
+genIntTmp = dpc$getHashCached(object = expt,operation = "GENERATION-INTERVAL-OPTIM",orElse = function(...) {
+  genInt = expt %>% group_by(bootstrapNumber) %>% group_modify(function(d,g,...) {
+    actuals=d$actual[[1]]$value
+    errors = d$error[[1]]$error
+    #initMean = mean(actuals)
+    #initSd = sd(actuals)
+    message(".",appendLF = FALSE)
+    #out = optim(par = c(initMean,initSd), fn = minimise, lower = c(0,0), method = "L-BFGS-B", errors=errors, actuals=actuals)
+    out = estimateParams(errors=errors, actuals=actuals)
+    #return(tibble(mean = out$par[1],sd = out$par[2], err = out$value))
+    return(out)
+  })
+  #genInt = genInt %>% mutate(shape = mean^2/sd^2, rate = mean/sd^2)
+  generationIntervalSimulation = genInt %>% select(bootstrapNumber,shape,rate) %>% pivot_longer(cols = c(shape,rate), names_to = "param", values_to = "value") %>% mutate(dist="gamma")
+  usethis::use_data(generationIntervalSimulation, overwrite = TRUE)
+  return(generationIntervalSimulation)
+})
+
+si4 = SerialIntervalProvider$generationInterval(dpc,bootstrapsDf = genIntTmp)
 
 ```
 
-Figure 4 shows the impact of altering the assumptions made about the serial interval to the predictions of R(t) at the 4 time points in Fig 3.
+The generation interval is inferred from the incubation period and empirical serial interval distribution prior to truncation. Our best estimate for this is a `r si4$printSerialInterval()`, and shown in `r ref$fig("generation-interval")`. The mean of 4.8 days is identical to that of the serial interval distribution from panel B, `r ref$fig("si-estimates")` as a result of the constraints imposed during fitting. The standard deviation of our generation interval estimate is 1.72. This is within the confidence limits of estimates from the literature from both China (0.74 - 2.97) and Singapore (0.91 - 3.93) [@ganyaniEstimatingGenerationInterval2020a].
 
-* Larger Mean SI pushes estimates of R(t) away from 1 whether it be high or low - high values of SI => more extreme predictions
-* Larger SD serial interval tends to include more historical information = > will react to sudden changes much more slowly.
+```{r}
+label5 = si4$dfit$printDistributionDetail() %>% ungroup() %>% summarise(label = paste0(param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
+fig6 = si4$dfit$plot(c(0,15))+xlab("Generation interval (days)")+ylab("density")+guides(fill="none",colour="none")+standardPrintOutput::cornerAnnotation(label5)
+
+fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/Fig6_GenerationInterval")
+
+# https://mc-stan.org/users/documentation/case-studies/boarding_school_case_study.html
+# https://magesblog.com/post/2016-09-27-fitting-distribution-in-stan-from/
+
+```
+
+`r cap$fig("generation-interval", "Estimated generation interval distributions, from resampled serial intervals as predictor, and estimated serial intervals from incubation period combined with samples from a generation interval assumed as a gamma distributed quantity.")`
+
+## Impact of using the serial interval on estimation of $R_t$
+
+With our 3 estimates of the serial interval and 1 generation interval and observed COVID-19 case counts, we investigate the impact on the estimates of $R_t$, of using these estimates as a proxy for the infectivity profile. This uses data at 4 time points on an epidemic curve from the first wave of the COIV-19 outbreak in England, shown in `r ref$fig("epi-curve")`, which are 19th March, 12th April, 12th May and 23rd June, corresponding to the ascending, peak, early descending and late descending phases respectively.
+
+```{r fig3}
+siDates = tibble(
+  `Start date` = as.Date(c("2020-03-19","2020-04-12","2020-05-12","2020-06-23")),
+  `End date` = NA,
+  `Label` = c("ascending","peak","early descending","late descending")
+)
+
+ukts = dpc$datasets$getPHEApi(areaName = "england") %>% filter(date >= as.Date("2020-03-01") & date<=as.Date("2020-06-30")) 
+
+ukts = ukts %>% bind_rows(
+  ukts %>% group_by(statistic) %>% filter(date == min(date)) %>% select(-date) %>% mutate(value=0) %>% left_join(
+    tibble(date = as.Date(as.Date("2020-02-16"):as.Date("2020-02-29"),"1970-01-01")), by=character()
+  )
+)
+
+ukts = ukts %>% 
+  tsp$imputeAndWeeklyAverage() #%>%
+  #tsp$logIncidenceStats(smoothingWindow = 14, growthRateWindow = 14)
+
+fig3 = ukts %>% tsp$plotIncidenceQuantiles(colour = statistic, events = siDates) +scale_color_brewer(palette="Dark2")  #+ geom_vline(data = tibble(date=ends), aes(xintercept=date), colour="black")
+
+fig3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig3_EpidemicCurve")
+
+#ukts %>% tsp$plotRt(colour = statistic)
 
 
-```{r fig4, fig.cap="Time varying replication number for various assumptions on the serial interval"}
+```
+
+`r cap$fig("epi-curve","Epidemic curve for cases, deaths and hospital admissions are used for analysis in this paper. Dashed vertical lines show dates at which we conduct our analysis, chosen to represent the ascending, peak, early and late descending phases of cases during the first wave in the UK.")`
+
+```{r cache=TRUE}
+
+meanlim=c(2,8)
+sdlim=c(1,6)
+
+ukcases = ukts %>% tsp$logIncidenceStats() %>% filter(statistic=="case")
+
+siImpact = dpc$datasets$getHashCached(object=ukcases, params = list(siDates, meanlim,sdlim), operation = "SERIAL-INTERVAL-IMPACT", orElse = function(...) {
+  # perform the Rt estimate for the various mean sd combinations
+  I = ukcases %>% pull(Est.value)
+  dates = ukcases %>% pull(date)
+  
+  out = NULL
+  
+  for(endDate in siDates$`Start date`) {
+  
+    event = siDates$Label[siDates$`Start date` == endDate]
+    start = match(endDate,dates)-3
+    end = match(endDate,dates)+3
+    
+    for (siMean in seq(meanlim[1],meanlim[2],length.out = 40)) {
+      #siMean = 4
+      for (siSd in seq(sdlim[1],sdlim[2],length.out = 40)) {
+      #siSd = 4  
+        
+        cfg_tmp = EpiEstim::make_config(mean_si = siMean, std_si = siSd, t_end = end, t_start = start, method="parametric_si")
+        rEst = EpiEstim::estimate_R(I, method="parametric_si", config = cfg_tmp)
+        out = bind_rows(
+          out,
+          tibble(
+            startDate = as.Date(endDate-7,"1970-01-01"),
+            endDate = as.Date(endDate,"1970-01-01"),
+            label = event,
+            siMean = siMean,
+            siSd = siSd,
+            medianR = rEst$R$`Median(R)`
+          )                    
+        )
+      }
+    }
+    
+  }
+  return(out)
+})
+
+#serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
 
 siFits = bind_rows(
   tibble(
@@ -395,14 +642,38 @@ siFits = bind_rows(
   tibble(
     name = names(si2$getSummary()),
     value = as.numeric(unlist(si2$getSummary()))
-  ) %>% pivot_wider(names_from = name, values_from = value) %>% mutate(name = "weighted")
+  ) %>% pivot_wider(names_from = name, values_from = value) %>% mutate(name = "random effects"),
+  tibble(
+    name = names(si4$getSummary()),
+    value = as.numeric(unlist(si4$getSummary()))
+  ) %>% pivot_wider(names_from = name, values_from = value) %>% mutate(name = "generation")
 )
 
-plotSiVariability = function(d, contours) {
-  ggplot(out %>% filter(endDate == d), aes(x=siMean, y=siSd, z=medianR, fill=medianR))+geom_tile()+
+tmp = siImpact %>% left_join(siFits, by=character()) %>% group_by(name) %>% filter(abs(meanOfMean-siMean) == min(abs(meanOfMean-siMean)) & abs(meanOfSd-siSd) == min(abs(meanOfSd-siSd)))
+tmp2 = tmp %>% ungroup() %>% group_by(startDate, label) %>% summarise(min = min(medianR), max= max(medianR)) %>% mutate(delta = max-min, percent = delta*2/(max+min)*100) %>%
+  mutate(desc = sprintf("%s - %1.0f%% variation ($R_t$: %1.2f to %1.2f)",label,percent,min,max))
+summaryImpact = paste0(tmp2$desc,collapse = "; ")
+
+```
+
+At each of these 4 time points `r ref$fig("si-impact")` shows the estimated $R_t$ under the range of different assumptions about the mean and standard deviation of the infectivity profile, modeled as a gamma distribution. In panels A, C and D the effect of increasing the mean of the infectivity profile is to push the resulting estimate of $R_t$ away from the critical value of 1 at which the epidemic is growing. In panel B, at the peak, the mean of the infectivity profile has a less clear cut effect. The impact of changes to standard deviation is likewise varied. In panels A, C & D during ascending and descending phases there is relatively little impact of changing the standard deviation of the infectivity profile on the estimates of $R_t$, and any small changes that do occur depend on the shape of the preceding epidemic curve. At the peak however, in panel B, the wider the standard deviation the more historical information influences the estimation of $R_t$ and this acts to delay the estimated transition from positive to negative growth. The overall result of this is that estimates of the infectivity profile with a high standard deviation will predict $R_t$ crossing 1 later than estimates based on an infectivity profile with a low standard deviation, but the point of crossing 1 is relatively insensitive to the value of the mean of the infectivity profile.
+
+When we consider using the various estimates of the serial interval or generation interval, as a proxy for the infectivity profile, on the resulting estimates of $R_t$ we can see from the coloured crosses on `r ref$fig("si-impact")` representing the different estimates of serial or generation interval, that in the situations of dynamic change such as the ascending phase the variability may have quite a large impact on subsequent estimates of $R_t$ but at other times the impact is much smaller [`r summaryImpact`].
+
+```{r fig4}
+
+plotSiVariability = function(d, xlim = meanlim, ylim = sdlim) { #, contours) {
+  data = siImpact %>% filter(label == d & siMean >= xlim[1] & siMean <= xlim[2] & siSd >= ylim[1] & siSd <= ylim[2])
+  contours = round(quantile(data$medianR,seq(0.1,0.9,0.1)),digits = 2)
+  # seq(
+  #   ceiling(min(data$medianR)*10)/10,
+  #   floor(max(data$medianR)*10)/10,
+  #   length.out = 11
+  # )
+  ggplot(data, aes(x=siMean, y=siSd, z=medianR, fill=1/medianR))+geom_tile()+
     metR::geom_contour2(colour="black", breaks=contours)+
-    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.2)+
-    scale_fill_gradient2(high="orange",mid="white",low="cyan", midpoint=1, guide="none")+
+    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.2, size=standardPrintOutput::labelInPoints(10))+
+    scale_fill_gradient2(high="cyan",mid="white",low="orange", midpoint=1, limits=c(1/4,1/0.6), guide="none", oob=scales::squish)+
     
     geom_linerange(data=serialIntervals, aes(
       xmin=mean_si_estimate_low_ci,xmax=mean_si_estimate_high_ci,
@@ -419,219 +690,597 @@ plotSiVariability = function(d, contours) {
       ymin=minOfSd, ymax=maxOfSd,colour=name),inherit.aes = FALSE, size=1)+
     geom_point(data=siFits,aes(x=meanOfMean,y=meanOfSd,colour=name),inherit.aes = FALSE, size=1)+
     
-    coord_cartesian(xlim=c(2,10),ylim=c(0.25,10))+
+    coord_cartesian(xlim,ylim)+
     scale_size(range=c(0.1,2),name = "Samples")+
-    scale_color_brewer(palette = "Set1")+
+    scale_color_brewer(palette = "Dark2")+
     labs(subtitle = d,x="SI Mean",y="SI Std Dev")
 }
 
-contours = list(
-  seq(1,5,0.4),
-  seq(0.9,1.1,0.02),
-  seq(0.7,1,0.04),
-  seq(0.7,1,0.04)
-)
-
-plts = sapply(1:length(ends), FUN = function(i) {plotSiVariability(ends[[i]], contours[[i]])}, simplify = FALSE)
-
-patchwork::wrap_plots(plts, ncol=2, guides = "collect") %>% saveHalfPageFigure("~/Dropbox/covid19/serial-intervals/Fig4_EstimatesOfRtForSIAssumptions")
+plts = sapply(siDates$Label, FUN = plotSiVariability, simplify = FALSE)
+library(grid)
+(patchwork::wrap_plots(plts, ncol=2, guides = "collect") + patchwork::plot_annotation(tag_levels = "A")) %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig4_EstimatesOfRtForSIAssumptions")
 
 ```
 
-## Serial interval standard deviation assuming delay to presentation
+`r cap$fig("si-impact","Time varying reproduction number given various assumptions on the serial interval mean and standard deviation. The black points and grey error bars show the various estimates of serial interval from the literature, whereas the coloured error bars show the mean and standard deviation of the 3 serial interval and 1 generation interval estimates presented in this paper. Contours show the $R_t$ estimate. The four panels represent the 4 different time points investigated")`
 
-* Serial intervals are a convolution of generation intervals, with a delay depending on time to presentation
-* In theory 
-* Linton et al estimates time to presentation / time to death etc
-* What effect does the serial interval of death-death or test-test events considered
-* simulate delay process using a gamma distribution
-* assume a known generation interval and simulate effects
-
-```{r fig5, fig.cap="Reconstruction of uncertain incubation period distributions from Lauer et al"}
-# https://www.acpjournals.org/doi/10.7326/M20-0504#t4-M200504
-# Lauer incubation periods
-lauerIncub = tibble::tribble(
-  ~dist, ~param, ~paramValue,
-  "lnorm","meanlog","1.621 (1.504–1.755)",
-  "lnorm","sdlog","0.418 (0.271–0.542)",
-  "gamma", "shape", "5.807 (3.585–13.865)", 
-  "gamma", "scale", "0.948 (0.368–1.696)",
-  "weibull", "shape", "2.453 (1.917–4.171)", 
-  "weibull", "scale", "6.258 (5.355–7.260)",
-#  "erlang", "shape", "6 (3–11)",
-#  "erlang", "scale", "0.880 (0.484–1.895)"
-)
-
-lauerIncub = lauerIncub %>% mutate(
-  paramValueList = lapply(stringr::str_extract_all(paramValue, "[0-9]+\\.?[0-9]*"),as.numeric)
-) %>% mutate(
-  mean = map_dbl(paramValueList, ~.x[1]),
-  lower = map_dbl(paramValueList, ~.x[2]),
-  upper = map_dbl(paramValueList, ~.x[3]),
-  sd = (upper-lower)/3.96
-)
-
-lauerFit = DistributionFit$new(distributions = unique(lauerIncub$dist))
-
-lauerIncub %>% group_by(dist) %>% group_map(function(d,g,...) {
-  lauerFit$withSingleDistribution(dist = g$dist,paramDf = d %>% select(param,mean,sd,lower,upper),bootstraps = 1000)
-  return(NULL)
-}) %>% invisible()
-
-lauerFit$printDistributionDetail()
-label3 = lauerFit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
-fig5 = lauerFit$plot(xlim = c(0,15))+
-     standardPrintOutput::cornerAnnotation(label3)+
-     xlab("days")+ylab("density")+narrowAndTall()
-fig5 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-intervals/Fig5_ReconstructedLauerSIs")
-```
-
-# Estimates of incubation period, symptomatic to admission, admission to death
-
-```{r}
-ff100 = dpc$spim$getFF100()
-
-censIncub = ff100 %>% filter(!is.na(date_exposure_first)) %>% select(date_exposure_first,date_exposure_last,date_onset) %>%
-  mutate(
-    right = as.numeric(date_onset-date_exposure_first), 
-    left = as.numeric(date_onset-date_exposure_last)) %>%
-  mutate( 
-    left = ifelse(left<=0,NA_integer_,left)
-  ) %>% filter( right > 0)
-
-incubFF100Fit = DistributionFit$new(distributions = c("weibull","lnorm","gamma"))
-incubFF100Fit$models$weibull$lower$shape = 1
-incubFF100Fit$models$weibull$start$shape = 1.1
-incubFF100Fit$models$gamma$lower$shape = 1
-incubFF100Fit$models$gamma$start$shape = 1.1
-incubFF100Fit$fromCensoredData(censIncub,lowerValueExpr = left,upperValueExpr = right,truncate = TRUE, bootstraps = 1000)
-incubFF100Fit$plot(xlim=c(0,7))
-
-label4 = incubFF100Fit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
-tmpfig6 = incubFF100Fit$plot(xlim = c(0,7))
-fig6=tmpfig6+
-     standardPrintOutput::cornerAnnotation(label4)+
-     xlab("days")+ylab("density")+standardPrintOutput::narrowAndTall()
-fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-intervals/Fig6_ff100Incubation")
-
-
-
-
-```
-
-
-* Select out chess trusts which update their data - (need to document this method)
-Can we get some distributions from the data we have?
-
-
+## Time delays from infection to case identification, admission, and death
 
 ```{r}
 CHESS = dpc$spim$getCHESS()
 CHESSClean = CHESS %>% chp$chessAdmissionSubset()
-plots=list()
-tables=list()
+#plots=list()
+#tables=list()
 
 ```
 
-* Symptom onset to date of first positive test taken  - could be negative is swab is screening & patient is presymptomatic.
-* use estimated date onset -> infection swab date positive specimen taken (aka case)
-* limitations: in hospital subset of patients. retrospective date reporting, peaks at 1 day, 1 week, 2 weeks etc, suggest approximation on data entry
-* mostly positive dates - some outliers removed between -14 and +28 days
-* NB this transition could be seen as 111 data to cases data lag
-
 ```{r}
+
 onsetToTest = CHESSClean %>% 
     filter(age>10 & !is.na(estimateddateonset) & !is.na(infectionswabdate)) %>% 
     mutate(
       transition = "onset to test",
-      time = as.integer(infectionswabdate - estimateddateonset)
+      time = as.integer(infectionswabdate - estimateddateonset)+0.01
     ) %>% select(caseid,transition,time) %>% filter(time < 28 & time > -14) %>% group_by(transition)
 
-onsetToTestFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom","exp"))$fromUncensoredData(onsetToTest, valueExpr = time, truncate = TRUE, bootstraps = 100)
-plots$onsetToTest = onsetToTestFit$plot(xlim = c(-2,20))+xlab("time delay")
-tables$onsetToTest = onsetToTestFit$printDistributionDetail()
-```
-
-```{r}
-onsetToTestResult = CHESSClean %>% 
-    filter(age>10 & !is.na(estimateddateonset) & !is.na(labtestdate)) %>% 
-    mutate(
-      transition = "onset to test result",
-      time = as.integer(labtestdate - estimateddateonset)
-    ) %>% select(caseid,transition,time) %>% filter(time < 28 & time > -14) %>% group_by(transition)
-
-onsetToTestResultFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToTestResult, valueExpr = time, truncate = TRUE, bootstraps = 100)
-plots$onsetToTestResult = onsetToTestResultFit$plot(xlim = c(0,20))+xlab("time delay")
-tables$onsetToTestResult = onsetToTestResultFit$printDistributionDetail()
-```
-
-* Admission assumed to be after onset.
-* large number of cases assumed to onset on day of admission - probably a missing data effect - zero day onset removed
-* Spikes at 7, 10 and 14 days probably approximates
-
-```{r}
 onsetToAdmission = CHESSClean %>% 
   # Onset ot admission
     filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>% 
     mutate(
       transition = "onset to admission",
-      time = as.integer(hospitaladmissiondate - estimateddateonset)
+      time = as.integer(hospitaladmissiondate - estimateddateonset)+0.01
     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
-onsetToAdmissionFit = DistributionFit$new(distributions = c("exp","lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
-plots$onsetToAdmission = onsetToAdmissionFit$plot(xlim = c(0,25))+xlab("time delay")
-tables$onsetToAdmission = onsetToAdmissionFit$printDistributionDetail() %>% arrange(aic,dist,param)
-```
 
-<!-- * Test to admission -->
-<!-- * Potentially complex as admission may occur before test comes back positive. -->
-<!-- * Also issues with hospital acquired infections. -->
-<!-- * Assume admission before 14 days is unrelated. cap at 100. -->
-
-<!-- ```{r} -->
-<!--   # Swab positive to admission -->
-<!-- testToAdmission = CHESSClean %>%  -->
-<!--     filter(age>10 & !is.na(infectionswabdate) & !is.na(hospitaladmissiondate)) %>%  -->
-<!--     mutate( -->
-<!--       transition = "test to admission", -->
-<!--       time = as.integer(hospitaladmissiondate - infectionswabdate) -->
-<!--     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > -14) -->
-<!-- testToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(testToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100) -->
-<!-- testToAdmissionFit$plot(xlim = c(-14,25)) -->
-<!-- testToAdmissionFit$printDistributionDetail() -->
-<!-- ``` -->
-
-* Deaths assume must happen after onset - capped at 100 days
-* Long tail. Large SD.
-
-
-```{r}
 onsetToDeath = CHESSClean %>% 
   filter(age>10 & !is.na(estimateddateonset) & !is.na(finaloutcomedate) & finaloutcome=="Death") %>% 
     mutate(
       transition = "onset to death",
       time = as.integer(finaloutcomedate - estimateddateonset)
     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
-onsetToDeathFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToDeath, valueExpr = time, truncate = TRUE, bootstraps = 100)
-plots$onsetToDeath = onsetToDeathFit$plot(xlim = c(0,60))+xlab("time delay")
-tables$onsetToDeath = onsetToDeathFit$printDistributionDetail() %>% arrange(aic,dist,param)
-# 
-#   # Onset ot admission
-#     filter(age>10 & !is.na(estimateddateonset) & !is.na(hospitaladmissiondate)) %>% 
-#     mutate(
-#       transition = "onset to admission",
-#       time = as.integer(hospitaladmissiondate - estimateddateonset)
-#     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > 0) %>% group_by(transition)
-# onsetToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(onsetToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100)
-# onsetToAdmissionFit$plot(xlim = c(0,25))
-# onsetToAdmissionFit$printDistributionDetail()
+
+rawOnset = bind_rows(
+  onsetToTest, onsetToAdmission, onsetToDeath
+) %>% group_by(transition)
+
+
+onsetFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(rawOnset, valueExpr = time, truncate = TRUE, bootstraps = 100)
+onsetPlot = onsetFit$plot(xlim = c(-2,20))+xlab("onset to observation (days)")+standardPrintOutput::narrowAndTall()
+
+#plots$onsetToTest = onsetToTestFit$plot(xlim = c(-2,20))+xlab("time delay")
+#tables$onsetToTest = onsetToTestFit$printDistributionDetail()
+```
+
+In `r ref$fig("chess-delay")` we show probability distributions fitted to data from the CHESS data set which define times from symptom onset (Panel A) to case identification ($T_{onset \rightarrow case}$), admission ($T_{onset \rightarrow admission}$), or death ($T_{onset \rightarrow death}$). Symptom onset to test (case identification) can be a negative quantity if a swab is taken during disease screening and the patient is pre-symptomatic. In this data the time point that defines the time of test is the date when the specimen is taken, which will subsequently be tested positive for SARS-CoV-2, so does not include sample processing delays. However in this hospital based data source of admitted patients the onset data was collected retrospectively. We also note peaks at 1 day, 1 week, 2 weeks, and so on which suggests approximation on data entry, and there may well be biases in the data collection. 
+
+It is more obvious from the clinical course of COVID-19 that admission should occur after disease onset. In the data, a large number of cases are reported to have symptom onset on day of admission. This is potentially a reporting artifact as in the absence of certain knowledge about onset, it is possible the day of admission is may have been captured instead, and we again see the peaks at 1 week, 2 weeks, and so on, suggesting approximations in data entry. 
+
+The time between onset of symptoms and death can also be assumed as a positive quantity given this is based on an in hospital cohort. This distribution shows a large tail, and some patients in that tail were noted to be admitted many months before the appearance of COVID-19. These patients likely represent hospital acquired cases in chronically unwell patients. The extreme outlying values (with delay from admission to death greater than 100 days, or with an admission before 1st Jan 2020) were removed as they prevented sensible estimation of the rest of the distribution.
+
+By combining the incubation period distribution in panel B in `r ref$fig("incub-period")` with the time delay distributions in panel A of `r ref$fig("chess-delay")`, we can obtain probability distributions from infection to observation, and these are shown in panel B for the 3 observations of test (case identification), admission and death. These distributions provide us with a means of estimating a time series of infection from observed case counts, admissions and deaths. As above full details of their parameterisations is available in `r ref$stab("chess-delay-params")`. The mean time from infection to the various time points described in the time line in `r ref$fig("infection-timeline")` are presented in `r ref$tab("rt-offset")`. The infection to onset is the incubation period, with a mean of 5.5 days. On average approximately 8 days pass from infection to diagnosis, a subsequent 1 days until admission, and a further 7-8 days until death, however it also shows considerable variation in these delays, exemplified by the 95% quantiles for the time from infection to death estimated as ranging from 3.6 days to nearly 50 days.
+
+```{r}
+
+# generate a observation-observation delay error function
+# this is resampling raw CHESS delays to have a fixed number of bootstraps of given length & generating a delay distribution by looking at diffence between random resamples
+rawDelay = rawOnset %>% mutate(transition = stringr::str_replace(transition,"onset to ","infection to ")) %>% group_by(transition) %>% group_modify(function(d,g,...) {
+  boot = 1:100
+  tmp = lapply(boot, function(b) tibble(
+    bootstrapNumber = b,
+    sampleNumber = 1:1000,
+    delay1 = sample(d$time,size=1000),
+    delay2 = sample(d$time,size=1000),
+    delayOffset = delay2-delay1
+  ))
+  return(bind_rows(tmp))
+})
+
+# combine incubation period + observation delay of infectee period to get time correction
+combinedDelay = rawDelay %>% 
+  left_join(incubDist, by=c("bootstrapNumber","sampleNumber"), suffix=c("",".incub")) 
+
+infectionToObservationDelay = combinedDelay %>% 
+  mutate(timeDelay = incub2+delay2) %>% ungroup() %>%
+  select(transition,timeDelay,bootstrapNumber,sampleNumber)
+
+infectionToObservationFit = DistributionFit$new(distributions = c("lnorm","gamma","nbinom","weibull"))
+infectionToObservationFit$fromBootstrappedData(infectionToObservationDelay %>% select(-sampleNumber) %>% group_by(transition), valueExpr = timeDelay)
+
+infectionPlot = (infectionToObservationFit$plot(c(-2,20))+standardPrintOutput::narrowAndTall()+xlab("infection to observation (days)"))
+
+chessPlot = onsetPlot + infectionPlot +patchwork::guide_area() + patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(ncol=1, guides="collect",heights = c(5,5,1))
+chessPlot %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig6_ChessTimeDelayDistributions")
+
+```
+
+`r cap$fig("chess-delay","Panel A: Time delay distributions from symptom onset to test (diagnosis or case identification), admission or death, estimated from CHESS data set, plus in Panel B estimated delays from infection to observation, and can be negative in certain . based on incubation period and observation delay. These  can be used for deconvolution.")`
+
+`r cap$tab("rt-offset","Estimated time delays between infection and various observations over the course of an infection, based on the combination of incubation period and symptom onset to observation delay")`
+
+```{r}
+timeCorrection2 = infectionToObservationDelay %>%
+  mutate(to = stringr::str_remove(transition,"infection to ")) %>%
+  group_by(to) %>%
+  summarise(
+    mean = mean(timeDelay),
+    sd = sd(timeDelay),
+    lower = quantile(timeDelay,0.025),
+    upper = quantile(timeDelay,0.975),
+  ) %>% 
+  bind_rows(
+    incubDist %>% group_by(to) %>% summarise(
+      mean = mean(delayOffset),
+      sd = sd(delayOffset),
+      lower = quantile(delayOffset,0.025),
+      upper = quantile(delayOffset,0.975),
+    )
+  ) 
+
+timeCorrection2 %>% write.csv(file=paste0(dpc$directory,"/","TIME-CORRECTION.csv"))
+
+ukCovidObservationDelays = timeCorrection2 %>%
+  mutate(
+    `Mean delay (days)` = sprintf("%1.2f",mean),
+    `SD (days)` = sprintf("%1.2f",sd),
+    `95% quantiles (days)` = sprintf("%1.2f; %1.2f",lower, upper)
+  )
+usethis::use_data(ukCovidObservationDelays, overwrite = TRUE)
+
+ukCovidObservationDelays %>% arrange(mean) %>% select(c(-mean,-sd,-lower,-upper)) %>%
+  rename(Observation=to) %>%
+  standardPrintOutput::saveTable(filename="~/Dropbox/covid19/serial-interval/Table2_TimeCorrectionsFromIncubationPeriodAndDelayToObservation", defaultFontSize = 8)
+
+```
+
+## Impact of deconvolution
+
+
+```{r}
+# https://www.rdocumentation.org/packages/surveillance/versions/1.12.1/topics/backprojNP
+# http://freerangestats.info/blog/2020/07/18/victoria-r-convolution
+
+convolutionsFit = infectionToObservationFit$clone()
+convolutionsFit$filterModels(aic == min(aic))
+pmfs = convolutionsFit$discreteProbabilities(q = 0:30)
+pmfs = pmfs %>% mutate(statistic = case_when(
+  transition == "infection to test" ~ "case",
+  transition == "infection to admission" ~ "hospital admission",
+  transition == "infection to death" ~ "death",
+  TRUE ~ NA_character_
+))
+
+ukts2 = ukts %>% group_by(statistic) %>% group_modify(function(d,g,...) {
+
+  caseSts = surveillance::sts(
+    observed = d %>% pull(Imputed.value) ,
+    epoch = d %>% pull(date)
+  )
+  
+  casePmf = pmfs %>% filter(statistic == g$statistic) %>% pull(Mean.discreteProbability)
+  
+  # Back-propagate to get an estimate of the original, assuming our observations
+  # are a Poisson process
+  
+  bpnp.control <- list(k=0,eps=rep(0.005,2),iter.max=rep(250,2),B=-1) #,verbose=TRUE)
+  bpnp.control2 <- modifyList(bpnp.control, list(hookFun=NULL,k=2,B=100,eq3a.method="C"))
+  
+  #Fast C version (use argument: eq3a.method="C")! 
+  sts.bp <- surveillance::backprojNP(caseSts, incu.pmf=casePmf, control=bpnp.control2)
+  
+  d = d %>% mutate(
+    Deconv.value = sapply(1:dim(sts.bp@lambda)[1], FUN=function(x) {mean(sts.bp@lambda[x,,])}),
+    Deconv.0.975.value = sapply(1:dim(sts.bp@lambda)[1], FUN=function(x) {quantile(sts.bp@lambda[x,,],0.975)}),
+    Deconv.0.025.value = sapply(1:dim(sts.bp@lambda)[1], FUN=function(x) {quantile(sts.bp@lambda[x,,],0.025)})
+  )
+  
+  return(d)
+
+})
+
+# incidence = (ukts2 %>% tsp$plotIncidenceQuantiles(colour = statistic, dates = c("2020-03-01","2020-07-01"))) + 
+#   geom_line(aes(y=Deconv.value,colour=statistic),linetype="21") + 
+#   geom_ribbon(aes(ymin=Deconv.0.025.value,ymax=Deconv.0.975.value,group=statistic),fill="black",colour=NA,alpha=0.2) + 
+#   guides(fill="none",colour="none")+
+#   facet_wrap(vars(statistic))
+
+
+ukts3 = ukts2 %>%
+  tsp$logIncidenceStats(valueVar = Deconv.value, growthRateWindow = 14, smoothingWindow = 14) %>%
+  tsp$estimateRtQuick(valueVar = Est.Deconv.value, serialIntervalProvider = SerialIntervalProvider$generationInterval(dpc), window = 7)
+#ggplot(result,aes(x=date,fill=statistic,colour=statistic))+geom_point(aes(y=observed))+geom_line(aes(y=smoothed))+geom_line(aes(y=Deconv.value),linetype="dashed")+geom_ribbon(aes(ymin=lower,ymax=upper),fill="blue",colour=NA,alpha=0.2)
+
+ukts4 = ukts2 %>%
+  tsp$logIncidenceStats(valueVar = value, growthRateWindow = 14, smoothingWindow = 14) %>%
+  tsp$estimateRtQuick(valueVar = Est.value, window = 7) %>%
+  tsp$adjustRtDates(window = 0)
+
+ukts6 = bind_rows(
+  ukts2 %>% mutate(subgroup = "formal") %>% select(-value) %>% rename(value=Deconv.value),
+  ukts %>% mutate(subgroup = "pragmatic")
+)
+
+
+
+ukts5 = bind_rows(
+  ukts3 %>% mutate(subgroup = "formal"),
+  ukts4 %>% mutate(subgroup = "pragmatic")
+)
+
+avRtError = ukts3 %>% ungroup() %>% select(date,statistic,deconv=`Median(R)`) %>% left_join(
+  ukts4 %>% ungroup() %>% select(date,statistic,unadj=`Median(R)`), by=c("date","statistic")
+) %>% mutate(percent = abs(2*(unadj-deconv)/(unadj+deconv))*100) %>% group_by(statistic) %>% 
+  summarise(desc = sprintf("%1.2f%% (IQR %1.2f%%; %1.2f%%)", median(percent,na.rm=TRUE), quantile(percent,0.25,na.rm=TRUE), quantile(percent,0.75,na.rm=TRUE) )) %>%
+  ungroup() %>% 
+  mutate(out=sprintf("%s: sMAPE %s",statistic,desc)) %>%
+  pull(out) %>% paste0(collapse="; ")
+
+# rtDeconv = ukts3 %>% tsp$plotRt(colour = statistic,dates = c("2020-03-01","2020-07-01"))+facet_wrap(vars(statistic))+guides(fill="none",colour="none") #+scale_color_brewer(palette = "Dark2")
+# rtRaw = ukts4 %>% tsp$plotRt(colour = statistic,dates = c("2020-03-01","2020-07-01"))+guides(fill="none",colour="none")+facet_wrap(vars(statistic))
+
+incidence = ukts6 %>% tsp$plotIncidenceQuantiles(colour=subgroup,dates = c("2020-03-01","2020-07-01")) + facet_wrap(vars(statistic))+
+  scale_color_brewer(palette = "Dark2")
+
+rtComp = ukts5 %>% tsp$plotRt(colour = subgroup,dates = c("2020-03-01","2020-07-01"), rtlim=c(0.75,1.75))+facet_wrap(vars(statistic))+
+  scale_color_brewer(palette = "Dark2")
+  #scale_linetype_manual(values = c("21","solid"))+
+  #standardPrintOutput::narrower()
+
+deconvComparison = (incidence+standardPrintOutput::hideX()) + rtComp + patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(ncol = 1, guides = "collect", heights = c(5,5))
+
+deconvComparison %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig8_DeconvolutionVersusUndajusted")
+# note the actual estimates are in x2@upperbound, which adds up to 39, same as the original y
+```
+
+`r cap$fig("deconv-compare","Panel A: The epidemic incidence curves in England for different observations (orange - formal) and inferred estimates of infection rates (green - pragmatic) based on a deconvolution of the time delay distributions. Panel B, the resulting $R_t$ values calculated either using infection rate estimates and generation interval (formal subgroup) or unadjusted incidence of observation, and serial interval (pragmatic). The $R_t$ estimated direct from observed incidence curves (pragmatic) have their dates adjusted by the mean delay estimate")`
+
+With the estimates of delay from infection to observation we are able to use a non parametric back propagation as described in the methods to estimate a time series of infections as recommended by Gostic et al. [@gosticPracticalConsiderationsMeasuring2020a] when using EpiEstim. The results of the back propagation is show in `r ref$fig("deconv-compare")`, panel A which shows resulting point and smoothed infection curves associated with observation curves from England. The back projection results in a sharper and narrower epidemic curve than the observation it is derived from, and but shows additional structure which is not obvious from the underlying observations. Estimates of $R_t$ are shown in panel B based on de-convolved time series plus generation interval, versus raw observation counts, re-sampled serial interval estimates, with time adjustment on the resulting $R_t$ estimates to align $R_t$ estimate date to putative date of infection. We have not calculated confidence intervals for the estimates of $R_t$. The estimates of $R_t$ differ from their mean (using symmetric mean absolute percentage error, sMAPE) by between 6% to 9% [`r avRtError`].
+
+# Discussion
+
+This paper summarizes a piece of analysis that describes and underpins the assumptions we make when estimating $R_t$ using the Cori method and EpiEstim library in the UK. Central to this is the choice of infectivity profile, and the use of serial interval or generation interval as a proxy for this quantity. 
+
+In general estimates of serial interval and other quantities based on data from early in the epidemic must account for right truncation of the available data or else risk producing underestimates. At later stages of the epidemic as more data is available these issues are less significant as the majority of relevant events have been observed.
+
+Our estimate of the serial interval as from the FF100 UK data was found to be on the low side, compared to international estimates. The FF100 data is a comparatively small data set and was collected in the early stage of the epidemic. It is based largely on household contacts of international travelers and we believe this has significant biases. As the participants in the FF100 study were put into self-isolation upon discovery there is a tendency to bias the observations towards shorter contact periods and hence shorter serial intervals. As such we do not think the short serial interval estimate from the FF100 study is specific to the UK but rather that the data set is not as broadly representative of the whole UK population. 
+
+Our literature search allowed us to estimate the serial interval with a random effects meta-analysis and a re-sampling study. Both produced comparable results, but our re-sampling study more clearly showed the potential for the serial interval between symptom onsets of infector and infectee to be negative, due to relatively long and variable incubation period of SARS-CoV-2. The negative values of the serial interval are theoretically problematic for their use as a proxy for the infectivity profile of SARS-CoV-2 as required by the Cori method [@gosticPracticalConsiderationsMeasuring2020a; @svenssonNoteGenerationTimes2007], which reasonably assumes infectee must be infected after the infector. Pragmatically, as a way around this, we may truncate the re-sampled serial interval at zero, and use this as the infectivity profile, but this truncation increases the mean of the resulting serial interval distribution from 4.8 to 5.8 days.
+
+An alternative to this is to use the generation interval as a proxy for the infectivity profile, but there are limited estimates of this quantity available in the literature [@ganyaniEstimatingGenerationInterval2020a]. Derivation of the generation interval from the serial interval is possible using knowledge of the incubation period. We again looked at the FF100 data for estimates of incubation period and again found that the UK data suggests a value which is far shorter that international estimates, for the same reasons as mentioned above [@backerIncubationPeriod20192020; @duEstimatingDistributionCOVID192020; @lauerIncubationPeriodCoronavirus2020; @lintonIncubationPeriodOther2020; @xiaTransmissionCoronaVirus2020]. We cross referenced this with a second estimate derived from the Open COVID-19 Data Working Group data set [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020], which is based on a large international data set of people who tested positive for SAR-CoV-2 after travelling from areas with outbreaks. The resulting estimates of the mean incubation period of 5.42 days (log normally distributed) is much closer to previous estimates, and we expect to be less influences by right censoring. Again we regard the short incubation period calculated from the FF100 data set to be a feature of the data set rather than a UK specific finding. In fact the estimate based on the Open COVID-19 Data may in itself be an under estimate as the majority of travel histories only include the return date of the visit in question and not the start date.
+
+With an incubation period estimate and serial interval estimate, we derived an estimate for generation interval, assuming a gamma distribution. This was comparable to previous estimates in that although it is based on a different serial interval, and hence has a different mean, the standard deviation of our estimate is in accordance with that estimated by Ganyani et al. [@ganyaniEstimatingGenerationInterval2020a]. Although the confidence intervals for the mean and standard deviation of the generation interval are comparable, as the standard deviation is quite short, the variation in the shape and rate parameters of the underlying gamma distribution are quite large. It is possible that the gamma distribution is not the best choice for the generation interval, and this is an area that warrants further attention. Care should be taken when generating bootstrap samples from the generation interval when it is specified as an uncertain gamma distribution parameterised with mean and standard deviation, as the potential exists for unrealistic combinations of mean and standard deviation to producing inappropriately shaped gamma distributions, particularly when the standard deviation is small and the mean is long, which could in theory result in posterior estimates for $R_t$ being largely determined by the reciprocal of just a small number of observations.
+
+Using estimates of the serial interval distribution and generation interval distribution as a proxy for infectivity profile, we investigated the resulting variation in the estimation of $R_t$ using incident cases in England and the Cori method through EpiEstim. We found the bias between the smallest and largest of our estimates was seen to be as high as 20-25% of the central estimate of $R_t$ when $R_t$ was high, but somewhat smaller when $R_t$ values were 1 or lower. Distributions with lower values of the mean tended to result in estimates of $R_t$ that were closer to one. This suggests that biases introduced by the use of different serial interval distributions should not influence the answer to the key question, "is $R_t$ greater or less than 1?" which defines whether the epidemic is expanding or contracting in size. It is also to be expected that the nature of change of $R_t$ over time is not affected by this bias, so an increasing value of $R_t$ will be increasing regardless of the infectivity profile that is used to estimate it.
+
+The underlying framework of the Cori method for estimating $R_t$ is based on knowledge of the incidence of infections. This is not a quantity that is readily observed in the SARS-CoV-2 epidemic, and pragmatically use of observations including symptom onset, case identification, admission and death are expected to be used as proxy measures for infection [@coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019a]. However, as pointed out elsewhere [@gosticPracticalConsiderationsMeasuring2020a] the variable time between infection and such observations causes the signal to be both delayed and blurred. By combining our estimates of incubation period with data from hospital admissions in the CHESS data set we were able to make estimates of the distribution of the delay from infection to observation for the UK. There are several caveats to this part of our analysis that must be made. The CHESS data set relies on a retrospective report of onset of symptoms, and this field is not recorded for all patients. We select only those patients who have reported an onset date and it may be the case that these patients represent a subgroup of patients whose symptom onset is significantly different from the average patient. The data collection around these dates was noted above to show patterns suggestive of rounding or approximation and this could also introduce some bias. The delay distributions are also unlikely to remain fixed during the outbreak, as we would hope to see the time from infection to case identification shorten during the epidemic, and the time from infection to death lengthen as treatment improves, and as the cohort of susceptible individuals changes. Our confidence in these distributions is therefore somewhat low, although we note acceptable agreement between our estimates produced using a mixture of international and UK data, and previously published estimates from different countries, most notably China [@jungRealTimeEstimation2020; @lintonIncubationPeriodOther2020; @sancheNovelCoronavirus2019nCoV2020; @verityEstimatesSeverityCoronavirus2020a] which cite an onset to admission of 2.7-5.9 days [@lintonIncubationPeriodOther2020;@tindaleEvidenceTransmissionCOVID192020;@sancheHighContagiousnessRapida] and onset to death delay of 16.1-17.8 days [@lintonIncubationPeriodOther2020; @sancheHighContagiousnessRapida]. Given our estimate of the incubation period is log normally distributed, it is unsurprising that the combination of incubation period and delay from onset to observation is also best described by log normal distributions (`r ref$fig("chess-delay")`, panel B), and with these we can apply non parametric back propagation to infer a time series of putative infections from the delayed observations we have available. 
+
+In `r ref$fig("deconv-compare")` we bring all the different parts of the analysis together and compare the two approaches of formal estimation of $R_t$ using the generation interval and back propagation of case, admission or death counts to putative infection, versus an pragmatic estimation using the truncated re-sampled serial interval, and direct use of observation numbers, combined with the simple-but-incorrect adjustment to the resulting $R_t$ time series, shifting the date backwards by the mean of the delay distribution [@gosticPracticalConsiderationsMeasuring2020a]. 
+
+In our pragmatic approach we make the assumption that case counts, admissions and deaths can be used as a direct proxy measure for infection events. The Cori method uses a Bayesian framework to update a prior probabilistic estimate of $R_t$, on any given day, with information gained from the time series of infections in the epidemic to date, and the infectivity profile, to produce a posterior estimate of $R_t$. With the assumption that prior and posterior estimates of $R_t$ are gamma distributed, the Cori method derives a closed form solution for the posterior distribution, which can be rapidly calculated. If equivalent information is contained within a time series of observation such as cases, admissions, or deaths we propose that there is no fundamental reason the Cori method cannot be extended to these data sets. However, if the time delay between infection and observation is changing over time then we may expect to see compression of the early part of the time series, and relaxation in later parts, and a resulting estimate of $R_t$ that is further away from 1 than estimates that would have been obtained from the true infection incidence had it been available. 
+
+There is an open question about what proxy measure for the infectivity profile is most appropriate if using delayed observations in this way. One appealing possibility is the use of case interval ($SI_case$), admission interval ($SI_admission$), or death intervals ($SI_death$), rather than serial interval ($SI_onset$). These distributions (which are estimated in `r ref$sfig("observation-interval")`) are more normally distributed than serial interval or generation interval and have a very definite negative component, which cannot be integrated into the Cori method as-is, and pragmatic truncation of the distribution at zero would introduce an untenable increase in the mean of the distribution. We have adopted the empirical re-sampled serial interval distribution (truncated at zero) for infectivity profile in absence of a clear alternative, as this is a quantity that can be directly observed from the data, and has known limitations and uncertainty, and we note the potential for bias in our estimates of $R_t$ that this introduces.
+
+In comparing formal versus pragmatic methods, given the number of moving parts in this comparison it is surprising to see the level of agreement between the $R_t$ estimates from the two methods (`r ref$fig("deconv-compare")` panel B) in the early phase of the epidemic, and also to see that there is some similar structure of the $R_t$ time series in the later parts. This is particularly the case for estimates based on cases and admissions, but less so for deaths where the de-convolution time series shows additional features that are not obvious from the data. We have no gold standard in comparing the $R_t$ estimates for England, so we are limited in what we can conclude, but we do observe that $R_t$ estimates based on our attempt at de-convolution have more variability than ones from un-adjusted observations, and de-convolved estimates have additional features not present in the un-adjusted estimates. The de-convolved estimates of infection are also noted to run to the end of the time series, which is somewhat surprising as estimates of infection rates at the end of the time series should depend on data which has not yet been observed. This is a feature of the back propagation algorithm which needs to be used with caution as the resulting estimates of $R_t$ basd on de-convolution for the latter part of the time series appear inconsistent with each other.
+
+# Limitations
+
+We did not fully quantify uncertainty in our analysis and estimation of $R_t$. The informal approach to estimating $R_t$ has uncertainty arising from the serial interval distribution, and stochastic noise in the value of the observation in question. The formal approach involves uncertainty in the initial estimation of the serial interval, uncertainty in the incubation period, resulting in uncertainty in the generation interval, the back propagation itself is a source of uncertainty and involves uncertain time delay distributions which are in turn based on uncertain incubation period, and finally the stochastic noise in the observation under consideration. Accurately tracking the uncertainty of all these components into a final estimate remains a challenge.
+
+Our estimates are based on the best available information at the present stage of the epidemic.  However the serial interval is not a fixed quantity and may be affected by behavioral changes such as case isolation, or social distancing. The assumption it is constant is questionable although we have very little hard evidence about how it may vary over time. Similarly time distributions from infection to case identification, admission and death are expected to be highly variable over the course of an outbreak. This has implications for their use in de-convolution, as changing time distributions will have a significant effect on the shape of inferred infection incidence curves, and the complexity of the de-convolution.
+
+There are implicit selection biases in all the data sources we use. A large proportion of SARS-CoV-2 cases are asymptomatic [@baiPresumedAsymptomaticCarrier2020; @huClinicalCharacteristics242020; @mizumotoEstimatingAsymptomaticProportion2020]. It is highly likely that these people participate in transmission chains, and they may do so with a very different infectivity profile to those that are symptomatic, however we have no information about these people in the data sets, and hence all the estimates presented here could be quite wrong, when asymptomatic cases are taken into consideration.
+
+Our approach in estimating key parameters has been to combine different data sets, which come from different international sources, and which have potentially different biases. In combining data sets we assume that time delays are independent of one another, and can be combined randomly, as we have no other evidence to the contrary. This assumption is questionable, as physiologically we can imagine that patients with a long incubation period, for example, may well have a longer period from symptom onset to admission, for example. This could have unpredictable effects on our estimates of time delays but the most likely is that our estimated variance is too small as a result.
+
+In assessing the impact of differences in infectivity profile choices and different sources of observed incidence or inferred infections, we use a real life example of the outbreak in the UK. Whilst this is qualitatively interesting, and grounds the discussion in reality, as there is no gold standard to compare to, we are limited in our ability to conclude anything about the relative benefits of different approaches. Also as the outbreak was relatively stable in the UK over the period we considered, there are limited significant features to compare. An opportunity for further work exists in analysing a simulation with known epidemiological parameters that vary over time and assessing the performance of different methods.
+
+# Conclusions
+
+Estimation of $R_t$ using the Cori method relies on a key set of parameters, namely serial interval, generation interval, and time delays from infection to onset, case identification, admission and death. In this work we present estimates for the statistical distributions of these key parameters in the UK, along with their uncertainty, which we use when estimating $R_t$. Whilst these estimates are by no means perfect we propose they represent the best available estimates for the UK, given the current state of knowledge.
+
+As there is a wide range of candidate values for these quantities, we have assessed the bias that the variation in choice of parameters introduces to $R_t$ estimation, when using the Cori method. Whilst these introduce significant variation in the worst case scenario, we find that even large differences in infectivity profile can have only small impacts on estimates of $R_t$ when $R_t$ is close to 1. Larger values for the mean of the infectivity profile appear to result in $R_t$ estimates that are further away from 1. This is a relatively reassuring finding in that the answer to the key question "is the epidemic under control?" is insensitive to the mean of the infectivity profile. The standard deviation of the infectivity profile, tends to result in estimates of $R_t$ that are influenced by more historical information as so lag those with narrow standard distributions.
+
+We find that using more formal methods for estimating $R_t$ by back propagation inference of infection rate and use of the generation interval, compared to the more pragmatic direct use of case counts as a proxy for infection produces somewhat different results, with the formal methods producing a $R_t$ estimate with more variability than the pragmatic approach. Both methods agree well in predicting when the epidemic crossed the $R_t$ threshold of 1, but we note considerable uncertainty exists in the quantities needed to perform the back propagation, and we are not at the present time able to ensure that all this uncertainty could be faithfully quantified in our resulting $R_t$ estimates. We did not set out to assess whether one method is better than another, and this would be a natural extension to this work, however we note that new methods for combining back propagation with estimation of $R_t$ are under active development [@abbottEpiNow2EstimateRealtime2020; @abbottEstimatingTimevaryingReproduction2020] and which may render any further investigation obsolete.
+
+# References
+
+<div id="refs"></div>
+
+# Supplementary material
+
+## `r cap$stab("dfit-serial-interval-ff100","Parametererised serial interval distributions from FF100. Gamma and Negative Binomial estimates are from data truncated at zero. AIC estimates are not comparable to those for Normal distribution which is fitting all data, including negative serial intervals, and hence has a lower mean.")`
+
+```{r}
+si3$dfit$printDistributionDetail() %>% ungroup() %>% select(N=n, AIC=aic, Distribution, `Parameter / Moment` = param, `Mean ± SD (95% CI)`) %>% group_by(Distribution, AIC, N) %>% arrange(AIC) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS1_ParametersFF100SerialInterval")
+```
+
+## `r cap$sfig("meta-analysis","Forest plot for serial interval studies for A, the mean and B, the standard deviation of the serial interval, using the normal mixture random effect model, and from studies identified in the literature which assume a Gamma distributed serial interval")`
+
+```{r}
+library(metaplus)
+tmp = serialIntervals %>% mutate(yi = mean_si_estimate, sei = (mean_si_estimate_high_ci-mean_si_estimate_low_ci)/3.92) %>% filter(!is.na(sei)) %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial"))
+  meanfit = suppressWarnings(metaplus::metaplus(tmp$yi, tmp$sei, slab=tmp$label, random="mixture"))
+      
+plot(meanfit, cex=0.6, main="mean")
+
 ```
 
 ```{r}
-patchwork::wrap_plots(plots)
+tmp2 = serialIntervals %>% mutate(yi = std_si_estimate, sei = (std_si_estimate_high_ci-std_si_estimate_low_ci)/3.92) %>% filter(!is.na(sei)) %>% filter(assumed_distribution == "gamma" & estimate_type %>% stringr::str_starts("serial"))
+sdfit = suppressWarnings(metaplus::metaplus(tmp2$yi, tmp2$sei, slab=tmp2$label, random="mixture"))
+  
+plot(sdfit, cex=0.6, main="std dev")
 
-suppTable = bind_rows(tables) %>% ungroup() %>% select(-dist,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>% rename(Transition = transition, Parameter= param, AIC= aic, N=n) %>% arrange(AIC) %>% group_by(Transition, Distribution)
-suppTable %>% standardPrintOutput::mergeCells()
 ```
+
+
+## `r cap$stab("dfit-serial-interval-resample","Parametererised serial interval distributions from resampling the literature. Gamma and Negative Binomial estimates are from data truncated at zero. AIC estimates are not comparable to those for Normal distribution which is fitting all data, including negative serial intervals, and hence has a lower mean.")`
+
+```{r}
+si1$dfit$printDistributionDetail() %>% ungroup() %>% select(N=n, AIC=aic, Distribution, `Parameter / Moment` = param, `Mean ± SD (95% CI)`) %>% group_by(Distribution, AIC, N) %>% arrange(AIC) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS2_ParametersResampledSerialInterval")
+```
+
+## `r cap$stab("incub-period-detail","Distribution details for estimated incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data")`
+
+```{r}
+bind_rows(
+  incubFF100Fit$printDistributionDetail() %>% mutate(source = "FF100"),
+  bopFit$printDistributionDetail() %>% mutate(source = "Open COVID-19 Data Working Group")
+) %>% ungroup() %>% select(Source = source, N = n, AIC = aic, Distribution, `Parameter / Moment` = param, `Mean ± SD (95% CI)`) %>% arrange(N, AIC, Distribution) %>%
+  group_by(N, Source, AIC, Distribution) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS3_IncubationPeriodsBeOutbreakPreparedAndFF100_Detail")
+```
+
+## `r cap$stab("chess-delay-params","Time delay distributions estimated from CHESS data set, for both transitions from disease onset to case, admission or death, and presumed infection and case, admission or death")`
+
+```{r}
+suppTable = bind_rows(
+  onsetFit$printDistributionDetail(),
+  infectionToObservationFit$printDistributionDetail()
+) %>% ungroup() %>% select(-dist,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>% rename(Transition = transition, Parameter= param, AIC= aic, N=n)  %>% group_by(Transition, N, AIC, Distribution) %>% arrange(AIC)
+suppTable %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/TableS4_ChessTimeDelayDistributionsDetail",defaultFontSize = 7)
+```
+
+
+## `r cap$sfig("observation-interval","Time intervals between infector-infectee observations")`
+
+These distributions are based on the joint probability of serial interval (between onset) estimated from our literature re-sampling analysis and delay distributions from onset to observation, estimated from the CHESS data set. The joint probability is estimated as the combination of bootstrapped samples of raw data assuming these are independent (see discussion section).
+
+$$
+\begin{aligned}
+SI_{observation,X \to Y} = SI_{onset, X \to Y} + T_{onset \to observation,Y} - T_{onset \to observation,X}
+\end{aligned}
+$$
+In which the quantity $T_{onset \to observation,Y} - T_{onset \to observation,X}$ is essentially an error term with zero mean. We note that the un-truncated normal distributions mean is approximately equal for all 4 distributions, around 4.5 to 4.8, as the skew of the distribution affects the fitting process. In this figure the distributions were fitted using a maximum goodness of fit estimator. The serial interval for onset estimated in the main paper is included for comparison.
+
+
+```{r}
+
+simulatedSI = rawDelay %>%
+  mutate(between = transition %>% stringr::str_remove("infection to")) %>% #actually this is not infection to anything, its observation to observation
+  group_by(between,bootstrapNumber) %>%
+  group_modify(function(d,g,...) {
+    # each d here is a single bootstrap of delay from and to
+    # grab a resampled serial interval bootstrap
+    siEsts = si1$bootstrapSamples %>% filter(bootstrapNumber == g$bootstrapNumber) %>% pull(value) %>% sample(nrow(d))
+    d = d %>% mutate(
+      siOriginal = siEsts,
+      siTo = siEsts+delayOffset
+    )
+    return(d)
+  }) %>%
+  select(between, bootstrapNumber,siOriginal,siTo,delayOffset) %>%
+  bind_rows(
+    si1$dfit$groupedDf %>% mutate(
+      between = "onset",
+      siOriginal = value,
+      siTo = value,
+      delayOffset = 0
+    ) %>% select(-value)
+  )
+
+simulatedSIFit  = DistributionFit$new(c("norm","gamma","lnorm"))
+
+simulatedSIFit$fromBootstrappedData(simulatedSI %>% group_by(between) %>% select(bootstrapNumber,siTo), valueExpr = siTo, method="mge") #method="qme", probs=seq(0.4,0.6,by = 0.02))
+fig7 = simulatedSIFit$plot(xlim=c(-7,28),summary=TRUE)+xlab("Time interval")
+fig7 %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/FigS3_ObservationIntervalDistributions")
+```
+
+
+
+
+
+
+
+
+
+<!-- # OLD -->
+
+
+<!-- ## Serial interval standard deviation assuming delay to presentation -->
+
+<!-- * Serial intervals are a convolution of generation intervals, with a delay depending on time to presentation -->
+<!-- * In theory  -->
+<!-- * Linton et al estimates time to presentation / time to death etc -->
+<!-- * What effect does the serial interval of death-death or test-test events considered -->
+<!-- * simulate delay process using a gamma distribution -->
+<!-- * assume a known generation interval and simulate effects -->
+
+<!-- ```{r, fig.cap="Parameter distributions of resampled serial invervals"} -->
+<!-- estimates2 = DistributionFit$unconvertParameters(si1$dfit$bootstraps) %>% rename(value = mean) %>% bind_rows(si1$dfit$bootstraps) %>% filter(dist == "gamma") -->
+
+<!-- quants = estimates2 %>% group_by(param) %>% summarise( -->
+<!--   tibble( -->
+<!--     q=c(0.025,0.1,0.5,0.9,0.975), -->
+<!--     value=quantile(value,c(0.025,0.1,0.5,0.9,0.975)) -->
+<!--   )) -->
+
+<!-- p1 = ggplot(estimates2,aes(x=value,colour=param))+geom_density(show.legend = FALSE)+geom_vline(data=quants,mapping=aes(xintercept = value))+geom_text(data=quants,mapping=aes(x = value,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90, inherit.aes = FALSE)+facet_wrap(vars(param), scales = "free") -->
+
+<!-- p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/FigS1_ParameterDistrbituions") -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- #tmp2 = si3$dfit$groupedDf %>% mutate( -->
+<!-- #  SL = as.integer(date_onset.infectee - date_onset.infector)) -->
+
+<!-- #panel1 = ggplot(tmp2) + geom_bar(width=0.7,aes(x=SL)) + xlab("days") -->
+
+<!-- # tmp2 = ff100 %>% mutate( -->
+<!-- #   EL = 0L,  -->
+<!-- #   ER = as.integer(date_exposure_last - date_exposure_first), -->
+<!-- #   SL = as.integer(date_onset - date_exposure_first), -->
+<!-- #   SR = as.integer(date_onset - date_exposure_first+1), -->
+<!-- #   type=0L) %>% mutate(ER = ifelse(ER>SL,SL,ER)) %>% select(EL,ER,SL,SR,type) %>% filter(SL>0) -->
+<!-- # tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")]) -->
+
+<!-- # tmp2 = tmp2 %>% filter(SL>0) -->
+<!-- # tmp3 = as.matrix(tmp2[,c("EL","ER","SL","SR","type")]) -->
+<!-- #  -->
+<!-- # MCMC_seed <- 1 -->
+<!-- # overall_seed <- 2 -->
+<!-- # mcmc_control <- EpiEstim::make_mcmc_control(seed = MCMC_seed,  -->
+<!-- #                                   burnin = 1000) -->
+<!-- # dist <- "G" # fitting a Gamma dsitribution for the SI -->
+<!-- # config <- EpiEstim::make_config(list(si_parametric_distr = dist, -->
+<!-- #                            mcmc_control = mcmc_control, -->
+<!-- #                            seed = overall_seed,  -->
+<!-- #                            n1 = 50,  -->
+<!-- #                            n2 = 50)) -->
+<!-- #  -->
+<!-- # # rm(`%in%`) = function(x,y) { -->
+<!-- # #   return(sapply(x, function(x1) {any(y == x1)})) -->
+<!-- # # } -->
+<!-- #  -->
+<!-- # ## first estimate the SI distribution using function dic.fit.mcmc fron  -->
+<!-- # ## coarseDataTools package: -->
+<!-- # n_mcmc_samples <- config$n1*mcmc_control$thin -->
+<!-- #  -->
+<!-- # SI_fit = coarseDataTools::dic.fit.mcmc(dat = tmp3, -->
+<!-- #                   dist = "G",#off1G", -->
+<!-- #                   init.pars = EpiEstim::init_mcmc_params(tmp2, dist), -->
+<!-- #                   burnin = mcmc_control$burnin, -->
+<!-- #                   n.samples = n_mcmc_samples, -->
+<!-- #                   seed = mcmc_control$seed) -->
+<!-- #  -->
+<!-- # si_sample <- EpiEstim::coarse2estim(SI_fit, thin = mcmc_control$thin)$si_sample -->
+<!-- #  -->
+<!-- # calcGammaMean = function(x) { -->
+<!-- #   shape = SI_fit@ests["shape",x] -->
+<!-- #   scale = SI_fit@ests["scale",x] -->
+<!-- #   out = list() -->
+<!-- #   out$mean = shape*scale -->
+<!-- #   out$sd = sqrt(shape*scale^2) -->
+<!-- #   return(out) -->
+<!-- # } -->
+<!-- #  -->
+<!-- # UKSIConfig = EpiEstim::make_config( -->
+<!-- #   mean_si = calcGammaMean("est")[["mean"]], -->
+<!-- #   std_si = calcGammaMean("est")[["sd"]], -->
+<!-- #   min_mean_si = calcGammaMean("CIlow")[["mean"]], -->
+<!-- #   min_std_si = calcGammaMean("CIlow")[["sd"]], -->
+<!-- #   max_mean_si = calcGammaMean("CIhigh")[["mean"]], -->
+<!-- #   max_std_si = calcGammaMean("CIhigh")[["sd"]], -->
+<!-- #   #TODO: the following are not going to be used unless we apply this -->
+<!-- #   std_mean_si = (calcGammaMean("CIhigh")[["mean"]]-calcGammaMean("CIlow")[["mean"]])/3.96,  -->
+<!-- #   std_std_si = (calcGammaMean("CIhigh")[["sd"]]-calcGammaMean("CIlow")[["sd"]])/3.96, -->
+<!-- #   method = "uncertain_si" -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # gammaMean = sprintf("%1.2f (%1.2f-%1.2f)", -->
+<!-- #   calcGammaMean("est")[["mean"]], -->
+<!-- #   calcGammaMean("CIlow")[["mean"]], -->
+<!-- #   calcGammaMean("CIhigh")[["mean"]] -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # gammaShape = sprintf("%1.2f (%1.2f-%1.2f)", -->
+<!-- #   SI_fit@ests["shape","est"], -->
+<!-- #   SI_fit@ests["shape","CIlow"], -->
+<!-- #   SI_fit@ests["shape","CIhigh"] -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # gammaScale = sprintf("%1.2f (%1.2f-%1.2f)", -->
+<!-- #   SI_fit@ests["scale","est"], -->
+<!-- #   SI_fit@ests["scale","CIlow"], -->
+<!-- #   SI_fit@ests["scale","CIhigh"] -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # gammaSd = sprintf("%1.2f (%1.2f-%1.2f)", -->
+<!-- #   calcGammaMean("est")[["sd"]], -->
+<!-- #   calcGammaMean("CIlow")[["sd"]], -->
+<!-- #   calcGammaMean("CIhigh")[["sd"]] -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # panel2 = (ggplot(tmp2, aes(x=SL)) + geom_histogram(aes(y=..density..),fill=NA,colour = "black", binwidth=1)+ #,width=0.7) + -->
+<!-- #     geom_line(data = tibble( -->
+<!-- #       x=seq(0,10,length.out = 101), -->
+<!-- #       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","est"], scale = SI_fit@ests["scale","est"]) -->
+<!-- #     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue")+ -->
+<!-- #     geom_line(data = tibble( -->
+<!-- #       x=seq(0,10,length.out = 101), -->
+<!-- #       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIlow"], scale = SI_fit@ests["scale","CIlow"]) -->
+<!-- #     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+ -->
+<!-- #     geom_line(data = tibble( -->
+<!-- #       x=seq(0,10,length.out = 101), -->
+<!-- #       y=dgamma(seq(0,10,length.out = 101), shape = SI_fit@ests["shape","CIhigh"], scale = SI_fit@ests["scale","CIhigh"]) -->
+<!-- #     ), aes(x=x,y=y), inherit.aes = FALSE, colour="blue",linetype="dashed")+ -->
+<!-- #     annotate("text", x = 10, y = 0.5, label = paste0("Mean: ",gammaMean,"\nSD: ",gammaSd,"\nShape: ",gammaShape,"\nScale: ",gammaScale),hjust="inward",vjust="inward")+ -->
+<!-- #     xlab("days") -->
+<!-- # )  -->
+<!-- ``` -->
+
+<!-- This used fitted distributions to do combination and has been replacedf by code using raw estimates. -->
+
+<!-- ```{r} -->
+
+<!-- # #glimpse(symptomaticToCaseModels %>% filter(aic == min(aic))) -->
+<!-- # # select best fit (by AIC) for days symptomatic to case. -->
+<!-- # # get 200 random samples for each bootstrap -->
+<!-- # # split into 2 groups and exclude any values with number of days > 30 -->
+<!-- # # calculate the difference -->
+<!-- #  -->
+<!-- # ### From infgection  -->
+<!-- # # onsetToTestFit$filterModels(aic == min(aic)) -->
+<!-- # # onsetToTestFit$generateSamples(sampleExpr = 2000) -->
+<!-- # fromInfectionDelay = function(distFit) { -->
+<!-- #   distFit2 = distFit$clone() -->
+<!-- #   distFit2$filterModels(aic == min(aic)) -->
+<!-- #   distFit2$generateSamples(sampleExpr = 2000) -->
+<!-- #  -->
+<!-- #    -->
+<!-- #   # get samples from distibution and split into 2 groups - one for index patient and one for affected patient -->
+<!-- #   distSamples = distFit2$samples %>% -->
+<!-- #     mutate(sampleCat = (sampleNumber-1) %/% 1000 + 1, sampleNumber = sampleNumber %% 1000) %>% -->
+<!-- #     pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "delay") %>% -->
+<!-- #     mutate(to = stringr::str_replace(transition,"onset to ","")) -->
+<!-- #    -->
+<!-- #   # delay from infection -->
+<!-- #   # the join adds in incubation  -->
+<!-- #   delayDist = incubDist %>% select(-transition, -dist, -to) %>%  -->
+<!-- #     inner_join(distSamples, by=c("sampleNumber","bootstrapNumber")) %>%  -->
+<!-- #     mutate(from="infection") -->
+<!-- #   delayDist = delayDist %>% mutate(delayOffset = delay2+incub2-delay1) -->
+<!-- #    -->
+<!-- #   # delay from onset -->
+<!-- #   delayOnsetDist = distSamples %>% mutate(delayOffset = delay2-delay1, from="onset") -->
+<!-- #    -->
+<!-- #   return(delayDist %>% bind_rows(delayOnsetDist)) -->
+<!-- # } -->
+<!-- #  -->
+<!-- # relativeDelays = bind_rows( -->
+<!-- #   incubDist, -->
+<!-- #   onsetToTestFit %>% fromInfectionDelay(), -->
+<!-- #   onsetToAdmissionFit %>% fromInfectionDelay(), -->
+<!-- #   #onsetToTestResultFit %>% fromInfectionDelay(), -->
+<!-- #   onsetToDeathFit %>% fromInfectionDelay() -->
+<!-- # )  -->
+<!-- #  -->
+<!-- # # relative delays df here has distributions for a whole number of bootstraps. -->
+<!-- # # we could use this to fit models. and determine uncertainty on densitites. -->
+<!-- # # aggregating over all bootstraps and plotting all results as density.  -->
+<!-- #  -->
+<!-- # #ggplot(relativeDelays %>% filter(delayOffset > -25 & delayOffset < 25), aes(x=delayOffset, colour = transition, fill=transition))+geom_density(alpha = 0.1,show.legend = FALSE)+facet_wrap(vars(transition)) -->
+<!-- # ggplot(relativeDelays %>% filter(delayOffset > -45 & delayOffset < 45), aes(x=delayOffset, colour = to))+geom_density()+facet_wrap(vars(from)) -->
+
+<!-- ``` -->
 
 
 <!-- Hospital admission generally predates case detection in this data set as hospital based. No clear reason to treat case identification and hospital admission as different time points. -->
@@ -661,81 +1310,593 @@ suppTable %>% standardPrintOutput::mergeCells()
 
 <!-- ``` -->
 
-## Impact of delays on serial nterval
+<!-- * Estimate gamma from MCMC -->
 
-What is impact of these delay distributions on serial interval? We need to look at a hypothetical gamma distribution, and add a random sample of symptomatic to cases and subtract similar
-
-
-
-```{r}
-
-#glimpse(symptomaticToCaseModels %>% filter(aic == min(aic)))
-# select best fit (by AIC) for days symptomatic to case.
-# get 200 random samples for each bootstrap
-# split into 2 groups and exclude any values with number of days > 30
-# calculate the difference
-
-# onsetToTestFit$filterModels(aic == min(aic))
-# onsetToTestFit$generateSamples(sampleExpr = 2000)
-relativeDelay = function(distFit) {
-  distFit2 = distFit$clone()
-  distFit2$filterModels(aic == min(aic))
-  distFit2$generateSamples(sampleExpr = 2000)
-  delayDist = distFit2$samples %>%
-    mutate(sampleCat = (sampleNumber-1) %/% 1000 + 1, sampleNumber = sampleNumber %% 1000) %>%
-    pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "delay") %>% mutate(delayOffset = delay2-delay1)
-  return(delayDist)
-}
-
-relativeDelays = bind_rows(
-  onsetToTestFit %>% relativeDelay(),
-  onsetToAdmissionFit %>% relativeDelay(),
-  onsetToTestResultFit %>% relativeDelay(),
-  onsetToDeathFit %>% relativeDelay()
-)
-
-ggplot(relativeDelays %>% filter(delayOffset > -45 & delayOffset < 45), aes(x=delayOffset, colour = transition))+geom_density()
-
-# 
-
-```
-#TODO:
-1) generation -> serial via incubation period
-2) EpiEstim si_from_sample using shifted normal distribution. make_config using method = "si_from_sample" with sample in si_sample a matrix where each column gives one distribution of the serial interval to be explored (see details). Seems to need to be provided to both
-
-# Discussion
+<!-- ```{r} -->
+<!-- # minimal generation interval deconvolution -->
+<!-- # create samples from incubation period offset -->
 
 
-* Serial interval estimated from UK data and resampled from literature produces widely differing answers 
-* R(t) as calculated by epiestim affected by assumptions about the serial interval
-* Larger serial interval mean tends to take R(t) estimates away from 1 
-* Larger serial interval SD tends to take you further back into history.
-* EpiEstim assumes a truncated normal distribution for SD for bootstrapping. In fact the SD is going to be heavily skewed to the left (chi squared). Sampling process for epiestim will tend to produce estimates 
+<!-- #sampleSize = si1$dfit$groupedDf %>% group_by(bootstrapNumber) %>% count() %>% pull(n) %>% max() -->
+<!-- sampleSize = nrow(si1$dfit$fitData) -->
 
-# Limitations
+<!-- incub2Fit = lauerFit$clone() -->
+<!-- incub2Fit$bootstraps = incub2Fit$bootstraps %>% inner_join( -->
+<!--   si1$dfit$groupedDf %>% group_by(bootstrapNumber) %>% count(), -->
+<!--   by = "bootstrapNumber" -->
+<!--   ) -->
+<!-- incub2Fit$generateSamples(sampleExpr = n * 2) -->
+<!-- incub2Samples = incub2Fit$samples %>% filter(dist == "lnorm") %>% -->
+<!--     mutate(sampleCat = sampleNumber %% 2 + 1, sampleNumber = (sampleNumber+1) %/% 2) %>% -->
+<!--     pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "delay") %>% -->
+<!--     mutate(delay = delay2-delay1) -->
 
-* Serial interval is not a fixed quantity - affected by behavioural changes, e.g. case isolation, level of asymptomatics, settings also define serial interval - e.g. care homes,  
-* Assumption that serial interval can be gamma distributed. Baked into current method of estimating R(t) using EpiEstim. Needs truncation of negative SI's whereas best evidence suggests negative serial intervals commonplace. As a workaround best practice suggests devolving cases to infections and using generation interval. Both alternatives could introduce bias.
-* No information about progression of Serial interval over course of epidemic - component of SI to do with fundamental biology of infection, other part is behavioural. As self isolation adherance improves we can expect serial interval to become shorter but more dispersed. Assumption that is it static is flawed.
-
-# Conclusions
-
-* High degree of asymptomatic spread and less detected => true serial interval larger than UK estimates from known transmission chains.
-* Onset of symptoms -> onset of symptoms somewhat shorter that positive test ->? positive test. Serial interval estimates SD should vary depending on what event we use to estimate. 
-* Estimates of R(t) based on different events, e.g admission, 
+<!-- # get the  -->
+<!-- ordered = incub2Samples %>% group_by(bootstrapNumber) %>% arrange(delay) %>% mutate(order=row_number()) -->
 
 
-# Supplementary material
+<!-- tmp = si1$dfit$groupedDf %>% group_by(bootstrapNumber) %>% arrange(value) %>% mutate(order = row_number()) %>% inner_join(ordered, by=c("bootstrapNumber","order")) -->
 
-```{r fig2, fig.cap="Parameter distributions of resampled serial invervals"}
-estimates2 = DistributionFit$unconvertParameters(si1$dfit$bootstraps) %>% rename(value = mean) %>% bind_rows(si1$dfit$bootstraps) %>% filter(dist == "gamma")
+<!-- ggplot(tmp, aes(x=value-delay))+geom_density() -->
+<!-- #TODO: -->
+<!-- # a bootstrapping resampling which respect the fact that si1 value minus incubFit delay must be greater than zero. -->
 
-quants = estimates2 %>% group_by(param) %>% summarise(
-  tibble(
-    q=c(0.025,0.1,0.5,0.9,0.975),
-    value=quantile(value,c(0.025,0.1,0.5,0.9,0.975))
-  ))
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- #reticulate::install_miniconda() -->
+<!-- #reticulate::conda_create("r-tensorflow", packages=c("python=3.7","tensorflow=1.14","pyyaml","requests","Pillow","pip","numpy=1.16")) -->
+<!-- reticulate::use_condaenv(condaenv = 'r-tensorflow', required = TRUE) -->
+<!-- #reticulate::py_install("tensorflow-probability=0.7", "r-tensorflow") -->
 
-p1 = ggplot(estimates2,aes(x=value,colour=param))+geom_density(show.legend = FALSE)+geom_vline(data=quants,mapping=aes(xintercept = value))+geom_text(data=quants,mapping=aes(x = value,label=q),y=Inf,hjust=1.1,vjust=1.1,angle=90, inherit.aes = FALSE)+facet_wrap(vars(param), scales = "free")
+<!-- # variables & priors -->
+<!-- #mean <- greta::uniform(0,10) # -->
 
-p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-intervals/FigS1_ParameterDistrbituions")
+<!-- dof = 5 -->
+
+<!-- sd <- greta::gamma(rate = 1/2, shape = dof/2) -->
+<!-- sdOfMean   <- greta::cauchy(0, 3, truncation = c(0, Inf)) -->
+<!-- mean = greta::normal(mean=si1$dfit$groupedDf$value, sd=10, truncation = c(0, Inf)) -->
+
+<!-- genInterval <- greta::gamma(shape = mean^2/sd^2, rate=mean/sd^2) -->
+
+<!-- pt1Delay <- greta::lognormal( -->
+<!--   meanlog = lauerFit$fittedModels %>% filter(dist=="lnorm" & param=="meanlog") %>% pull(mean), -->
+<!--   sdlog = lauerFit$fittedModels %>% filter(dist=="lnorm" & param=="sdlog") %>% pull(mean) -->
+<!-- ) -->
+
+<!-- pt2Delay <- greta::lognormal( -->
+<!--   meanlog = lauerFit$fittedModels %>% filter(dist=="lnorm" & param=="meanlog") %>% pull(mean), -->
+<!--   sdlog = lauerFit$fittedModels %>% filter(dist=="lnorm" & param=="sdlog") %>% pull(mean) -->
+<!-- ) -->
+
+<!-- # linear predictor -->
+<!-- mu <- genInterval + pt1Delay - pt2Delay -->
+
+<!-- # observation model -->
+<!-- greta::distribution(si1$dfit$groupedDf$value) <- greta::normal(mu,sdOfMean) -->
+
+<!-- #m <- greta::model(mean, sd, sdOfMean) -->
+<!-- m <- greta::model(mean, sd, sdOfMean) -->
+<!-- draws <- greta::mcmc(m, n_samples = 2000, chains = 4) -->
+<!-- bayesplot::mcmc_trace(draws) -->
+<!-- summary(draws) -->
+
+<!-- ``` -->
+
+<!-- 
+#TODO: convert this to stan 
+# DECONVOLUTION: https://stackoverflow.com/questions/12462919/deconvolution-with-r-decon-and-deamer-package
+# https://www.rdocumentation.org/packages/surveillance/versions/1.12.1/topics/backprojNP
+deamer / decon
+-->
+
+
+
+
+
+
+
+<!-- ```{r skip=TRUE} -->
+<!-- #TODO: from Lauer's original data -->
+
+<!-- # Reconstruct serial interval -->
+<!-- # https://www.acpjournals.org/doi/10.7326/M20-0504#t4-M200504 -->
+<!-- # Original data here: https://github.com/HopkinsIDD/ncov_incubation/tree/master/data -->
+<!-- # Lauer incubation periods -->
+<!-- lauerIncub = tibble::tribble( -->
+<!--   ~dist, ~param, ~paramValue, -->
+<!--   "lnorm","meanlog","1.621 (1.504–1.755)", -->
+<!--   "lnorm","sdlog","0.418 (0.271–0.542)", -->
+<!--   "gamma", "shape", "5.807 (3.585–13.865)",  -->
+<!--   "gamma", "scale", "0.948 (0.368–1.696)", -->
+<!--   "weibull", "shape", "2.453 (1.917–4.171)",  -->
+<!--   "weibull", "scale", "6.258 (5.355–7.260)", -->
+<!-- #  "erlang", "shape", "6 (3–11)", -->
+<!-- #  "erlang", "scale", "0.880 (0.484–1.895)" -->
+<!-- ) -->
+
+<!-- lauerIncub = lauerIncub %>% mutate( -->
+<!--   paramValueList = lapply(stringr::str_extract_all(paramValue, "[0-9]+\\.?[0-9]*"),as.numeric) -->
+<!-- ) %>% mutate( -->
+<!--   mean = map_dbl(paramValueList, ~.x[1]), -->
+<!--   lower = map_dbl(paramValueList, ~.x[2]), -->
+<!--   upper = map_dbl(paramValueList, ~.x[3]), -->
+<!--   sd = (upper-lower)/3.96 # THIS ASSUMPTION IS WHAT CAUSES DIFFERENCE IN PUBLISHED AND BOOTSTRAPPED MEANS AND RESULTS IN RESAMPLING -->
+<!-- ) -->
+
+<!-- lauerFit = DistributionFit$new(distributions = unique(lauerIncub$dist)) -->
+
+<!-- lauerIncub %>% group_by(dist) %>% group_map(function(d,g,...) { -->
+<!--   lauerFit$withSingleDistribution(dist = g$dist,paramDf = d %>% select(param,mean,sd,lower,upper),bootstraps = 1000) -->
+<!--   return(NULL) -->
+<!-- }) #%>% invisible() -->
+
+<!-- # From original data -->
+
+<!-- lauerRaw = readr::read_csv("https://raw.githubusercontent.com/HopkinsIDD/ncov_incubation/master/data/nCoV-IDD-traveler-data.csv") -->
+<!-- for (col in c("ER","EL","SL","SR","PR")) { -->
+<!--   col = as.symbol(col) -->
+<!--   lauerRaw = lauerRaw %>% mutate(!!col := as.numeric(as.Date(stringr::str_extract(!!col,"[0-9]{4}-[0-9]{2}-[0-9]{2}")))) -->
+<!-- } -->
+<!-- lauerRaw = lauerRaw %>% mutate(type = 0L, -->
+<!--   ER=ER+1,   -->
+<!--   SR=SR+1 -->
+<!-- ) -->
+
+<!-- assumedEarliest = as.numeric(as.Date("2019-12-01")) -->
+<!-- #https://github.com/HopkinsIDD/ncov_incubation/blob/master/manuscript/nCoV_Incubation.Rmd -->
+<!-- lauerRawProc <- lauerRaw %>%  -->
+<!--              # if EL is missing or before 1 Dec 2019, use 1 Dec 2019 -->
+<!--              mutate( -->
+<!--                EL = ifelse(is.na(EL) | EL < assumedEarliest, assumedEarliest, EL), -->
+<!--                # if SR is missing, use PR -->
+<!--                SR = ifelse(is.na(SR), PR, SR), -->
+<!--                # if ER is missing, use SR; if SL is missing, use EL -->
+<!--                ER=if_else(is.na(ER) | ER>SR, SR, ER), -->
+<!--                SL=if_else(is.na(SL) | SL<EL, EL, SL) -->
+<!--              ) -->
+<!-- lauerRawProc = lauerRawProc %>% mutate( -->
+<!--     EL = EL-assumedEarliest, -->
+<!--     ER = ER-assumedEarliest, -->
+<!--     SL = SL-assumedEarliest, -->
+<!--     SR = SR-assumedEarliest, -->
+<!--     E_int=ER-EL, -->
+<!--     S_int=SR-SL -->
+<!--   ) %>% -->
+<!--     # any entries missing EL, ER, SL, or SR -->
+<!--   filter( -->
+<!--     !is.na(EL) & !is.na(ER) & !is.na(SL) & !is.na(SR) -->
+<!--   ) %>%  -->
+<!--     # remove entries that haven't been reviewed by two people -->
+<!--   filter(!is.na(REVIEWER2), REVIEWER2!="NA") %>%  -->
+<!--     # remove entries with exposure/onset intervals less than 0 -->
+<!--     # remove entries where ER greater than SR or EL greater than SL -->
+<!--   filter(E_int > 0, S_int > 0, ER<=SR, SL>=EL) %>% -->
+<!--   mutate(type=0L) %>% -->
+<!--   select(ER,EL,SR,SL,type) -->
+
+<!-- tmp3 = as.matrix(lauerRawProc[,c("EL","ER","SL","SR","type")]) -->
+
+<!-- ## estimate the SI distribution using function dic.fit.mcmc fron  -->
+<!-- ## coarseDataTools package: -->
+<!-- # n_mcmc_samples <- config$n1*mcmc_control$thin -->
+<!-- #  -->
+<!-- SI_fit = coarseDataTools::dic.fit(dat = tmp3, -->
+<!--                    dist = "G", -->
+<!--                    n.boots = 50) -->
+
+<!-- # fitdistrplus -->
+<!-- lauerRaw = lauerRaw %>% mutate( -->
+<!--   left = pmin(SL,SR,na.rm = TRUE)-(EL+ER)/2, -->
+<!--   right = pmin(SL,SR,na.rm = TRUE)-(EL+ER)/2, -->
+<!--   ) %>% mutate( -->
+<!--     left = ifelse(left < 0 | is.na(left) , 0 ,left), -->
+<!--     right = ifelse(right < 0 , 0 ,right) -->
+<!--   ) %>% filter(!(is.na(left) & is.na(right))) -->
+
+<!-- lauerRawFit = DistributionFit$new(c("lnorm","gamma","nbinom","weibull")) -->
+<!-- lauerRawFit$fromCensoredData(lauerRaw, lowerValueExpr = left, upperValueExpr = right) -->
+<!-- lauerRawFit$printDistributionSummary() -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- onsetToTestResult = CHESSClean %>%  -->
+<!--     filter(age>10 & !is.na(estimateddateonset) & !is.na(labtestdate)) %>%  -->
+<!--     mutate( -->
+<!--       transition = "onset to test result", -->
+<!--       time = as.integer(labtestdate - estimateddateonset) -->
+<!--     ) %>% select(caseid,transition,time) %>% filter(time < 28 & time > -14) %>% group_by(transition) -->
+
+<!-- onsetToTestResultFit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))$fromUncensoredData(onsetToTestResult, valueExpr = time, truncate = TRUE, bootstraps = 100) -->
+<!-- plots$onsetToTestResult = onsetToTestResultFit$plot(xlim = c(0,20))+xlab("time delay") -->
+<!-- tables$onsetToTestResult = onsetToTestResultFit$printDistributionDetail() -->
+<!-- ``` -->
+
+
+<!-- * Test to admission -->
+<!-- * Potentially complex as admission may occur before test comes back positive. -->
+<!-- * Also issues with hospital acquired infections. -->
+<!-- * Assume admission before 14 days is unrelated. cap at 100. -->
+
+<!-- ```{r} -->
+<!--   # Swab positive to admission -->
+<!-- testToAdmission = CHESSClean %>%  -->
+<!--     filter(age>10 & !is.na(infectionswabdate) & !is.na(hospitaladmissiondate)) %>%  -->
+<!--     mutate( -->
+<!--       transition = "test to admission", -->
+<!--       time = as.integer(hospitaladmissiondate - infectionswabdate) -->
+<!--     ) %>% select(caseid,transition,time) %>% filter(time < 100 & time > -14) -->
+<!-- testToAdmissionFit = DistributionFit$new(distributions = c("norm","lnorm","gamma","weibull","exp"))$fromUncensoredData(testToAdmission, valueExpr = time, truncate = TRUE, bootstraps = 100) -->
+<!-- testToAdmissionFit$plot(xlim = c(-14,25)) -->
+<!-- testToAdmissionFit$printDistributionDetail() -->
+<!-- ``` -->
+
+<!-- ## Impact of delays on serial interval / Serial interval adjustments for non onset data -->
+
+<!-- * Time delay of estimate of R_t depends on incubation period -->
+<!-- * What is impact of these delay distributions on estimating R_t using the serial interval?  -->
+<!-- * We look at: -->
+<!-- * serial interval onset-onset + delay observation infectee - delay observation infector -->
+<!-- * These can be though of as error functions, applied to serial interval distribution to produce serial interval distribution between deaths or admissions, or cases. -->
+<!-- * We use our resampled SI estimates and chess delays -->
+
+<!-- ```{r} -->
+
+<!-- simulatedSI = rawDelay %>%  -->
+<!--   filter(from=="onset") %>%  -->
+<!--   group_by(from,to,bootstrapNumber) %>%  -->
+<!--   group_modify(function(d,g,...) { -->
+<!--     # each d here is a single bootstrap of delay from and to -->
+<!--     # grab a resampled serial interval bootstrap -->
+<!--     siEsts = si1$bootstrapSamples %>% filter(bootstrapNumber == g$bootstrapNumber) %>% pull(value) %>% sample(nrow(d)) -->
+<!--     d = d %>% mutate( -->
+<!--       siOriginal = siEsts, -->
+<!--       siTo = siEsts+delayOffset -->
+<!--     ) -->
+<!--     return(d) -->
+<!--   }) %>%   -->
+<!--   select(between = to,bootstrapNumber,siOriginal,siTo,delayOffset) %>% -->
+<!--   bind_rows( -->
+<!--     si1$dfit$groupedDf %>% mutate( -->
+<!--       between = "onset", -->
+<!--       siOriginal = value, -->
+<!--       siTo = value, -->
+<!--       delayOffset = 0 -->
+<!--     ) %>% select(-value) -->
+<!--   ) -->
+
+<!-- ``` -->
+
+
+<!-- ```{r fig7} -->
+
+<!-- simulatedSIFit  = DistributionFit$new(c("norm","gamma","nbinom")) -->
+
+<!-- simulatedSIFit$fromBootstrappedData(simulatedSI %>% group_by(between) %>% select(bootstrapNumber,siTo), valueExpr = siTo, method="mge") #method="qme", probs=seq(0.4,0.6,by = 0.02)) -->
+<!-- fig7 = simulatedSIFit$plot(xlim=c(-7,28))+xlab("Time interval") -->
+<!-- fig7 %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig7_TimeIntervalDistributionsBetweenObservation") -->
+<!-- ``` -->
+
+<!-- `r cap$fig("observation-interval","Time intervals between infector-infectee observations")` -->
+
+<!-- * Negative values for time intervals create poor gamma fit. -->
+<!-- * Source of bias when considering estimating R_t using observations other than onset (and since onset is typically not reported this means all). -->
+<!-- * EpiEstim assumes serial interval is >0 -->
+<!-- * Gostic et al. suggest approach in deconvolution / generation interval. No good estimates of generation interval exist - can be derived by deconvolution of serial interval -->
+<!-- * Assumption that serial interval >0 can be addressed in EpiEstim -->
+<!-- * Quantification of bias -->
+<!-- * ALternative approach is to use time interval between observations in lieu of SI  -->
+<!-- * Use truncated normal distributions to model -->
+<!-- * Understand that fraction of contributors to observed eventare not included in estimate -->
+
+<!-- `r cap$tab("trunc-norm","Truncated normal parametrisation of serial observation interval distributions for different observations")` -->
+
+<!-- ```{r table3} -->
+
+<!-- # thinking here about -->
+<!-- # tmp = simulatedSI %>% group_by(between,bootstrapNumber) %>% summarise( -->
+<!-- #   negativeFrac = sum(ifelse(siTo < 1,1,0))/n(), -->
+<!-- #   positiveFrac = sum(ifelse(siTo >= 1,1,0))/n(), -->
+<!-- #   mean1 = mean(siTo), -->
+<!-- #   sd1 = sd(siTo) -->
+<!-- # ) %>% group_by(between) %>% summarise( -->
+<!-- #   tibble( -->
+<!-- #     param = c("positive fraction","negative fraction","mean","sd"), -->
+<!-- #     mean = c(mean(positiveFrac),mean(negativeFrac),mean(mean1),mean(sd1)), -->
+<!-- #     sd = c(sd(positiveFrac),sd(negativeFrac),sd(mean1),sd(sd1)), -->
+<!-- #     lower = c(quantile(positiveFrac,0.025),quantile(negativeFrac,0.025),quantile(mean1,0.025),quantile(sd1,0.025)), -->
+<!-- #     upper = c(quantile(positiveFrac,0.975),quantile(negativeFrac,0.975),quantile(mean1,0.975),quantile(sd1,0.975)) -->
+<!-- #   ) -->
+<!-- # ) -->
+
+<!-- truncNorm = simulatedSI %>% group_by(between,bootstrapNumber) %>% summarise( -->
+<!--   mean1 = mean(siTo), -->
+<!--   sd1 = sd(siTo) -->
+<!-- ) %>% group_by(between) %>% summarise( -->
+<!--   meanOfMean = mean(mean1), -->
+<!--   sdOfMean =sd(mean1), -->
+<!--   lowerOfMean = quantile(mean1,0.025), -->
+<!--   upperOfMean = quantile(mean1,0.975), -->
+<!--   meanOfSd = mean(sd1), -->
+<!--   sdOfSd =sd(sd1), -->
+<!--   lowerOfSd = quantile(sd1,0.025), -->
+<!--   upperOfSd = quantile(sd1,0.975), -->
+<!-- ) %>% mutate( -->
+<!--   `Mode (95% CI)` = sprintf("%1.2f (%1.2f; %1.2f)",meanOfMean,lowerOfMean,upperOfMean), -->
+<!--   `SD (95% CI)` = sprintf("%1.2f (%1.2f; %1.2f)",meanOfSd,lowerOfSd,upperOfSd), -->
+<!-- )  -->
+<!-- truncNorm %>% write.csv(file=paste0(dpc$directory,"/","OBSERVATION_INTERVAL_TRUNC_NORM.csv")) -->
+<!-- ukCovidObservationIntervals = truncNorm -->
+<!-- usethis::use_data(ukCovidObservationIntervals, overwrite = TRUE) -->
+
+<!-- truncNorm %>% arrange(meanOfSd) %>% select(Observation=between,`Mode (95% CI)`,`SD (95% CI)`) %>%  -->
+<!--   standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table3_TruncatedNormal") -->
+
+
+<!-- si4 = SerialIntervalProvider$truncatedNormals(dpc) -->
+
+<!-- ``` -->
+
+<!-- * Negative values of time interval between observations not accounted for in EpiEstim. -->
+<!-- * We should anticipate this biases results using this estimation method as fraction of cases contributing to current obseved numbers of e.g. deaths have not themselves been observed.  -->
+<!-- * Underestimates number of infectors, therefore overestimates $R_t$. Size of overestimate depends on fraction of negative serial interval -->
+<!-- * Also depends on dynamics of infection - will tend to overestimate $R_t$ in situation where infection numbers rising, and get more accurate when infection numbers falling rapidly. -->
+<!-- * Shorter timescales show less effect. -->
+
+<!-- `r cap$tab("correction","Proportion of serial observation interval that is negative")` -->
+
+<!-- ```{r table4} -->
+
+<!-- corrFac = simulatedSIFit$calculateCumulativeDistributions(q = 0) %>%  -->
+<!--   filter(dist == "norm") %>% arrange(Mean.cumulative) %>% -->
+<!--   mutate( -->
+<!--     `Proportion negative SI (95% CI)` = sprintf("%1.2f (%1.2f; %1.2f)",Mean.cumulative, Quantile.0.025.cumulative, Quantile.0.975.cumulative), -->
+<!--     `Naive correction factor` = sprintf("%1.2f",1-Mean.cumulative), -->
+<!--   ) %>% -->
+<!--   ungroup() %>% -->
+<!--   select(`Time intervals between` = between, `Proportion negative SI (95% CI)`,`Naive correction factor`) -->
+<!-- corrFac %>% standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table4_CorrectionFactor") -->
+<!-- ukCovidCorrectionFactor = corrFac -->
+<!-- usethis::use_data(ukCovidCorrectionFactor, overwrite = TRUE) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+
+<!-- ff100ts = ukts %>% tsp$estimateRt(quick=FALSE, serialIntervalProvider=si3) %>% tsp$adjustRtDates(window = 0) -->
+<!-- resampledTs = ukts %>% tsp$estimateRt(quick=FALSE, serialIntervalProvider=si1) %>% tsp$adjustRtDates(window = 0,) -->
+<!-- midmarketTs = ukts %>% tsp$estimateRt(quick=FALSE, serialIntervalProvider=si2) %>% tsp$adjustRtDates(window = 0) -->
+<!-- truncNormTs = ukts %>% tsp$estimateRtWithAssumptions(quick=FALSE, serialIntervalProvider=si4) #%>% tsp$adjustRtDates() #%>% tsp$adjustRtCorrFac() #%>% tsp$adjustRtCorrFac()  -->
+
+<!-- tmp = bind_rows( -->
+<!--   ff100ts %>% mutate(source = "ff100"), -->
+<!--   resampledTs %>% mutate(source = "resampled"), -->
+<!--   midmarketTs %>% mutate(source = "midmarket"), -->
+<!--   #truncNormTs %>% mutate(source = "truncated normals") -->
+<!-- ) -->
+
+
+
+<!-- tmp %>% filter(statistic == "case") %>% tsp$plotRt(colour = source,events = events)+scale_color_brewer(palette = "Set1",guide="none")+facet_wrap(vars(source),ncol = 1) -->
+
+
+<!-- ``` -->
+
+<!-- * Use empirical resampled distribution of the serial interval and Lauer's estimates of the incubation period to estimate a distribution for the generation interval --> -->
+<!-- * THis is a deconvolution where difference of incubation period is error function -->
+
+<!-- ```{r} -->
+<!-- generationInterval = si1$bootstrapSamples %>% group_by(bootstrapNumber) %>% group_modify(function(d,g,...) { -->
+<!--   message(".",appendLF = FALSE) -->
+<!--   errors = incubDist %>% filter(from=="infection" & to =="onset" & bootstrapNumber==g$bootstrapNumber) %>% pull(delayOffset) -->
+<!--   tmp = deamer::deamerSE( -->
+<!--     y = d$value+runif(length(d$value),-0.5,0.5),  -->
+<!--     errors = errors, from = 0, to = 21, grid.length = 22) -->
+<!--   return(tibble( -->
+<!--     density = as.vector(tmp$f), -->
+<!--     x = tmp$supp -->
+<!--   )) -->
+<!-- }) -->
+
+
+<!-- pltGenInt = generationInterval %>% group_by(x) %>% summarise( -->
+<!--   y = mean(density), -->
+<!--   ymin1 = quantile(density,0.025), -->
+<!--   ymax1 = quantile(density,0.975), -->
+<!--   ymin2 = quantile(density,0.25), -->
+<!--   ymax2 = quantile(density,0.75) -->
+<!-- ) -->
+
+<!-- ggplot(pltGenInt,aes(x=x,y=y))+ -->
+<!--   geom_line()+ -->
+<!--   geom_ribbon(aes(ymin=ymin1,ymax=ymax1),alpha=0.1)+ -->
+<!--   geom_ribbon(aes(ymin=ymin2,ymax=ymax2),alpha=0.15) -->
+
+<!-- summary = generationInterval %>% group_by(bootstrapNumber) %>% mutate( -->
+<!--   mean1 = sum(x * density) -->
+<!--   ) %>% summarise( -->
+<!--     mean1 = first(mean1), -->
+<!--     sd1 = sqrt((x-mean1)^2 * generationInterval$density) -->
+<!--   ) %>% ungroup() %>% -->
+<!--   summarise( -->
+<!--     meanOfMean = mean(mean1), -->
+<!--     sdOfMean = sd(mean1), -->
+<!--     lowerOfMean = quantile(mean1,0.025), -->
+<!--     upperOfMean = quantile(mean1,0.975), -->
+<!--     meanOfSd = mean(sd1), -->
+<!--     sdOfSd = sd(sd1), -->
+<!--     lowerOfSd = quantile(sd1,0.025), -->
+<!--     upperOfSd = quantile(sd1,0.975), -->
+<!--   ) %>%  -->
+<!--   mutate( -->
+<!--     `Mean \U00B1 SD and 95% CI` = sprintf("%1.2f \U00B1 %1.2f (%1.2f; %1.2f)",meanOfMean, sdOfMean, lowerOfMean, upperOfMean), -->
+<!--     `SD \U00B1 SD and 95% CI` = sprintf("%1.2f \U00B1 %1.2f (%1.2f; %1.2f)",meanOfSd, sdOfSd, lowerOfSd, upperOfSd) -->
+<!--   ) -->
+
+<!-- ``` -->
+<!-- ## With an offset parameter ---- -->
+<!-- # TODO: to make this work properly we need to implement an offset gamma probability distribution family. -->
+
+<!-- # estimateParams = function(errors,predicted) { -->
+<!-- #    -->
+<!-- #   gridSearch = function(shapeLim=c(0.1,5),rateLim=c(0.1,15),offsetLim=c(0,4), grid = NULL) { -->
+<!-- #     #browser() -->
+<!-- #     shapeWidth=(shapeLim[2]-shapeLim[1])/10 -->
+<!-- #     rateWidth=(rateLim[2]-rateLim[1])/10 -->
+<!-- #     offsetWidth=(offsetLim[2]-offsetLim[1])/10 -->
+<!-- #     if(shapeWidth<0.0001) return(grid) -->
+<!-- #     for(shape in seq(shapeLim[1]+shapeWidth,shapeLim[2]-shapeWidth,length.out = 5)) { -->
+<!-- #       for(rate in seq(rateLim[1]+rateWidth,rateLim[2]-rateWidth,length.out = 5)) { -->
+<!-- #         for(offset in seq(offsetLim[1]+offsetWidth,offsetLim[2]-offsetWidth,length.out = 5)) { -->
+<!-- #           grid = grid %>% bind_rows( -->
+<!-- #             tibble( -->
+<!-- #               offset=offset, -->
+<!-- #               shape=shape, -->
+<!-- #               rate=rate, -->
+<!-- #               mlse=simSi(shape=shape,rate=rate,offset=offset,errorVec=errors,predicted=predicted) -->
+<!-- #             ) -->
+<!-- #           ) -->
+<!-- #         }   -->
+<!-- #       } -->
+<!-- #     } -->
+<!-- #     gridmin = grid %>% filter(mlse==min(mlse)) -->
+<!-- #     grid = gridmin %>% group_modify(function(d,g,..) { -->
+<!-- #       return(gridSearch( -->
+<!-- #         d$shape+c(-1,1)*shapeWidth, -->
+<!-- #         d$rate+c(-1,1)*rateWidth, -->
+<!-- #         d$offset+c(-1,1)*offsetWidth, -->
+<!-- #         grid -->
+<!-- #       )) -->
+<!-- #     }) -->
+<!-- #     return(grid %>% distinct()) -->
+<!-- #   } -->
+<!-- #    -->
+<!-- #   return(gridSearch() %>% filter(mlse == min(mlse))) -->
+<!-- # } -->
+<!-- #  -->
+<!-- # genInt2 = dpc$getHashCached(object = incubDist,operation = "GENERATION-INTERVAL-WITH-OFFSET",params = list(empiricalSis), orElse = function(...) { -->
+<!-- #   return( -->
+<!-- #     incubDist %>% group_by(bootstrapNumber) %>% group_modify(function(d,g,...) { -->
+<!-- #         #browser() -->
+<!-- #         errors = d$incubError -->
+<!-- #         actual = empiricalSis %>% filter(bootstrapNumber==g$bootstrapNumber) -->
+<!-- #         message(".",appendLF = FALSE) -->
+<!-- #         return(estimateParams(errors=errors,predicted=actual$density)) -->
+<!-- #     }) -->
+<!-- #   ) -->
+<!-- # }) -->
+<!-- #  -->
+<!-- # genInt2 = genInt2 %>% mutate(mean = shape/rate+offset, sd = sqrt(shape/(rate^2))) -->
+<!-- #  -->
+<!-- # genInt2Fit = DistributionFit$new() -->
+<!-- # genInt2Tmp = genInt2 %>% select(bootstrapNumber,shape,rate) %>% pivot_longer(cols = c(shape,rate), names_to = "param", values_to = "value") %>% mutate(dist="gamma") -->
+<!-- # genInt2Fit$fromBootstrappedDistributions(fittedDistributions = genInt2Tmp) -->
+<!-- #  -->
+<!-- # genInt2Fit$shifted = -mean(genInt2$offset) -->
+
+
+<!-- ```{r} -->
+<!-- empiricalSis = si1$bootstrapSamples %>% -->
+<!--   group_by(bootstrapNumber) %>% -->
+<!--   group_modify(function(d,g,...) { -->
+<!--     tmp = density(d$value, from=-7, to=28,bw = 0.5) -->
+<!--     return(tibble(value = tmp$x, density = tmp$y)) -->
+<!--   }) -->
+
+<!-- # TODO: predicted is assumed here to be a density of length 512 e.g. from lines above. -->
+<!-- # could make this more generic and into an empirical probability distribution matching algorithm -->
+<!-- simSi = function(shape, rate, offset, errorVec, predicted) { -->
+<!--   #browser() -->
+<!--   N = length(errorVec) -->
+<!--   genSim = rgamma(N*100,shape,rate = rate)+offset+rep(errorVec,100) -->
+<!--   tmp = density(genSim, from=-7, to=28,bw = 0.5) -->
+<!--   return( -->
+<!--     #tibble(value=tmp$x, density = tmp$y) -->
+<!--     sqrt(mean((tmp$y - predicted)^2)) # this is RMSE - would log of RMSE be better? -->
+<!--     # TODO: match moments rather than distributions? -->
+<!--   ) -->
+<!-- } -->
+
+<!-- # For some reason the attempts to find these shape / rate / offset parameters fails -->
+<!-- # when using optim -->
+<!-- # # estimateParamsOptim = function(errors,actual) { -->
+<!-- # -->
+<!-- #   optimFunc = function(x) simSi(shape=x[1], rate=x[2], offset=x[3], errorVec = errors, predicted = actual) -->
+<!-- #   out = optim(par = c(2,2,2), fn = optimFunc, lower = c(0,0,0), method = "L-BFGS-B") -->
+<!-- #   TODO: assemble results into dataframe with shape, rate, offset. -->
+<!-- # } -->
+<!-- # this seems to hit local minima and get stuck -->
+<!-- # Or possibly the first derivative is not well defined as depending on rgamma with shape and rate -->
+<!-- # -->
+
+
+<!-- ## Without an offset parameter ---- -->
+
+<!-- estimateParamsNoOffset = function(errors,predicted) { -->
+
+<!--   gridSearch = function(shapeLim=c(0.1,5),rateLim=c(0.1,15), grid = NULL) { -->
+<!--     #browser() -->
+<!--     shapeWidth=(shapeLim[2]-shapeLim[1])/10 -->
+<!--     rateWidth=(rateLim[2]-rateLim[1])/10 -->
+<!--     if(shapeWidth<0.0001) return(grid) -->
+<!--     for(shape in seq(shapeLim[1]+shapeWidth,shapeLim[2]-shapeWidth,length.out = 5)) { -->
+<!--       for(rate in seq(rateLim[1]+rateWidth,rateLim[2]-rateWidth,length.out = 5)) { -->
+<!--         grid = grid %>% bind_rows( -->
+<!--           tibble( -->
+<!--             shape=shape, -->
+<!--             rate=rate, -->
+<!--             mlse=simSi(shape=shape,rate=rate,offset=0,errorVec=errors,predicted=predicted) -->
+<!--           ) -->
+<!--         ) -->
+<!--       } -->
+<!--     } -->
+<!--     gridmin = grid %>% filter(mlse==min(mlse)) -->
+<!--     grid = gridmin %>% group_modify(function(d,g,..) { -->
+<!--       return(gridSearch( -->
+<!--         d$shape+c(-1,1)*shapeWidth, -->
+<!--         d$rate+c(-1,1)*rateWidth, -->
+<!--         grid -->
+<!--       )) -->
+<!--     }) -->
+<!--     return(grid %>% distinct()) -->
+<!--   } -->
+
+<!--   return(gridSearch() %>% filter(mlse == min(mlse)) %>% mutate(offset=0)) -->
+<!-- } -->
+
+<!-- # errors = incubDist %>% filter(bootstrapNumber==8) %>% pull(incubError) -->
+<!-- # actual = empiricalSis %>% filter(bootstrapNumber==8) %>% pull(density) -->
+<!-- # tmp = estimateParams(errors=errors,predicted=actual) -->
+
+<!-- incubFit = bopFit$clone() -->
+<!-- incubFit$filterModels(aic == min(aic)) -->
+<!-- incubFit$bootstraps = incubFit$bootstraps %>% filter(bootstrapNumber <= 100) -->
+
+<!-- # generate a set of samples from best fitting incubation period distribution -->
+<!-- # get samples from incubation and split into 2 groups - one for index patient and one for affected patient -->
+<!-- incubFit$generateSamples(sampleExpr = 2000,seed = 101) -->
+<!-- incubSamples = incubFit$samples %>% -->
+<!--   mutate(sampleCat = (sampleNumber-1) %/% 1000 + 1, sampleNumber = ((sampleNumber-1) %% 1000)+1) %>% -->
+<!--   pivot_wider(names_from = sampleCat, values_from = value, names_prefix = "incub") -->
+<!-- incubDist = incubSamples %>% mutate(delayOffset = incub2, incubError = incub1-incub2, transition = "infection to onset", from="infection", to = "onset") -->
+
+<!-- genIntTmp = dpc$getHashCached(object = incubDist,operation = "GENERATION-INTERVAL-NO-OFFSET",params = list(empiricalSis), orElse = function(...) { -->
+<!--   genInt = -->
+<!--     incubDist %>% group_by(bootstrapNumber) %>% group_modify(function(d,g,...) { -->
+<!--       #browser() -->
+<!--       errors = d$incubError -->
+<!--       actual = empiricalSis %>% filter(bootstrapNumber==g$bootstrapNumber) -->
+<!--       message(".",appendLF = FALSE) -->
+<!--       return(estimateParamsNoOffset(errors=errors,predicted=actual$density)) -->
+<!--     }) -->
+<!--   genInt = genInt %>% mutate(mean = shape/rate, sd = sqrt(shape/(rate^2))) -->
+<!--   generationIntervalSimulation = genInt %>% select(bootstrapNumber,shape,rate) %>% pivot_longer(cols = c(shape,rate), names_to = "param", values_to = "value") %>% mutate(dist="gamma") -->
+<!--   usethis::use_data(generationIntervalSimulation, overwrite = TRUE) -->
+<!--   return(generationIntervalSimulation) -->
+<!-- }) -->
+
+<!-- si4 = SerialIntervalProvider$generationInterval(dpc,bootstrapsDf = genIntTmp) -->
+<!-- ``` -->

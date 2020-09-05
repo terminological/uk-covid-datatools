@@ -1,6 +1,6 @@
-#reticulate::install_miniconda()
-#reticulate::conda_create("r-tensorflow", packages=c("python=3.7","tensorflow=1.14","pyyaml","requests","Pillow","pip","numpy=1.16"))
-#reticulate::py_install("tensorflow-probability=0.7", "r-tensorflow")
+reticulate::install_miniconda()
+reticulate::conda_create("r-tensorflow", packages=c("python=3.7","tensorflow=1.14","pyyaml","requests","Pillow","pip","numpy=1.16"))
+reticulate::py_install("tensorflow-probability=0.7", "r-tensorflow")
 reticulate::use_condaenv(condaenv = 'r-tensorflow', required = TRUE)
 #install.packages("greta")
 

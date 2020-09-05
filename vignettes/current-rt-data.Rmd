@@ -84,12 +84,21 @@ Processing: `r proc("CTRY","triage")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(finalCasesCTRY, denominatorExpr = population/1000000, events = events)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
-  p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig3_casesCTRY")
+  p=tsp$plotIncidenceQuantiles(casesCTRY, denominatorExpr = population/1000000, events = events, colour = source)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
+  p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig3a_casesCTRY")
 })
 ```
 
 Sources: `r datasrc("CTRY","case")`
+
+## Cases - CTRY (continued...)
+
+```{r}
+with(currentRt$source, {
+  p=tsp$plotIncidenceQuantiles(finalCasesCTRY, denominatorExpr = population/1000000, events = events)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
+  p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig3b_finalCasesCTRY")
+})
+```
 
 Processing: `r proc("CTRY","case")`
 
