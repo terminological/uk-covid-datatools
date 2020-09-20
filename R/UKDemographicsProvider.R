@@ -278,13 +278,13 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
     df6 = self$getHashCached(object = df2, operation = "FIND_DEMOGRAPHICS",..., orElse = function(df2,...) {
     # normalise the age range representation and convert to upper and lower bound
       df2 = df2 %>% 
-        dplyr::mutate(tmp_ageCat = ageCat %>% stringr::str_replace(">([0-9]+)","\\1-120") %>% stringr::str_replace("<([0-9]+)","0-\\1") %>% stringr::str_replace("([0-9]+)\\+","\\1-120")) %>%
-        dplyr::mutate(tmp_ageCat = ifelse(is.na(tmp_ageCat) | tmp_ageCat=="unknown","0-120",tmp_ageCat)) %>%
+        dplyr::mutate(tmp_ageCat = ageCat %>% as.character() %>% stringr::str_replace(">([0-9]+)","\\1-120") %>% stringr::str_replace("<([0-9]+)","0-\\1") %>% stringr::str_replace("([0-9]+)\\+","\\1-120")) %>%
+        dplyr::mutate(tmp_ageCat = ifelse(is.na(tmp_ageCat) | stringr::str_to_lower(tmp_ageCat)=="unknown","0-120",tmp_ageCat)) %>%
         tidyr::separate(col = tmp_ageCat, into=c("tmp_ageMin","tmp_ageMax"), sep="[^0-9]+") %>% 
         dplyr::mutate(tmp_ageMin = as.integer(tmp_ageMin),tmp_ageMax = as.integer(tmp_ageMax)) %>%
         dplyr::mutate(
-          tmp_ageMax = ifelse(isTRUE(ageCat %>% stringr::str_detect("<([0-9]+)")), tmp_ageMax-1, tmp_ageMax),
-          tmp_ageMin = ifelse(isTRUE(ageCat %>% stringr::str_detect(">([0-9]+)")), tmp_ageMin+1, tmp_ageMin)
+          tmp_ageMax = ifelse(!is.na(ageCat) & ageCat %>% stringr::str_detect("<([0-9]+)"), tmp_ageMax-1, tmp_ageMax),
+          tmp_ageMin = ifelse(!is.na(ageCat) & ageCat %>% stringr::str_detect(">([0-9]+)"), tmp_ageMin+1, tmp_ageMin)
         )
       
       
@@ -315,9 +315,11 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
       
       df6 = df5 %>%
         dplyr::summarise(population = sum(count))
+      
+      browser(expr = self$debug)
       return(df6)
     })
-    browser(expr = self$debug)
+    
     # combine output with input
     out = df %>% left_join(df6, by=c("code","gender","ageCat","codeType"))
     return(out)

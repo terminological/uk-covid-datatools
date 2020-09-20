@@ -172,7 +172,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       browser(expr=self$debug)
       if(loader$simplify) map = suppressWarnings(map %>% sf::st_simplify(dTolerance=0.001))
       map = self$standardiseMap(map, !!loader$codeCol, !!loader$nameCol, !!loader$altCodeCol, mapId)
-      return(map %>% dplyr::group_by(code,name))
+      return(map %>% ungroup()) #dplyr::group_by(code,name))
     })
   },
   
@@ -183,7 +183,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         self$getMap("LAD19") %>% dplyr::filter(code %>% stringr::str_starts("E")),
         self$getMap("SHB19"), 
         self$getMap("LHB19")
-      ) %>% dplyr::group_by(code,name))
+      ) %>% dplyr::ungroup()) #group_by(code,name))
   })},
   
   

@@ -53,6 +53,7 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     self$codes$getCodes(nocache=TRUE)
     self$codes$getMappings(nocache=TRUE)
     self$codes$getTransitiveClosure(nocache=TRUE)
+    invisible(self)
   },
   
   updateSPIMDatasets = function() {
@@ -62,6 +63,7 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     self$spim$getOneOneOne(nocache=TRUE)
     self$spim$getSeroprevalence(nocache=TRUE)
     self$spim$getSPIMextract(nocache=TRUE)
+    invisible(self)
   },
   
   updateDatasets = function() {
@@ -70,6 +72,7 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     self$datasets$getPublicOneOneOne(nocache=TRUE)
     self$datasets$getTomWhiteCases(nocache=TRUE)
     self$datasets$getTomWhiteIndicators(nocache=TRUE)
+    invisible(self)
   },
   
   timeseriesProcessor = function(...) {

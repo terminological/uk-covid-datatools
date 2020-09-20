@@ -563,7 +563,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     #   #years = filename %>% stringr::str_remove_all("_") %>% stringr::str_extract("([0-9]{4})") %>% as.integer()
     #   #years = ifelse(is.na(years),2017,years)
     #   
-    #   UKILIdata = read_csv("~/Git/uk-covid-datatools/data-raw/ilidata.csv")
+    #   UKILIdata = readr::read_csv("~/Git/uk-covid-datatools/data-raw/ilidata.csv")
     #   processed = paste0("~/Git/uk-covid-datatools/data-raw/ILI/",unique(UKILIdata$filename))
     #   unprocessed = !(filenames %in% processed)
     #   unprocessedFilenames = filenames[unprocessed]

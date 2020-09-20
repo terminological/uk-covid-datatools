@@ -133,7 +133,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     mapping = self$codes$getTransitiveClosure() %>% 
       dplyr::filter(toCodeType %in% targetCodeTypes) %>%
       dplyr::semi_join(tmp, by=c("fromCode" = "code")) %>%
-      dplyr::select(fromCode,fromCodeType, toCode,-toCodeType) %>%
+      dplyr::select(fromCode,toCode) %>%
       self$codes$findNamesByCode(codeVar = toCode, outputNameVar = toName, outputCodeTypeVar = toCodeType) %>%
       dplyr::distinct()
     if(nrow(mapping)==0) stop("no route to target code types in transitive closure.")
@@ -152,9 +152,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     tmp3 = tmp3 %>%
       dplyr::group_modify(function(d,g,...) {
           # targets with no sources in the map:
-          nosource = mapping %>% dplyr::filter(fromCodeType==g$fromCodeType & toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="toCode")
+          nosource = mapping %>% dplyr::filter(toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="toCode")
           # sources with no targets in the map:
-          notarget = mapping %>% dplyr::filter(fromCodeType==g$fromCodeType & toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="fromCode")
+          notarget = mapping %>% dplyr::filter(toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="fromCode")
           #TODO: There are lots of edge cases here.
           mapped = d %>% 
             dplyr::filter(!is.na(fromCode) & !is.na(toCode)) %>% 
@@ -298,7 +298,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' 
   #' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
   
-  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, window = 14,...) {covidTimeseriesFormat %def% {
+  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, window = 14) {covidTimeseriesFormat %def% {
     smoothExpr = enexpr(smoothExpr)
     smoothLabel = as_label(smoothExpr)
     if (smoothLabel == "value") warning("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
@@ -311,7 +311,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::mutate(
         y = !!smoothExpr
       ) %>%
-      self$completeAndRemoveAnomalies(valueVar=y, originalValueVar = y_orig, ...) %>%
+      self$completeAndRemoveAnomalies(valueVar=y, originalValueVar = y_orig) %>%
       dplyr::mutate(
         x = as.integer(date-min(date)),
       ) %>%
@@ -372,57 +372,73 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 
   #### calculate baskets of stats ----
   
-  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,...) {covidTimeseriesFormat %def% {
+  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,...) {
     valueVar = ensym(valueVar)
-    
-    tmp = covidTimeseriesFormat(covidTimeseries)  %>% 
-      ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must have incidence totals") %>%
-      dplyr::filter(type=="incidence")
-    
-    logExpr = expr(log(!!valueVar+1))
-    
-    lbl = function(pref) return(paste0(pref,".",as_label(logExpr)))
-    lblV = function(pref) return(paste0(pref,".",as_label(valueVar)))
-    
-    if (lblV("Growth") %in% colnames(covidTimeseries)) {
-      # this has already been done
-      return(covidTimeseries) 
-    }
-    
-    tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow,...)
-    
-    tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
-    tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
-    
-    tmp$interceptDate = as.Date(tmp$date - tmp[[lbl("Est")]]/tmp[[lbl("Slope")]])
-    tmp$doublingTime = log(2)/tmp[[lblV("Growth")]]
-    
-    meanLbl = lbl("Est")
-    sdLbl = lbl("Est.SE")
-    q = qnorm(c(0.025,0.25,0.5,0.75,0.975))
-    fn = function(i) return(exp(tmp[[meanLbl]]+q[i]*tmp[[sdLbl]])-1)
-    
-    tmp[[lblV("Est")]] = exp(tmp[[meanLbl]])-1
-    tmp[[lblV("Est.Quantile.0.025")]] = fn(1)
-    tmp[[lblV("Est.Quantile.0.25")]] = fn(2)
-    tmp[[lblV("Est.Quantile.0.5")]] = fn(3)
-    tmp[[lblV("Est.Quantile.0.75")]] = fn(4)
-    tmp[[lblV("Est.Quantile.0.975")]] = fn(5)
-    
-    tmp[["tmp_gv"]] = tmp[[lblV("Growth")]]
-    tmp[["tmp_gv.se"]] = tmp[[lblV("Growth.SE")]]
-    
-    tmp = tmp %>% 
-      covidStandardGrouping() %>% 
-      dplyr::mutate(
-          !!lblV("Growth.windowed") := stats::filter(x = tmp_gv, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1),
-          !!lblV("Growth.windowed.SE") := stats::filter(x = tmp_gv.se, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1) / sqrt(growthRateWindow),
-          !!lblV("Growth.windowed.Window") := growthRateWindow
-      ) %>% 
-      dplyr::select(-tmp_gv, -tmp_gv.se)
+    self$getHashCached(object = covidTimeseries, operation="LOG-INCIDENCE", params=list(as_label(valueVar),growthRateWindow,smoothingWindow), ... , orElse = function (...) {covidTimeseriesFormat %def% {
       
-    return(tmp %>% ungroup())
-  }},
+      tmp = covidTimeseriesFormat(covidTimeseries)  %>% 
+        ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must have incidence totals") %>%
+        dplyr::filter(type=="incidence")
+      
+      logExpr = expr(log(!!valueVar+1))
+      
+      lbl = function(pref) return(paste0(pref,".",as_label(logExpr)))
+      lblV = function(pref) return(paste0(pref,".",as_label(valueVar)))
+      
+      if (lblV("Growth") %in% colnames(covidTimeseries)) {
+        # this has already been done
+        return(covidTimeseries) 
+      }
+      
+      tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow)
+      
+      tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
+      tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
+      tmp[[lblV("Growth.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]])
+      
+      tmp$interceptDate = as.Date(tmp$date - tmp[[lbl("Est")]]/tmp[[lbl("Slope")]])
+      
+      tmp$doublingTime = log(2)/tmp[[lblV("Growth")]]
+      tmp$doublingTime.Quantile.0.025 = log(2)/qnorm(mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]],p = 0.975)
+      tmp$doublingTime.Quantile.0.25 = log(2)/qnorm(mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]],p = 0.75)
+      tmp$doublingTime.Quantile.0.75 = log(2)/qnorm(mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]],p = 0.25)
+      tmp$doublingTime.Quantile.0.975 = log(2)/qnorm(mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]],p = 0.025)
+      
+      meanLbl = lbl("Est")
+      sdLbl = lbl("Est.SE")
+      q = qnorm(c(0.025,0.25,0.5,0.75,0.975))
+      fn = function(i) return(exp(tmp[[meanLbl]]+q[i]*tmp[[sdLbl]])-1)
+      
+      tmp[[lblV("Est")]] = exp(tmp[[meanLbl]])-1
+      tmp[[lblV("Est.Quantile.0.025")]] = fn(1)
+      tmp[[lblV("Est.Quantile.0.25")]] = fn(2)
+      tmp[[lblV("Est.Quantile.0.5")]] = fn(3)
+      tmp[[lblV("Est.Quantile.0.75")]] = fn(4)
+      tmp[[lblV("Est.Quantile.0.975")]] = fn(5)
+      
+      tmp[["tmp_gv"]] = tmp[[lblV("Growth")]]
+      tmp[["tmp_gv.se"]] = tmp[[lblV("Growth.SE")]]
+      
+      tmp = tmp %>% 
+        covidStandardGrouping() %>% 
+        dplyr::mutate(
+            !!lblV("Growth.windowed") := stats::filter(x = tmp_gv, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1),
+            !!lblV("Growth.windowed.SE") := stats::filter(x = tmp_gv.se, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1) / sqrt(growthRateWindow),
+            !!lblV("Growth.windowed.Window") := growthRateWindow
+        ) %>% 
+        dplyr::select(-tmp_gv, -tmp_gv.se)
+      
+      tmp$doublingTime.windowed = log(2)/tmp[[lblV("Growth.windowed")]]
+      tmp$doublingTime.windowed.Quantile.0.025 = log(2)/qnorm(mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]],p = 0.975)
+      tmp$doublingTime.windowed.Quantile.0.25 = log(2)/qnorm(mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]],p = 0.75)
+      tmp$doublingTime.windowed.Quantile.0.75 = log(2)/qnorm(mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]],p = 0.25)
+      tmp$doublingTime.windowed.Quantile.0.975 = log(2)/qnorm(mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]],p = 0.025)
+      
+      tmp[[lblV("Growth.windowed.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]])
+        
+      return(tmp %>% ungroup())
+    }})
+  },
   
   estimateGrowthRate = function(covidTimeseries, window = self$rtWindow, ...) {
     self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(window), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {

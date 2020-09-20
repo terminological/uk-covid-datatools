@@ -237,15 +237,33 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
       
       out = out %>% bind_rows(
         tibble(
-          code = c("E99999999","W99999999","S99999999","N99999999","L99999999","M99999999"),
-          name = c("Unknown (England)","Unknown (Wales)","Unknown (Scotland)","Unknown (Northern Ireland)","Unknown (Channel Islands)","Unknown (Isle of Man)"),
+          code = c("E99999999","W99999999","S99999999","N99999999","L99999999","M99999999","K99999999"),
+          synonym = c("Unknown (England)","Unknown (Wales)","Unknown (Scotland)","Unknown (Northern Ireland)","Unknown (Channel Islands)","Unknown (Isle of Man)","Unknown (UK)"),
           start = as.Date("1970-01-01"),
           end = as.Date(NA),
-          parent = c("E92000001","W92000004","S92000003","N92000001",NA,NA),
-          entity = c("PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO"),
-          codeType = c("PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO","PSEUDO"),
-          status = "live"
-        )
+          parent = c("E92000001","W92000004","S92000003","N92000001",NA,NA,NA),
+          entity = "PSEUDO",
+          codeType = "PSEUDO"
+        ) %>% left_join(
+          tribble(
+            ~synonym, ~name, ~status,
+            "Unknown (England)", "Unknown (England)", "live",
+            "Unknown (England)", "England: Unknown", "terminated",
+            "Unknown (England)", "England: Other", "terminated",
+            "Unknown (Wales)", "Unknown (Wales)", "live",
+            "Unknown (Wales)", "Wales: Unknown", "terminated",
+            "Unknown (Wales)", "Wales: Other", "terminated",
+            "Unknown (Scotland)", "Unknown (Scotland)", "live",
+            "Unknown (Scotland)", "Scotland: Unknown", "terminated",
+            "Unknown (Scotland)", "Scotland: Other", "terminated",
+            "Unknown (Northern Ireland)", "Unknown (Northern Ireland)", "live",
+            "Unknown (Channel Islands)", "Unknown (Channel Islands)", "live",
+            "Unknown (Isle of Man)", "Unknown (Isle of Man)", "live",
+            "Unknown (UK)", "Unknown (UK)", "live",
+            "Unknown (UK)", "Unknown", "terminated"
+          ),by="synonym") %>% 
+          select(-synonym)
+        
       )
       
       scot_register = self$download("SCOT_REGISTER",url="https://www2.gov.scot/Resource/0054/00547737.xlsx",type="xlsx")
@@ -281,7 +299,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
   
   getManualMappings = function(...) {
     self$getSaved("MANUAL_CODE_MAPPINGS",...,orElse = function(...) {
-      idMapping <- read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=1853095988&single=true&output=csv","&nocache=",sample(1:1000000,1)))
+      idMapping = readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=1853095988&single=true&output=csv","&nocache=",sample(1:1000000,1)))
       idMapping = idMapping %>% 
         dplyr::rename(fromCode = fromId, toCode=toId, fromCodeType = fromType, toCodeType = toType) %>% 
         #dplyr::mutate(rel="synonym") %>%
@@ -348,10 +366,10 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
                              col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
       eccg = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",
-                             col_names = standardFormat,col_types = readr::cols(.default=col_character())) %>% 
+                             col_names = standardFormat,col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
       eauth = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
-                              col_names = standardFormat,col_types = readr::cols(.default=col_character())) %>% 
+                              col_names = standardFormat,col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
       
       combined = dplyr::bind_rows(
@@ -390,7 +408,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
   
   getManualCodes = function(...) {
     tmp = self$getSaved("MANUAL_CODE_LIST",..., orElse = function(...) {
-      gbHospitals <- readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=128715098&single=true&output=csv","&nocache=",sample(1:1000000,1)))
+      gbHospitals = readr::read_csv(paste0("https://docs.google.com/spreadsheets/d/e/2PACX-1vQj6X8rIlBlsD5bK-PMcBT9wjAWh60dTTJLfuczqsiKnYzYiN_4KjYAh4HWWkf4v1RH6ih7C78FhdiN/pub?gid=128715098&single=true&output=csv","&nocache=",sample(1:1000000,1)))
       tmp = gbHospitals %>% dplyr::mutate(
         start = as.Date("2019-01-01"),
         end = NA,
@@ -461,26 +479,27 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
         dplyr::select(fromCode = code, fromCodeType = codeType) %>% 
         dplyr::mutate(toCode = fromCode, toCodeType = fromCodeType, distance=0, path=paste0(fromCodeType,"-",fromCodeType))
       mappings = self$getMappings() %>% 
+        dplyr::mutate(distance = ifelse(rel=="synonym",0,1)) %>%
         dplyr::select(-rel, -weight) %>% 
-        dplyr::semi_join(self$getCodes(), by=c("toCode"="code"))
+        dplyr::semi_join(self$getCodes() %>% filter(status=="live"), by=c("toCode"="code"))
       out = out %>% dplyr::bind_rows(
-        mappings %>% dplyr::mutate(distance = 0, path = paste0(fromCodeType,"-",toCodeType))
+        mappings %>% dplyr::mutate(path = paste0(fromCodeType,"-",toCodeType))
       ) 
+      map = mappings %>% dplyr::select(joinCode = fromCode, toCode, toCodeType) %>% dplyr::distinct()
       tmp = out
       while(nrow(tmp) > 0) {
         message("building transitive closure; rows in this iteration: ",nrow(tmp))
         browser(expr=self$debug)
         tmp = tmp %>% 
           dplyr::rename(joinCode = toCode, joinCodeType = toCodeType) %>% 
-          dplyr::inner_join(
-            mappings %>% dplyr::rename(joinCode = fromCode) %>% dplyr::select(-fromCodeType),# joinCodeType = fromCodeType),# %>% dplyr::filter(rel=="parent"), 
-            by=c("joinCode") #,"joinCodeType")
+          dplyr::inner_join( 
+            map, by=c("joinCode")
           ) %>%  dplyr::mutate(
             distance = distance+1,
             path = paste0(path,"-",toCodeType)
           ) %>% dplyr::select(-joinCode,-joinCodeType)
         
-        tmp = tmp %>% dplyr::group_by(fromCode,toCode) %>% filter(path==min(path)) %>% ungroup()
+        tmp = tmp %>% dplyr::group_by(fromCode,toCode) %>% filter(length(path)==min(length(path))) %>% filter(row_number()==1) %>% ungroup()
         tmp = tmp %>% dplyr::anti_join(out, by=c("fromCode","toCode"))
         
         out = out %>% dplyr::bind_rows(tmp)
@@ -554,10 +573,15 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
     
     tmp4 = tmp2 %>% 
       dplyr::semi_join(tmp3, by="tmp_name") %>% 
-      dplyr::select(code,codeType,tmp_name) %>% 
+      dplyr::select(code,codeType,tmp_name,start,priority) %>% 
       dplyr::distinct() %>%
-      dplyr::inner_join(self$getCodes(live=TRUE),by=c("code","codeType")) %>%
-      dplyr::select(code,codeType,name,tmp_name) %>% 
+      dplyr::inner_join(self$getCodes(),by=c("code","codeType")) %>%
+      dplyr::select(code,codeType,name,tmp_name,start,priority,status) %>% 
+      dplyr::mutate(live = ifelse(status=="live",1,0)) %>%
+      dplyr::group_by(tmp_name) %>%
+      dplyr::arrange(desc(live),desc(start),desc(priority)) %>% 
+      dplyr::filter(row_number()==1) %>%
+      dplyr::ungroup() %>% dplyr::select(-start,-priority,-status,-live) %>%
       dplyr::rename(!!nameVar := name, !!outputCodeVar := code)
     if(identical(outputCodeTypeVar,NULL)) {
       tmp4 = tmp4 %>% dplyr::select(-codeType)

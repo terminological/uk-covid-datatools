@@ -84,7 +84,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     getSpecificDates = function(search, dates) {
       tmp2 = self$getPaths() %>% stringr::str_subset(search)
-      tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-") %>% as.Date("%Y%m%d")
+      tmp2Date = tmp2 %>% stringr::str_extract("/([^/]+)\\.") %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-") %>% as.Date("%Y%m%d")
       tmp3 = tmp2[tmp2Date %in% dates]
       if(length(tmp3)==0) {
         warning("Missing file: ",search)
@@ -95,12 +95,46 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     #### Get raw SPIM files ----
     
+    
+    getOneOneOneLineList = function(dateFrom=Sys.Date()-28, ...) {
+      self$getDaily(id = "SPIM-111-LINE-LIST",params=list(dateFrom),...,orElse= function(...) {
+        paths = self$getNewerThan(search = self$filter$oneOneOneLineList, date = dateFrom)
+        tmp = lapply(paths, function(x) readr::read_csv(x, col_types = readr::cols(.default = readr::col_character())))
+        tmp2 = bind_rows(tmp)
+        tmp3 = tmp2 %>% mutate(
+            date = as.Date(DateVal),
+            name = case_when(
+              CCGName == "NHS Herefordshire and Worcestershire CCG" ~ "NHS Herefordshire CCG", # this name is not in ONS
+              TRUE ~ CCGName
+            ),
+            ageCat = stringr::str_remove(AgeGroup,"age"),
+            source = "111",
+            subgroup = case_when(
+              MetricName %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
+              MetricName %like% "PC Speak to 1h/CAS" ~ "urgent clinical review",
+              MetricName %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
+              MetricName %like% "PC Speak to/Contact 2h" ~ "urgent clinical review",
+              MetricName %like% "%Clinical Assessment%" ~ "clinical review",
+              MetricName %like% "%Contact%" ~ "clinical review",
+              MetricName %like% "%Ambulance%" ~ "emergency ambulance",
+              (MetricName %like% "%Self Care%" | MetricName %like% "%isolate%") ~ "self care",
+              TRUE ~ "other" #as.character(NA)
+            ),
+            gender = NA_character_,
+            note = MetricName
+          ) %>% 
+          select(-MetricCode,-DateVal,-AgeGroup,-CCGName,-MetricName) %>%
+          dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE)) %>%
+          self$codes$findCodesByName(codeTypes = c("CCG","CCG20"))
+        return(tmp3 %>% select(-name.original))
+      })
+      #ccgs = self$codes$getCodes() %>% filter(codeType == "CCG" & status == "live")
+    },
+    
     #' @description Load line list
     #' 
     #' @param path - path to the line list file
-    
     #' @return raw line list data set
-    
     getDeathsLineList = function(...) {
       path = self$getLatest(self$filter$deathsLineList)
       self$getDaily("DEATHS-LINE-LIST", ..., orElse = function (...) {
@@ -128,15 +162,28 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     getLineList = function(...) {
       path = self$getLatest(self$filter$lineList)
       self$getDaily("LINE-LIST", ..., orElse = function (...) {
-        tmp = readxl::read_excel(path.expand(path), 
-                                 col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
-        tmp = tmp %>% 
-          dplyr::mutate(
-            Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
-            specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
-            lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30")),
-            age = suppressWarnings(as.numeric(age)),
-          )
+        if (stringr::str_detect(path,"csv")) {
+          tmp = readr::read_csv(path, col_types = readr::cols(.default = readr::col_character()))
+          tmp = tmp %>% 
+            dplyr::mutate(
+              Onsetdate = suppressWarnings(as.Date(Onsetdate,"%m/%d/%Y")),
+              specimen_date = suppressWarnings(as.Date(specimen_date,"%m/%d/%Y")),
+              lab_report_date = suppressWarnings(as.Date(lab_report_date,"%m/%d/%Y")),
+              age = suppressWarnings(as.numeric(age)),
+            ) 
+          if(any(is.na(tmp$specimen_date))) browser()
+        } else {
+          tmp = readxl::read_excel(path.expand(path), 
+                   col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
+          tmp = tmp %>% 
+            dplyr::mutate(
+              Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
+              specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
+              lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30")),
+              age = suppressWarnings(as.numeric(age)),
+            )
+        }
+        
         return(tmp %>% dplyr::ungroup())
       })
       
@@ -1145,7 +1192,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     getCHESSSummary = function() {
       path = self$getLatest(self$filter$chessSummary)
-      read_csv(path, col_types = readr::cols(
+      readr::read_csv(path, col_types = readr::cols(
         DateRange = readr::col_date("%d-%m-%Y"),
         DateOfAdmission = readr::col_date("%d-%m-%Y"),
         YearofAdmission = readr::col_integer(),
@@ -1187,7 +1234,18 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           days_of_symptoms_before_ad)
     },
     
-    
+    getOneOneOneIncidence = function(dateFrom=Sys.Date()-28, ...) {
+      self$getDaily("SPIM-111-BREAKDOWN", params=list(dateFrom), ..., orElse = function(...) covidTimeseriesFormat({
+        tmp3 = self$getOneOneOneLineList(dateFrom,...)
+        tmp4 = tmp3 %>% 
+          dplyr::filter(!is.na(code)) %>%
+          dplyr::group_by(code,codeType,name,date,ageCat, gender,subgroup) %>% 
+          dplyr::summarise(value = n()) %>% 
+          dplyr::mutate(source="111 line list",statistic = "triage", type="incidence") %>%
+          self$fillAbsentAllRegions() %>% self$completeAllRegions()
+        return(tmp4)
+      })) 
+    },
     
     #' @description Load incidence from line list
     #' 
@@ -1244,7 +1302,6 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           self$fillAbsent() %>%
           #tidyr::complete(tidyr::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
           dplyr::ungroup()
-        
         return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
       }))
     },
@@ -1252,9 +1309,10 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @description Load deaths data from linelist - does not preserve ethnicity
     #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
     #' @return a covidTimeseriesFormat dataframe
-    getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", ...) {
-      self$getDaily(id = "DEATHS-LINE-LIST-INCIDENCE", params=list(ageBreaks, deathOrReport), ..., orElse = function (...) covidTimeseriesFormat({
+    getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", cutoff=60, ...) {
+      self$getDaily(id = "DEATHS-LINE-LIST-INCIDENCE", params=list(ageBreaks, deathOrReport,cutoff), ..., orElse = function (...) covidTimeseriesFormat({
         tmp = self$getDeathsLineList(...) %>% 
+          dplyr::filter(is.na(specimen_date) | as.integer(dod-specimen_date)<cutoff) %>%
           dplyr::mutate(
             ageCat = age %>% self$cutByAge(ageBreaks), 
             subgroup=ifelse(is.na(ons_pod),"unknown",ons_pod), 
@@ -1460,7 +1518,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             subgroup = variable
           )
         tmp3 = tmp2 %>% dplyr::select(-DateVal,-name.original, -variable) %>% mutate(ageCat=NA,gender=NA)
-        tmp4 = tmp3 %>% filter(!is.na(value)) %>% self$fillAbsentRegional() %>% self$fixDatesAndNames(4) %>% self$complete()
+        tmp4 = tmp3 %>% filter(!is.na(value)) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(4) %>% self$complete()
         return(tmp4)
         
         # CHESS_LL_lab_date_cases_P1
@@ -1563,7 +1621,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           dplyr::rename(note=variable) %>%
           dplyr::filter(!is.na(code)) # 2 missing hospital trusts - Velindre and Golden jubilee
         #browser()
-        tmp7 = dplyr::bind_rows(tmp5,tmp6) %>% self$fillAbsentRegional() %>% self$fixDatesAndNames(4) %>% self$complete()
+        tmp7 = dplyr::bind_rows(tmp5,tmp6) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(4) %>% self$complete()
         
         return(tmp7)
       })) 
@@ -1623,6 +1681,7 @@ convertRtToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, dateVar 
       `Quantile 0.15` = NA,	
       `Quantile 0.2` = NA,	
       `Quantile 0.25` = `Quantile.0.25(R)`,# %>% round(2),
+      `Quantile 0.3` = NA,
       `Quantile 0.35` = NA,	
       `Quantile 0.4` = NA,	
       `Quantile 0.45` = NA,
@@ -1640,7 +1699,7 @@ convertRtToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, dateVar 
       `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
       `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,
       `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
-      `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.35`,	
+      `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
       `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
       `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
       `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
@@ -1683,6 +1742,7 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, 
     `Quantile 0.15` = NA,	
     `Quantile 0.2` = NA,	
     `Quantile 0.25` = qnorm(0.25, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.3` = NA,	
     `Quantile 0.35` = NA,	
     `Quantile 0.4` = NA,	
     `Quantile 0.45` = NA,
@@ -1700,7 +1760,68 @@ convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, 
     `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
     `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,
     `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
-    `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.35`,	
+    `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
+    `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
+    `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
+    `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
+  )
+}
+
+#' reformats an Rt data set to SPI-M template
+#' 
+#' @param df - the dataframe with Rt estimates
+#' @param geographyExpr - the derivation of the geographic name
+#' @param modelName - the model
+#' @param dateVar - the column with dates
+#' @param groupName - the group submitting the estimate
+
+#' @return a tibble of the formatted estimates
+#' @export
+convertDoublingTimeToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, growthVar = "Growth.windowed.value", growthSEVar = "Growth.windowed.SE.value", dateVar = "date", groupName = "Exeter", version="0.1") {
+  dateVar = ensym(dateVar)
+  growthVar = ensym(growthVar)
+  growthSEVar = ensym(growthSEVar)
+  geographyExpr = enexpr(geographyExpr)
+  modelExpr = enexpr(modelExpr)
+  modelTypeExpr = enexpr(modelTypeExpr)
+  df %>% mutate(
+    `Group`=groupName,
+    `Model`=!!modelExpr,
+    `ModelType`=!!modelTypeExpr,
+    `Version`=version,
+    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
+    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
+    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
+    `Day of Value` = !!dateVar %>% format("%d") %>% as.integer(),
+    `Month of Value` = !!dateVar %>% format("%m") %>% as.integer(),
+    `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
+    `Geography` = !!geographyExpr,
+    `ValueType` = "doubling_time",
+    `Value` = log(2)/qnorm(0.5, !!growthVar, !!growthSEVar),
+    `Quantile 0.05` = log(2)/qnorm(0.95, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.1` = NA,
+    `Quantile 0.15` = NA,	
+    `Quantile 0.2` = NA,	
+    `Quantile 0.25` = log(2)/qnorm(0.75, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.3` = NA,	
+    `Quantile 0.35` = NA,	
+    `Quantile 0.4` = NA,	
+    `Quantile 0.45` = NA,
+    `Quantile 0.5` = log(2)/qnorm(0.5, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.55` = NA,
+    `Quantile 0.6` = NA,	
+    `Quantile 0.65` = NA,	
+    `Quantile 0.7` = NA,	
+    `Quantile 0.75` = log(2)/qnorm(0.25, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.8` = NA,	
+    `Quantile 0.85` = NA,	
+    `Quantile 0.9` = NA,	
+    `Quantile 0.95` = log(2)/qnorm(0.05, !!growthVar, !!growthSEVar),# %>% round(2)
+  ) %>% select(
+    `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
+    `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,
+    `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
+    `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
     `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
     `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
     `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
@@ -1751,6 +1872,7 @@ convertSerialIntervalToSPIM = function(serial, modelName, groupName = "Exeter", 
     `Quantile 0.15` = NA,	
     `Quantile 0.2` = NA,	
     `Quantile 0.25` = quant(0.25),
+    `Quantile 0.3` = NA,	
     `Quantile 0.35` = NA,	
     `Quantile 0.4` = NA,	
     `Quantile 0.45` = NA,

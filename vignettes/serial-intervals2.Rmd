@@ -1,14 +1,27 @@
 ---
-title: "Impact of serial interval uncertainty on estimates of the reproduction number for COVID 19"
-output: 
-  pdf_document :
+title: "Impact of uncertainty in serial interval, generation interval, incubation period and delayed observations in estimating the reproduction number for COVID 19"
+# output:
+#   pdf_document :
+#     fig_caption: yes
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(
+#     inputFile,
+#     encoding = encoding,
+#     output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.pdf'))
+#   })    
+output:
+  word_document :
     fig_caption: yes
+    fig_width: 7
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(
+    inputFile,
+    encoding = encoding,
+    output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.docx'))
+  })
 header-includes:
  \usepackage{float}
- \floatplacement{figure}{H}    
-
-knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.pdf')) })
+ \floatplacement{figure}{H}
 fig_width: 7
 fig_height: 5
 out.width: "100%"
@@ -28,7 +41,6 @@ knitr::opts_chunk$set(
   echo = FALSE,
   warning = FALSE,
   message = FALSE,
-  error = TRUE,
   fig.align="center"
 )
 ```

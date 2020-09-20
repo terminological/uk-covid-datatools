@@ -51,7 +51,7 @@ InternationalDatasetProvider = R6::R6Class("InternationalDatasetProvider", inher
     }
     
     if(file.exists("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")) {
-      covidAgeData = read_csv("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")
+      covidAgeData = readr::read_csv("~/Git/uk-covid-datatools/data-raw/covid-by-age.csv")
     } else {
       covidAgeData = tibble(filename=character())
     }

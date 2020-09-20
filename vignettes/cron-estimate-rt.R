@@ -254,6 +254,7 @@ currentRtQuick = tsp$getDaily(id = "CURRENT-RT-QUICK", orElse=function() {
     finalRtAssumed = finalDataset %>%
       tsp$estimateRtWithAssumptions(quick = TRUE) %>%
       tsp$logIncidenceStats() %>%
+      tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
     return(list(
@@ -273,6 +274,7 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
     finalRtDataset = finalDataset %>%
       tsp$estimateRt() %>%
       tsp$logIncidenceStats() %>%
+      tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
     final28DayRtDataset = finalDataset %>%
