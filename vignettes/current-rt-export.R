@@ -1,9 +1,9 @@
 setwd("~/Git/uk-covid-datatools/vignettes/")
 #devtools::load_all("~/Git/uk-covid-datatools/")
 source("cron-estimate-rt.R")
-readRDS("~/Data/maps/2020-09-14/CURRENT-DATASET-2020-09-14.rda")
-readRDS("~/Data/maps/2020-09-14/CURRENT-RT-QUICK-2020-09-14.rda")
-readRDS("~/Data/maps/2020-09-14/CURRENT-RT-SLOW-2020-09-14.rda")
+#readRDS("~/Data/maps/2020-09-14/CURRENT-DATASET-2020-09-14.rda")
+#readRDS("~/Data/maps/2020-09-14/CURRENT-RT-QUICK-2020-09-14.rda")
+#readRDS("~/Data/maps/2020-09-14/CURRENT-RT-SLOW-2020-09-14.rda")
 
 rtConfig = tsp$serial
 

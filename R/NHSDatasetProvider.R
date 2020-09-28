@@ -330,7 +330,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     getPHEApiNHSRegions = function(...) {
       self$getDaily("PHE-API-NHSER", ..., orElse = function (...) covidTimeseriesFormat({
         nhserCodes = dpc$codes$getCodes() %>% filter(codeType=="NHSER" & status=="live") %>% pull(code)
-        tmp = bind_rows(lapply(nhserCodes, FUN=function(x) self$getPHEApi(areaType = "region", areaCode=x)))
+        tmp = bind_rows(lapply(nhserCodes, FUN=function(x) self$getPHEApi(areaType = "nhsRegion", areaCode=x)))
         return(tmp)
       }))
     },

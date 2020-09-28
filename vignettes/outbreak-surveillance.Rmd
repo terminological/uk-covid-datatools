@@ -1,26 +1,25 @@
 ---
 title: "Detection of outliers in trends of SARS-CoV-2 transmission using epidemiological data"
 output: 
-  pdf_document :
+  pdf_document:
     fig_caption: yes
 header-includes:
  \usepackage{float}
- \floatplacement{figure}{H}    
-
+ \floatplacement{figure}{H}
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/outbreak-trends", output_file=paste0('outbreak-trends-',Sys.Date(),'.pdf')) })
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-monitor", output_file=paste0('NHS-111-monitor-',Sys.Date(),'.pdf')) })
 fig_width: 7
 fig_height: 5
 out.width: "100%"
 bibliography: current-rt.bib
 csl: current-rt.csl
 vignette: >
-  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteIndexEntry{Estimating R(t) from NHS 111 data}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -28,33 +27,112 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE
 )
-```
 
-```{r setup}
-library(tidyverse)
-
-
-# devtools::install_github("terminological/uk-covid-datatools")
-# library(ukcovidtools)
 devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+library(tidyverse)
+library(patchwork)
 library(rgdal)
 library(ggplot2)
 library(ggspatial)
 library(rgeos)
 library(maptools)
-library(lubridate)
 library(patchwork)
 library(sp)
+library(sf)
 
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 
-devtools::load_all("~/Git/uk-covid-datatools/")
-dpc = DataProviderController$setup("~/Data/maps/", "~/Dstl/dstl/")
-proc = dpc$timeseriesProcessor()
+standardPrintOutput::setDefaults()
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+reload()
+```
+
+Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Ellen
+Brooks-Pollock^4^; Phillippa Spencer ^5^; James Bannock ^5^;  Gareth Griffith ^6^; Leon Danon ^3,7^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+5) Cyber & Information Systems Division, CIS Division, Dstl Porton Down, Salisbury, Wiltshire, SP4 0JQ, UK
+6) MRC Integrative Epidemiology Unit, University of Bristol, United Kingdom; 
+7) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+Report: `r Sys.Date()`
+
+# Abstract
+
+```{r}
+cases = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85))
+breakdown111 = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01"))
+deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85))
+others = dpc$spim$getSPIMextract()
+negatives = dpc$spim$getNegatives()
+
+positivityByPillarAndAge = negatives %>% tsp$aggregateGender()  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% tsp$aggregateGender() %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos/(pos+neg), ageCat = tsp$ageCatToFactor(ageCat)) 
+
+volumesByPillarAndAge = negatives %>% tsp$aggregateGender()  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% tsp$aggregateGender() %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos+neg, ageCat = tsp$ageCatToFactor(ageCat)) %>% dpc$demog$findDemographics()
+
+
 ```
 
 ```{r}
-ll_incid = dpc$datasets$getLineListIncidence(ageBreaks = c(15,25,50,75))
+events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% filter(Label %in% c("Lockdown","VE day","Hotels and bars reopen","End summer term","Start autumn term","Manchester local lockdown"))
+
+(positivityByPillarAndAge %>% tsp$smoothAndSlopeTimeseries(smoothExpr = value) %>% tsp$plotDefault(events = events, ylim=c(0,10)))+ geom_point(aes(x=date,y=value*100,colour=subgroup), size=0.2, alpha=0.2) + geom_line(aes(x=date,y=Est.value*100,colour=subgroup))+facet_wrap(vars(ageCat))+ylab("test positivity (%)")
+
+```
+```{r}
+volumesByPillarAndAge %>% tsp$smoothAndSlopeTimeseries(smoothExpr = value) %>% tsp$plotIncidenceQuantiles(events = events,colour = subgroup,denominatorExpr = population/1000000, ylim = c(0,3000))+facet_wrap(vars(ageCat))+ylab("test per 1M per day")
+```
+
+```{r}
+
+positivityByGenderAndAge = negatives %>% tsp$aggregateSubgroup()  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% tsp$aggregateSubgroup() %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos/(pos+neg), ageCat = tsp$ageCatToFactor(ageCat)) 
+
+(positivityByGenderAndAge %>% tsp$smoothAndSlopeTimeseries(smoothExpr = value) %>% tsp$plotDefault(events = events, ylim=c(0,10)))+ geom_point(aes(x=date,y=value*100,colour=gender), size=0.2, alpha=0.2) + geom_line(aes(x=date,y=Est.value*100,colour=gender))+facet_wrap(vars(ageCat))+ylab("test positivity (%)")+scale_color_brewer(palette="Dark2")
+
+```
+
+```{r}
+
+positivityByGenderAndAgeForPillar1 = negatives %>% filter(subgroup=="Pillar 1")  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% filter(subgroup=="Pillar 1") %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos/(pos+neg), ageCat = tsp$ageCatToFactor(ageCat)) 
+
+(positivityByGenderAndAgeForPillar1 %>% tsp$smoothAndSlopeTimeseries(smoothExpr = value) %>% tsp$plotDefault(events = events, ylim=c(0,10)))+ geom_point(aes(x=date,y=value*100,colour=gender), size=0.2, alpha=0.2) + geom_line(aes(x=date,y=Est.value*100,colour=gender))+facet_wrap(vars(ageCat))+ylab("test positivity (%)")+scale_color_brewer(palette="Dark2")
+
+```
+
+
+```{r}
+
+
 
 ll_incid2 = ll_incid %>% filter(codeType == "LAD") %>%
   proc$aggregateGeography(targetCodeTypes = "CTRY", keepOriginal = FALSE) %>%
@@ -69,14 +147,7 @@ ll_incid4 = ll_incid2 %>% filter(subgroup=="Pillar 1") %>% proc$imputeAndWeeklyA
 ```
 
 
-Robert Challen ^1,2^; Leon Danon ^3,4^
 
-1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
-2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
-3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
-4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
-
-Report date: `r Sys.Date()`
 
 
 ```{r fig1, fig.cap="The timeseries of R(t) estimates in the whole UK based on either cases reported by PHE and NHS labs, or deaths, or on the headline figures from the PHE coronavirus tracker which includes cases from private labs not included in the national totals"}

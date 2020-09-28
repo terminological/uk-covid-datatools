@@ -96,9 +96,28 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
    #' @param ageLabels - a vector of age range labels
    
    #' @return an ordered factor of age categories
-   ageCatToFactor = function(ageCat, ageLabels = c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80+")) {
+   ageCatToFactor = function(ageCat, ageLabels = c(
+      "0-4","<5",
+      "5-9","5-14",
+      "10-14",
+      "15-19","15-24",
+      "20-24",
+      "25-29","25-34",
+      "30-34",
+      "35-39","35-44",
+      "40-44",
+      "45-49","45-54",
+      "50-54",
+      "55-59","55-64",
+      "60-64",
+      "65-69","65-74",
+      "70-74",
+      "75-79","75-84",
+      "80+","85+",
+      "unknown"
+      )) {
      factor(
-       ageCat,
+       ifelse(ageCat %in% ageLabels,as.character(ageCat),"unknown"),
        levels = ageLabels,
        ordered = TRUE
      )

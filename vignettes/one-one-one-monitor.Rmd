@@ -1,13 +1,24 @@
 ---
 title: "Monitoring the 111 data for early indication of outbreaks"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
 output: 
-  pdf_document:
-    fig_caption: yes
-header-includes:
- \usepackage{float}
- \floatplacement{figure}{H}
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+    css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
+    # self_contained: false
+    # lib_dir: ~/Dropbox/covid19/current-rt/data/libs
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-monitor", output_file=paste0('NHS-111-monitor-',Sys.Date(),'.pdf')) })
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-monitor", output_file=paste0('NHS-111-monitor-',Sys.Date(),'.html')) })
+# output: 
+#   pdf_document:
+#     fig_caption: yes
+# header-includes:
+#  \usepackage{float}
+#  \floatplacement{figure}{H}
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/NHS-111-monitor", output_file=paste0('NHS-111-monitor-',Sys.Date(),'.pdf')) })
 fig_width: 7
 fig_height: 5
 out.width: "100%"
@@ -74,34 +85,46 @@ reload = function() {
 reload()
 ```
 
-Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Ellen
-Brooks-Pollock^4^; Phillippa Spencer ^5^; James Bannock ^5^;  Gareth Griffith ^6^; Leon Danon ^3,7^
+<!-- Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3^; Ellen -->
+<!-- Brooks-Pollock^4^; Phillippa Spencer ^5^; James Bannock ^5^;  Gareth Griffith ^6^; Leon Danon ^3,7^ -->
 
-1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
-2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
-3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
-4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
-5) Cyber & Information Systems Division, CIS Division, Dstl Porton Down, Salisbury, Wiltshire, SP4 0JQ, UK
-6) MRC Integrative Epidemiology Unit, University of Bristol, United Kingdom; 
-7) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+<!-- 1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK. -->
+<!-- 2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK. -->
+<!-- 3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK. -->
+<!-- 4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK -->
+<!-- 5) Cyber & Information Systems Division, CIS Division, Dstl Porton Down, Salisbury, Wiltshire, SP4 0JQ, UK -->
+<!-- 6) MRC Integrative Epidemiology Unit, University of Bristol, United Kingdom;  -->
+<!-- 7) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.  -->
 
-Report: `r Sys.Date()`
+<!-- Report: `r Sys.Date()` -->
 
-# Abstract
+<!-- # Abstract -->
 
-NHS 111 data provides a different perspective from traditional data sources, in that it reflects activity in a different subgroup of the population. It is produced as a by producet of the telephone consultation and collected by automated systems, so has fewer issues in terms of data quality and timeliness. It does however have a different set of limitations in that it may be influenced by internal policy and external behaviour and the observation maybe non specific. It is however, showing strong signals in specific age groups, particularly the young, which support the argument that the outbreak is accelerating. 
+<!-- NHS 111 data provides a different perspective from traditional data sources, in that it reflects activity in a different subgroup of the population. It is produced as a by producet of the telephone consultation and collected by automated systems, so has fewer issues in terms of data quality and timeliness. It does however have a different set of limitations in that it may be influenced by internal policy and external behaviour and the observation maybe non specific. It is however, showing strong signals in specific age groups, particularly the young, which support the argument that the outbreak is accelerating.  -->
 
 
 
-# Methods
+<!-- # Methods -->
 
 ## Data
 
-The data is provided via NHS. The data are Covid-19 specific extracts of NHS 111 telephony records for England obtained from NHS Pathways which are updated on a daily basis. The data contains, among others, geography and age of the patient. The patient geography/location has been defined by Clinical Commissioning Group (CCG) and aggregated to NHS region using Office for National Statistics (ONS) published lookups [@ClinicalCommissioningGroup; @ClinicalCommissioningGroupa]. Patient age is assigned to one of the following age groups: <1, 1-4, 5-14, 15-24, 25-44, 45-54, 55-64, 65-74, 75-84 and 85+ years old, where an age is not listed the age is assigned as unknown. Disposition codes and descriptors are assigned by NHS Pathways [@StatisticsIntegratedUrgent]. We assume that all records pertaining to Covid-19 disposition codes are reported in the daily extract, and that all reporting centres report each day.
+* The data are Covid-19 specific extracts of NHS 111 telephony records for England obtained from NHS Pathways which are updated on a daily basis.
+* The data contains, among others, geography and age of the patient. 
+* The patient geography/location has been defined by Clinical Commissioning Group (CCG) and aggregated to NHS region using Office for National Statistics (ONS) published lookups [@ClinicalCommissioningGroup; @ClinicalCommissioningGroupa]. 
+* Patient age is assigned to one of the following age groups: <1, 1-4, 5-14, 15-24, 25-44, 45-54, 55-64, 65-74, 75-84 and 85+ years old, where an age is not listed the age is assigned as unknown. 
+* Disposition codes and descriptors are assigned by NHS Pathways [@StatisticsIntegratedUrgent]. 
+* We assume that all records pertaining to Covid-19 disposition codes are reported in the daily extract, and that all reporting centres report each day.
+* Outcome is classified as either "self care", "clinical review" (within 4-12 hours), "urgent clinical review" (within 2 hours), or needing an "emergency ambulance". -->
+* This is a count of number of assessments, not the number of people. 
+* Users may have accessed the service multiple times with different symptoms. 
+* NHS Pathways data is sourced from a live system that is updated every 15 minutes. 
+* The data is extracted for the dashboard and open data files with as little delay as possible but there can be a time delay between the extraction processes meaning that the dashboard and open data files may have different totals.
 
-The includes information on people who contacted the emergency services via different routes, i.e. the NHS 111 website, or phoned 111 or 999. Where the contact concerned symptoms and signs of COVID-19 outcome is recorded and this was classified as either "self care", "clinical review" (within 4-12 hours), "urgent clinical review" (within 2 hours), or needing an "emergency ambulance".
+<!-- The data is provided via NHS. The data are Covid-19 specific extracts of NHS 111 telephony records for England obtained from NHS Pathways which are updated on a daily basis. The data contains, among others, geography and age of the patient. The patient geography/location has been defined by Clinical Commissioning Group (CCG) and aggregated to NHS region using Office for National Statistics (ONS) published lookups [@ClinicalCommissioningGroup; @ClinicalCommissioningGroupa]. Patient age is assigned to one of the following age groups: <1, 1-4, 5-14, 15-24, 25-44, 45-54, 55-64, 65-74, 75-84 and 85+ years old, where an age is not listed the age is assigned as unknown. Disposition codes and descriptors are assigned by NHS Pathways [@StatisticsIntegratedUrgent]. We assume that all records pertaining to Covid-19 disposition codes are reported in the daily extract, and that all reporting centres report each day. -->
 
-The 111 data reports the triages which have received a potential coronavirus (COVID-19) final disposition, from 18 March 2020. This is a count of number of assessments, not the number of people. This data is based on signs and symptoms reported by members of the public through these channels, and is not based on the outcomes of tests for coronavirus. Members of the public may have accessed the service multiple times with different symptoms. NHS Pathways data is sourced from a live system that is updated every 15 minutes. The data is extracted for the dashboard and open data files with as little delay as possible but there can be a time delay between the extraction processes meaning that the dashboard and open data files may have different totals.
+<!-- The includes information on people who contacted the emergency services via different routes, i.e. the NHS 111 website, or phoned 111 or 999. Where the contact concerned symptoms and signs of COVID-19 outcome is recorded and this was classified as either "self care", "clinical review" (within 4-12 hours), "urgent clinical review" (within 2 hours), or needing an "emergency ambulance". -->
+
+<!-- The 111 data reports the triages which have received a potential coronavirus (COVID-19) final disposition, from 18 March 2020. This is a count of number of assessments, not the number of people. This data is based on signs and symptoms reported by members of the public through these channels, and is not based on the outcomes of tests for coronavirus. Members of the public may have accessed the service multiple times with different symptoms. NHS Pathways data is sourced from a live system that is updated every 15 minutes. The data is extracted for the dashboard and open data files with as little delay as possible but there can be a time delay between the extraction processes meaning that the dashboard and open data files may have different totals. -->
 
 ## Analysis
 
@@ -156,26 +179,28 @@ triage_111_999 = ts111 %>%
 #     tsp$estimateRtWithAssumptions(valueVar = Est.value)
 ```
 
-## England overview
+<!-- ## England overview -->
 
-`r ref$fig("111-CTRY")` shows numbers of contact events by outcome where self care expected to be mild cases, clinical review moderate or severe, and emergency ambulance for life threatening. Whole time series of incidence (on log scale) from lock down to present including $R_t$ and growth rates.
+<!-- `r ref$fig("111-CTRY")` shows numbers of contact events by outcome where self care expected to be mild cases, clinical review moderate or severe, and emergency ambulance for life threatening. Whole time series of incidence (on log scale) from lock down to present including $R_t$ and growth rates. -->
 
-Panel A:
+<!-- Panel A: -->
 
-* Anomaly in self care centred around VE day due to changes in internal policy and categorization. No further changes in policy known.
-* Initial decrease followed by stable $R_t$ during lock down 
-* Self care cases seen to start rising in late July, with rate of increase accelerating.
-* More recently followed by increases in other outcomes including ambulance calls for COVID.
-* ambulance rates dropped back but this could be reporting artefact
+<!-- * Anomaly in self care centred around VE day due to changes in internal policy and categorization. No further changes in policy known. -->
+<!-- * Initial decrease followed by stable $R_t$ during lock down  -->
+<!-- * Self care cases seen to start rising in late July, with rate of increase accelerating. -->
+<!-- * More recently followed by increases in other outcomes including ambulance calls for COVID. -->
+<!-- * ambulance rates dropped back but this could be reporting artefact -->
 
-Panel B:
+<!-- Panel B: -->
 
-* $R_t$ significantly above one on self care metric and may have been as high as 1.7 at times. 
-* Other measures also now significantly above 1.
+<!-- * $R_t$ significantly above one on self care metric and may have been as high as 1.7 at times.  -->
+<!-- * Other measures also now significantly above 1. -->
 
-Panel C:
+<!-- Panel C: -->
 
-* Growth rates positive and increasing since end of August.
+<!-- * Growth rates positive and increasing since end of August. -->
+
+## `r cap$fig("111-CTRY","The incidence of 111 & 999 contact events, $R_t$ estimates based on those contact events as a proxy for cases, and C growth rates of call volumes.")`
 
 ```{r fig1}
 triageCTRY_111_999 = triage_111_999 %>% filter(subgroup != "other" & date > "2020-03-15" & codeType=="CTRY" & name == "England")
@@ -188,17 +213,17 @@ p3 = tsp$plotGrowthRate(triageCTRY_111_999,events = events,colour = subgroup, rl
 (p1+p2+p3+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=1,guides = "collect",heights = c(2,2,2))) %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure1_111And999byOutcomeCTRY")
 ```
 
-`r cap$fig("111-CTRY","The incidence of 111 & 999 contact events with different outcomes, and R(t) estimates based on those contact events as a proxy for cases.")`
+<!-- ## By NHS Region -->
 
-## By NHS Region
+## `r cap$fig("111-NHSER","The incidence of 111 & 999 contact events in NHS regions")`
 
-* In `r ref$fig("111-NHSER")` we see rates of 111 calls on a log scale. 
-* Striking increases in calls with self care outcomes initially in North West but more recently across all regions. 
-* Latterly large increases in London and South West. Upward trend in other outcomes. 
-* In `r ref$fig("111-NHSER-GROWTH")` we see associated growth rates. 
-* Notably growth in call volumes resulting in a self-care outcome has been positive for a long time in certain regions - e.g. North West, London. 
-* The other, more serious, outcomes entering positive growth around 24th - 31st August.
-* `r ref$tab("111-NHSER-Doubling")` shows doubling times of these metrics, with self care cases anticipated to be doubling every week. The more serious outcomes growing more slowly.
+<!-- * In `r ref$fig("111-NHSER")` we see rates of 111 calls on a log scale.  -->
+<!-- * Striking increases in calls with self care outcomes initially in North West but more recently across all regions.  -->
+<!-- * Latterly large increases in London and South West. Upward trend in other outcomes.  -->
+<!-- * In `r ref$fig("111-NHSER-GROWTH")` we see associated growth rates.  -->
+<!-- * Notably growth in call volumes resulting in a self-care outcome has been positive for a long time in certain regions - e.g. North West, London.  -->
+<!-- * The other, more serious, outcomes entering positive growth around 24th - 31st August. -->
+<!-- * `r ref$tab("111-NHSER-Doubling")` shows doubling times of these metrics, with self care cases anticipated to be doubling every week. The more serious outcomes growing more slowly. -->
 
 ```{r fig2}
 events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% filter(Label %in% c("Hotels and bars reopen","End summer term","Start autumn term","Manchester local lockdown"))
@@ -213,17 +238,13 @@ p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monit
 
 ```
 
-`r cap$fig("111-NHSER","The incidence of 111 & 999 contact events in regions, and R(t) estimates based on those contact events as a proxy for cases.")`
-
-
+## `r cap$fig("111-NHSER-GROWTH","The growth rate of 111 contact events in each NHS region")`
 
 ```{r}
 p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure3_111And999byOutcomeNHSER_Rt")
 ```
 
-`r cap$fig("111-NHSER-GROWTH","The R(t) estimates based on 111 & 999 contact events in NHS regions as a proxy for cases.")`
-
-`r cap$tab("111-NHSER-Doubling","Current doubling time estimates for the main 111 outcome cateogries.")`
+## `r cap$tab("111-NHSER-Doubling","Current doubling time estimates for the main 111 outcome cateogries.")`
 
 ```{r}
 triageNHSER_111_999 = triageNHSER_111_999 %>% tsp$logIncidenceStats(nocache=TRUE)
@@ -236,9 +257,11 @@ breakdown = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01"))
 
 ```  
 
-## By Age
+<!-- ## By Age -->
 
-* `r ref$fig("111-IncidenceByAgeAndOutcome")` shows a full breakdown of age groups, adjusted for demographics. In elderly (85+) we see majority of calls result in a serious outcome, but that these have remained stable since the end of lock down. As we get progressively younger that pattern changes and a higher proportion of the cases are less acute outcomes. Notable inflections in the incidence curves for 5-14 age group around the beginning of August, in calls with self care outcomes,  which has been rising exponentially since.
+<!-- * `r ref$fig("111-IncidenceByAgeAndOutcome")` shows a full breakdown of age groups, adjusted for demographics. In elderly (85+) we see majority of calls result in a serious outcome, but that these have remained stable since the end of lock down. As we get progressively younger that pattern changes and a higher proportion of the cases are less acute outcomes. Notable inflections in the incidence curves for 5-14 age group around the beginning of August, in calls with self care outcomes,  which has been rising exponentially since. -->
+
+## `r cap$fig("111-IncidenceByAgeAndOutcome","The incidence per 1M population per day of the different 111 outcomes.")`
 
 ```{r}
 
@@ -258,7 +281,8 @@ byAgePlot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111
 
 ```
 
-`r cap$fig("111-IncidenceByAgeAndOutcome","A time series of the incidence per 1M population per day of the different 111 outcomes on a logarithmic scale.")`
+<!-- `r cap$fig("111-IncidenceByAgeAndOutcome","A time series of the incidence per 1M population per day of the different 111 outcomes on a logarithmic scale.")` -->
+## `r cap$fig("111-GrowthByAgeAndOutcome","The exponential growth rates of the different 111 outcomes broken down by age.")`
 
 ```{r}
 byAgeGrowth = tsp$plotGrowthRate(tmp, events = events, colour=subgroup, rlim=c(-0.1,0.25))+
@@ -267,14 +291,16 @@ byAgeGrowth = tsp$plotGrowthRate(tmp, events = events, colour=subgroup, rlim=c(-
 byAgeGrowth %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/NHS-111-monitor/Fig_GrowthByAgeAndOutcome")
 ```
 
-`r cap$fig("111-GrowthByAgeAndOutcome","A time series of the exponential growth rates of the different 111 outcomes broken down by age.")`
+<!-- `r cap$fig("111-GrowthByAgeAndOutcome","A time series of the exponential growth rates of the different 111 outcomes broken down by age.")` -->
 
 
-## By CCG
+<!-- ## By CCG -->
 
-* `r ref$fig("111-IncidenceByCCGAndOutcome")` shows rates of 111 calls per 1M population per day by the 4 outcomes. The individual maps are differently scaled to allow relative comparison. Highest rates largely in those areas with known established local lock downs.
-* `r ref$fig("111-GrowthByCCGAndOutcome")` shows absolute growth rates. No obvious regional hot spots for growth, but rather that growth is positive in majority of areas. 
-* `r ref$fig("111-ProbPositiveGrowthByCCGAndOutcome")` shows probability that the growth rate is positive and consistent with the view that there is no single regional focus.
+<!-- * `r ref$fig("111-IncidenceByCCGAndOutcome")` shows rates of 111 calls per 1M population per day by the 4 outcomes. The individual maps are differently scaled to allow relative comparison. Highest rates largely in those areas with known established local lock downs. -->
+<!-- * `r ref$fig("111-GrowthByCCGAndOutcome")` shows absolute growth rates. No obvious regional hot spots for growth, but rather that growth is positive in majority of areas.  -->
+<!-- * `r ref$fig("111-ProbPositiveGrowthByCCGAndOutcome")` shows probability that the growth rate is positive and consistent with the view that there is no single regional focus. -->
+
+## `r cap$fig("111-IncidenceByCCGAndOutcome","Most recent incidence per 1M population per day of the different 111 outcomes in each CCG.")`
 
 ```{r}
 
@@ -298,23 +324,23 @@ p2 = ccgMap2 %>% graph("clinical review",50)
 p3 = ccgMap2 %>% graph("urgent clinical review",60)
 p4 = ccgMap2 %>% graph("emergency ambulance",10)
 
-(p1 + p2 + p3 + p4 + patchwork::plot_layout(ncol=2)) %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111IncidencebyOutcomeAndCCG")
+(p1 + p2 + p3 + p4 + patchwork::plot_layout(ncol=4)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111IncidencebyOutcomeAndCCG")
 ```
 
-`r cap$fig("111-IncidenceByCCGAndOutcome","Most recent incidence per 1M population per day of the different 111 outcomes in each CCG.")`
+<!-- `r cap$fig("111-IncidenceByCCGAndOutcome","Most recent incidence per 1M population per day of the different 111 outcomes in each CCG.")` -->
 
-
+## `r cap$fig("111-GrowthByCCGAndOutcome","Median exponential growth rate of the different 111 outcomes in each CCG.")`
 
 ```{r}
 growthCCG = ggplot(ccgMap2 %>%filter(subgroup != "other"),aes(fill = Growth.value))+geom_sf()+scale_fill_gradient2(low = scales::muted("green"),high=scales::muted("red"),limit=c(-0.2,0.2),breaks=c(-0.2,-0.1,0,0.1,0.2),label=c("<-0.2","-0.1","0","0.1",">0.2"),oob=scales::squish)+
-  facet_wrap(vars(subgroup))+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
+  facet_wrap(vars(subgroup),ncol=4)+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
 
-growthCCG %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111GrowthByOutcomeAndCCG")
+growthCCG %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111GrowthByOutcomeAndCCG")
 ```
 
-`r cap$fig("111-GrowthByCCGAndOutcome","Median exponential growth rate of the different 111 outcomes in each CCG.")`
+<!-- `r cap$fig("111-GrowthByCCGAndOutcome","Median exponential growth rate of the different 111 outcomes in each CCG.")` -->
 
-
+## `r cap$fig("111-ProbPositiveGrowthByCCGAndOutcome","Probability exponential growth rate is larger than zero in each CCG.")`
 
 ```{r}
 
@@ -336,9 +362,9 @@ probCCG = ggplot(
   probCcgMap,
       aes(fill = Prob))+geom_sf()+
   scale_fill_viridis_d(option="plasma")+
-  facet_wrap(vars(subgroup))+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
+  facet_wrap(vars(subgroup),ncol=4)+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
 
-probCCG %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111ProbPositiveGrowthByCCGAndOutcome")
+probCCG %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/NHS-111-monitor/Figure4_111ProbPositiveGrowthByCCGAndOutcome")
 ```
 
 ```{r echo = FALSE, eval = FALSE}
@@ -358,7 +384,7 @@ mxProb = interactive(probCcgMap, col="Prob")
 ```
 
 
-```{r}
+```{r echo = FALSE, eval = FALSE}
 
 currentGrowth2 = byRegionAndOutcome %>% dpc$demog$findDemographics() %>% mutate(Est.value.per1M = Est.value/population*1000000)
 ccgMap3 = ccgMap %>% left_join(currentGrowth2 %>% select(-codeType,-name), by="code")
@@ -375,18 +401,36 @@ ccgMap3 = ccgMap3 %>% filter(subgroup != "other") %>%
     Incid = ifelse(value > maxIncid, maxIncid, value),
     DailyGrowth = Growth.value*100,
     start = date,
-    end = date+1
+    end = date
   )
 
 pal <- leaflet::colorFactor(
   palette = "RdYlBu",
   domain = probCcgMap$Prob,reverse = TRUE)
 
-leaflet::leaflet(ccgMap3 %>% filter(subgroup=="self care" & date > max(date)-10 )) %>%
+leaf = leaflet::leaflet(ccgMap3 %>% filter(subgroup=="self care" & date > max(date)-10 )) %>%
   leaflet::addPolygons(fillColor = ~pal(Prob), fill=TRUE, weight = 1, color = "black", fillOpacity=0.6) %>%
   leaflet::addProviderTiles(leaflet::providers$CartoDB.Voyager) %>%
-  leaflet::addLegend(pal = pal, values = ~Prob) %>%
-  leaftime::addTimeline()
+  leaflet::addLegend(pal = pal, values = ~Prob) #%>%
+  # leaftime::addTimeline(
+  #   sliderOpts = leaftime::sliderOptions(
+  #     formatOutput = htmlwidgets::JS(
+  #       "function(date) {return new Date(date).toDateString()}
+  #     "),
+  #     position = "bottomright",
+  #     step = 10,
+  #     duration = 3000,
+  #     showTicks = FALSE
+  #   )
+  # )
+
+leaf$dependencies[[length(leaf$dependencies)+1]] <- htmltools::htmlDependency(
+    name = "leaflet-timeline",
+    version = "1.0.0",
+    src = c("href" = "http://skeate.github.io/Leaflet.timeline/"),
+    script = "javascripts/leaflet.timeline.js",
+    stylesheet = "stylesheets/leaflet.timeline.css"
+)
 
 ```
 
@@ -395,11 +439,8 @@ leaflet::leaflet(ccgMap3 %>% filter(subgroup=="self care" & date > max(date)-10 
 # Discussion
 
 * Using $R_t$ calculated from 111 & 999 call data, which result in an urgent clinical review, or for which an ambulance attends is basis of our triage model estimate which we have been submitting to date.
-* The other outcomes of self care and clinical review are showing a more extreme picture of growth.
+* The other outcomes of self care and clinical review are showing a differet picture of growth.
 * This may be influenced by behavioral factors, but also possibly reflects a younger community based population that is mildly symptomatic.
-* Evidence of established rapid exponential growth of call volumes in areas such as London and South West, can we infer covid rates rising also.
-* Some evidence that this is strongest is young age groups.
-* Not obviously isolated to individual regions.
 
 # Limitations & next steps
 
@@ -409,11 +450,11 @@ leaflet::leaflet(ccgMap3 %>% filter(subgroup=="self care" & date > max(date)-10 
 * Confounding due to other respiratory symptoms - seasonal asthma, RSV, etc.
 * Outcome does not include information about whether self isolation / testing is recommended. Need further discussion with 111 & 999 providers.
 
-# Conclusion
+<!-- # Conclusion -->
 
-* Exponential growth is significantly higher than submitted estimates when using looser definitions of cases that may include mild cases in the community.
-* Current hospital based estimates do not reflect focus of spread in community and younger people.
-* These findings should be cross referenced to admissions.
+<!-- * Exponential growth is significantly higher than submitted estimates when using looser definitions of cases that may include mild cases in the community. -->
+<!-- * Current hospital based estimates do not reflect focus of spread in community and younger people. -->
+<!-- * These findings should be cross referenced to admissions. -->
 
 # References
 

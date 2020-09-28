@@ -22,7 +22,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       oneOneOne = "SPIM-111-999",
       onsWeekly = "SPIM_ONS",
       aeSitrep = "AESitrep",
-      trust = "SPIM_trust",
+      trust = "SPIM_trust_[0-9]{3}.xlsx",
       seroprevalence = "seroprev",
       negPillar1 = "Negatives pillar1",
       negPillar2 = "Negatives pillar2",
@@ -190,11 +190,75 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       # TODO: https://github.com/sarahhbellum/NobBS
     },
     
+    getNegatives = function(...) {
+      path1 = self$getLatest(self$filter$negPillar1)
+      path2 = self$getLatest(self$filter$negPillar2)
+      self$getDaily("NEGATIVES", ..., orElse = function(...) {
+        neg1 = readr::read_csv(path1)
+        neg2 = readr::read_csv(path2)
+        neg = bind_rows(neg1 %>% mutate(subgroup="Pillar 1"),neg2 %>% mutate(subgroup="Pillar 2"))
+        neg = neg %>% mutate(ageCat = case_when(
+          agegroup == "0 to 4" ~ "<5",
+          agegroup == "5 to 9" ~ "5-14",
+          agegroup == "10 to 14" ~ "5-14",
+          agegroup == "15 to 19" ~ "15-24",
+          agegroup == "20 to 24" ~ "15-24",
+          agegroup == "25 to 29" ~ "25-34",
+          agegroup == "30 to 34" ~ "25-34",
+          agegroup == "35 to 39" ~ "35-44",
+          agegroup == "40 to 44" ~ "35-44",
+          agegroup == "45 to 49" ~ "45-54",
+          agegroup == "50 to 54" ~ "45-54",
+          agegroup == "55 to 59" ~ "55-64",
+          agegroup == "60 to 64" ~ "55-64",
+          agegroup == "65 to 69" ~ "65-74",
+          agegroup == "70 to 74" ~ "65-74",
+          agegroup == "75 to 79" ~ "75-84",
+          agegroup == "80 to 84" ~ "75-84",
+          agegroup == "85 to 89" ~ "85+",
+          agegroup == "90 or older" ~ "85+",
+          TRUE ~ "unknown"
+        ))
+        neg = neg %>% mutate(gender = self$normaliseGender(gender))
+        
+        neg = neg %>% rename(value = negative, date = earliestspecimendate) %>% select(-agegroup)
+        
+        england = neg %>% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
+          dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = sum(value))
+        
+        phec = neg %>% dplyr::rename(name=phecentre) %>% 
+          dplyr::group_by(name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = sum(value)) %>% dpc$codes$findCodesByName(codeTypes = "PHEC",outputCodeVar = "code",outputCodeTypeVar = "codeType")
+        
+        nhser = neg %>% dplyr::rename(name=nhsregion) %>% 
+          dplyr::group_by(name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = sum(value)) %>% dpc$codes$findCodesByName(codeTypes = "NHSER",outputCodeVar = "code",outputCodeTypeVar = "codeType")
+        
+        ltla = neg %>% dplyr::mutate(code = ltla, codeType= "LAD", name=ltlaname) %>% 
+          dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = sum(value))
+        
+        utla = neg %>% dplyr::mutate(code = utla, codeType= "UA", name=utlaname) %>% 
+          dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = sum(value))
+        
+        neg = bind_rows(england,phec,nhser,ltla,utla) %>% mutate(source = "negatives", statistic = "negative test",type = "incidence") %>% select(-name.original) %>% mutate(note=NA)
+        
+        neg = neg %>% 
+          self$fixDatesAndNames(4) %>% 
+          self$fillAbsent(completeDates = TRUE) %>%
+          dplyr::ungroup()
+        
+        return(neg)
+        # phecentre,nhsregion,ltla,ltlaname,utla,utlaname,gender,earliestspecimendate,agegroup,negative
+      })
+    },
+    
+    
     #' @description Load the seroprevalance file
     #' 
-    
     #' @return raw FF100 data set
-    
     getSeroprevalence = function(...) {
       path = self$getLatest(self$filter$seroprevalence)
       self$getDaily("SEROPREV", ..., orElse = function (...) {
@@ -1281,28 +1345,34 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           return(df)
         }
         
-        out = bind_rows(
-          england,
-          tmp %>% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) %>% 
+        nhser = tmp %>% selectByRegion(NHSER_code, "NHSER", NHSER_name)
+        isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+        
+        if(!isNhser) {
+          nhser = tmp %>% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) %>% 
             dplyr::inner_join(
               self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
               by=c("code"="fromCode")
             ) %>%
             dplyr::ungroup() %>%
             dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
-            dplyr::rename(code = toCode, codeType=toCodeType),
+            dplyr::rename(code = toCode, codeType=toCodeType)
+        }
+        
+        out = bind_rows(
+          england,
+          nhser,
           tmp %>% selectByRegion(PHEC_code, "PHEC", PHEC_name),
           tmp %>% selectByRegion(UTLA_code, "UA", UTLA_name),
           tmp %>% selectByRegion(LTLA_code, "LAD", LTLA_name),
           tmp %>% selectByRegion(LSOA_code, "LSOA", LSOA_name)
         )
         
-        out = out %>% 
-          dplyr::mutate(source="line list",statistic = "case", type="incidence") %>%
-          self$fillAbsent() %>%
-          #tidyr::complete(tidyr::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
-          dplyr::ungroup()
-        return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+        out = out %>% dplyr::mutate(source="line list",statistic = "case", type="incidence")
+        out = out %>% self$fixDatesAndNames(4)
+        out = out %>% self$fillAbsent(completeDates=TRUE)
+        out = out %>% dplyr::ungroup()
+        return(out)
       }))
     },
     
@@ -1343,9 +1413,24 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dplyr::summarise(value = n()) 
           return(df)
         }
+        
+        nhser = tmp %>% selectByRegion(nhser_code, "NHSER", nhser_name)
+        isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+        
+        if(!isNhser) {
+          nhser = tmp %>% selectByRegion(nhser_code, "NHSER19CDH", nhser_name) %>% 
+            dplyr::inner_join(
+              self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
+              by=c("code"="fromCode")
+            ) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
+            dplyr::rename(code = toCode, codeType=toCodeType)
+        }
+        
         out = bind_rows(
           england,
-          tmp %>% selectByRegion(code = nhser_ecode, codeType="NHSER", name=nhser_name),
+          nhser,
           tmp %>% selectByRegion(code = phec_code, codeType="PHEC", name=phec_name),
           tmp %>% selectByRegion(code = utla_code, codeType="UA", name=utla_name),
           tmp %>% selectByRegion(code = ltla_code, codeType="LAD", name=ltla_name),
@@ -1354,12 +1439,11 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         
         
         
-        out = out %>% 
-          dplyr::mutate(source="deaths line list",statistic = "death", type="incidence") %>%
-          self$fillAbsent() %>%
-          self$fixDatesAndNames(4) %>% 
-          self$complete() %>%
-          dplyr::ungroup()
+        out = out %>% dplyr::mutate(source="deaths line list",statistic = "death", type="incidence")
+        out = out %>% self$fixDatesAndNames(4)
+        out = out %>% self$fillAbsent(completeDates=TRUE)
+        #out = out %>% self$complete()
+        out = out %>% dplyr::ungroup()
         return(out)
       }))
     },
@@ -1784,6 +1868,12 @@ convertDoublingTimeToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr
   geographyExpr = enexpr(geographyExpr)
   modelExpr = enexpr(modelExpr)
   modelTypeExpr = enexpr(modelTypeExpr)
+  
+  dtQuant = function(q) {
+    a = log(2)/qnorm(1-q, df %>% pull(!!growthVar), df %>% pull(!!growthSEVar))
+    b = ifelse(a<0 | is.nan(a) | is.infinite(a), 9999999+q, a)
+    return(b)
+  }
   df %>% mutate(
     `Group`=groupName,
     `Model`=!!modelExpr,
@@ -1797,26 +1887,26 @@ convertDoublingTimeToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr
     `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
     `Geography` = !!geographyExpr,
     `ValueType` = "doubling_time",
-    `Value` = log(2)/qnorm(0.5, !!growthVar, !!growthSEVar),
-    `Quantile 0.05` = log(2)/qnorm(0.95, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Value` = dtQuant(0.5),
+    `Quantile 0.05` = dtQuant(0.05),# %>% round(2),
     `Quantile 0.1` = NA,
     `Quantile 0.15` = NA,	
     `Quantile 0.2` = NA,	
-    `Quantile 0.25` = log(2)/qnorm(0.75, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.25` = dtQuant(0.25),# %>% round(2),
     `Quantile 0.3` = NA,	
     `Quantile 0.35` = NA,	
     `Quantile 0.4` = NA,	
     `Quantile 0.45` = NA,
-    `Quantile 0.5` = log(2)/qnorm(0.5, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.5` = dtQuant(0.5),# %>% round(2),
     `Quantile 0.55` = NA,
     `Quantile 0.6` = NA,	
     `Quantile 0.65` = NA,	
     `Quantile 0.7` = NA,	
-    `Quantile 0.75` = log(2)/qnorm(0.25, !!growthVar, !!growthSEVar),# %>% round(2),
+    `Quantile 0.75` = dtQuant(0.75),# %>% round(2),
     `Quantile 0.8` = NA,	
     `Quantile 0.85` = NA,	
     `Quantile 0.9` = NA,	
-    `Quantile 0.95` = log(2)/qnorm(0.05, !!growthVar, !!growthSEVar),# %>% round(2)
+    `Quantile 0.95` = dtQuant(0.95),# %>% round(2)
   ) %>% select(
     `Group`,`Model`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
     `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,

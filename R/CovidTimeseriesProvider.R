@@ -90,7 +90,7 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp)
   },
   
-  fillAbsent = function(covidTimeseries) {
+  fillAbsent = function(covidTimeseries, completeDates=FALSE) {
     tmp = covidTimeseriesFormat(covidTimeseries)
     tmp = tmp %>% 
       dplyr::ungroup() %>%
@@ -100,7 +100,10 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           ageCats = d %>% select(ageCat) %>% distinct()
           genders = d %>% select(gender) %>% distinct()
           subgroups = d %>% select(subgroup) %>% distinct()
-          dates = tibble(date = unique(d$date))
+          
+          seenDates = unique(d$date)
+          dates = tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
+          
           codesAndNames = d %>% select(code,name,codeType) %>% distinct()
           combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
           d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
@@ -112,6 +115,12 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
             # bias or prevalence
             # leave as NA
             d = d %>% dplyr::mutate(Implicit = FALSE)
+          }
+          if (!completeDates) {
+            d = d %>% mutate(
+              value = ifelse(!(date %in% seenDates), NA, value),
+              Implicit = ifelse(!(date %in% seenDates), FALSE, Implicit)
+            )
           }
           return(d)
         } else {

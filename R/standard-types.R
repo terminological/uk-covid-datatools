@@ -23,7 +23,7 @@ covidTimeseriesFormat = ensurer::ensures_that(
   is.data.frame(.) ~ "not a data frame",
   all(c("code","name","codeType","statistic","source","ageCat","gender","type","value","subgroup","date") %in% colnames(.)) ~ "missing columns",
   lubridate::is.Date(.$date) ~ "incorrect date format",
-  all(unique(.$statistic) %in% c("case","death","icu admission","hospital admission","symptom","triage","serology","test","information seeking")) ~ "unknown statistic value",
+  all(unique(.$statistic) %in% c("case","death","icu admission","hospital admission","symptom","triage","serology","test","information seeking","negative test")) ~ "unknown statistic value",
   all(unique(.$type) %in% c("incidence","prevalence","cumulative","background","bias")) ~ "unknown type value",
   length(unique(.$code)) == length(unique(paste0(.$code,.$name))) ~ "more than one code/name combination per code"
 )

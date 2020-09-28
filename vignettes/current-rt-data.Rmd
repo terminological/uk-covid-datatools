@@ -44,7 +44,7 @@ proc = function(ct, st) {
 - Key dates
 
 ```{r}
-events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","Anti-racism demos","Hotels and bars reopen"))
+events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","Anti-racism demos","Hotels and bars reopen","Start autumn term"))
 events %>% select(`Start date`,Classification,Label) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Table1_events")
 ```
 
@@ -366,14 +366,20 @@ p2 = tsp$plotRt(
     currentRt$rt %>% filter(statistic != "icu admission"), 
     events = events2,dates = "2020-05-01", 
     colour=statistic, 
-    rtlim = c(0.5,1.5), ribbons=TRUE)+
+    rtlim = c(0.5,2), ribbons=TRUE)+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
   standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels")
 
 ```
- 
+
+## Most recent $R_t$ 
+
+```{r}
+currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate(Estimate = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(name,statistic,date,Estimate) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6)
+```
+
 ## Combined data set - 7 day growth rates
 
 ```{r}
@@ -390,6 +396,7 @@ p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/da
 
 ```
 
+
 ## Combined data set - 28 day $R_t$
 
 ```{r}
@@ -399,7 +406,7 @@ p2 = tsp$plotRt(
     currentRt$rt28 %>% filter(statistic != "icu admission"), 
     events = events2,dates = "2020-05-01", 
     colour=statistic, 
-    rtlim = c(0.5,1.5), ribbons=TRUE)+
+    rtlim = c(0.5,2), ribbons=TRUE)+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 

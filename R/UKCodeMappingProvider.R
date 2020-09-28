@@ -624,6 +624,13 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
       dplyr::left_join(tmp,by="tmp_code", suffix = c(".original","")) %>%
       dplyr::select(-tmp_code)
     return(tmp2)
+  },
+  
+  allPresentAndCorrect = function(df,codeVar = "code", codeTypes) {
+    codeVar = ensym(codeVar)
+    tmp = self$getCodes() %>% filter(codeType %in% codeTypes)
+    notFound = df %>% anti_join(tmp, by = c("code"))
+    return(nrow(notFound) == 0)
   }
   
 ))

@@ -36,13 +36,20 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   }
   
   ### Triage calls - CTRY ----
-  triageCTRY = dpc$spim$getOneOneOne() %>% 
-    filter(statistic == "triage" & codeType == "CTRY" & name=="England" & source %in% c("111","999")) %>% 
-    tsp$aggregateSource(fn=sum, na.rm=TRUE) %>% 
+  triageCTRY = dpc$spim$getOneOneOneIncidence(dateFrom = as.integer(Sys.Date()-26*7)) %>% filter(!ageCat %in% c("<1","1-4","5-14","15-24")) %>% 
+    tsp$aggregateAge() %>%
+    tsp$aggregateGeography(targetCodeTypes = "CTRY") %>%
+    filter(statistic == "triage" & codeType == "CTRY") %>% 
+    #tsp$aggregateSource(fn=sum) %>% #, na.rm=TRUE) %>% 
     filter(date >= "2020-03-15") %>%
     dpc$demog$findDemographics()
+  # triageCTRY = dpc$spim$getOneOneOne() %>% 
+  #   filter(statistic == "triage" & codeType == "CTRY" & name=="England" & source %in% c("111","999")) %>% 
+  #   tsp$aggregateSource(fn=sum, na.rm=TRUE) %>% 
+  #   filter(date >= "2020-03-15") %>%
+  #   dpc$demog$findDemographics()
   finalTriageCTRY = triageCTRY %>% filter(subgroup %in% c("urgent clinical review","emergency ambulance")) %>% tsp$aggregateSubgroup() %>% dpc$demog$findDemographics()
-  rationale(codeType = "CTRY","triage","SPI-M 111 & 999 feed (only available for England)","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch. Daily 111 & 999 case counts added together.")
+  rationale(codeType = "CTRY","triage","SPI-M 111 breakdown (only available for England)","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch, in ages > 24.")
   
   tmp4Nations = dpc$datasets$getPHEApiNations()
   
@@ -52,7 +59,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
     dpc$spim$getLineListIncidence(specimenOrReport = "specimen") %>% 
       filter(codeType == "CTRY" & subgroup=="Pillar 1") %>% 
       tsp$aggregateAge() %>% 
-      tsp$aggregateGender() %>% #tsp$aggregateSubgroup()
+      tsp$aggregateGender() %>% #tsp$aggregateSubgroup() %>%
       dpc$demog$findDemographics()
   )
   
@@ -149,24 +156,28 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   rationale(codeType = "UK","death","Sum of 4 nations figures previously selected for CTRY deaths from PHE API","none")
   
   ### Triage calls - NHSER ----
-  triageNHSER = dpc$spim$getOneOneOne() %>% 
-    filter(statistic == "triage" & codeType == "NHSER" & source %in% c("111")) %>% #,"999")) %>% 
+  triageNHSER = dpc$spim$getOneOneOneIncidence(dateFrom = as.integer(Sys.Date()-26*7)) %>% filter(!ageCat %in% c("<1","1-4","5-14","15-24")) %>% 
+    tsp$aggregateAge() %>%
+    tsp$aggregateGeography(targetCodeTypes = "NHSER") %>%
+    filter(statistic == "triage" & codeType == "NHSER") %>% 
     #tsp$aggregateSource(fn=sum) %>% #, na.rm=TRUE) %>% 
     filter(date >= "2020-03-15") %>%
     dpc$demog$findDemographics()
   finalTriageNHSER = triageNHSER %>% filter(subgroup %in% c("urgent clinical review","emergency ambulance")) %>% 
     tsp$aggregateSubgroup() %>% 
     dpc$demog$findDemographics()
-  rationale(codeType = "NHSER","triage","SPI-M 111 feed","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch.")
+  rationale(codeType = "NHSER","triage","SPI-M 111 feed","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch, in ages > 24.")
   
   ### Cases - NHSER ----
   casesNHSER = dpc$spim$getLineListIncidence(specimenOrReport = "specimen") %>% 
     filter(codeType == "NHSER") %>% 
+    filter(code != "E99999999") %>%
     tsp$aggregateAge() %>% 
-    tsp$aggregateGender() %>% #tsp$aggregateSubgroup()
+    tsp$aggregateGender() %>%
     dpc$demog$findDemographics()
-  finalCasesNHSER = casesNHSER %>% filter(subgroup == "Pillar 1")
-  rationale(codeType = "NHSER","case","SPI-M line list","Line list aggregated by age and gender. Pillar 1 tests only as testing volumes variable in Pillar 2.")
+  finalCasesNHSER = casesNHSER %>% tsp$aggregateSubgroup() %>%
+    dpc$demog$findDemographics()
+  rationale(codeType = "NHSER","case","SPI-M line list","Line list aggregated by age and gender. unknown regions removed. Pillar 1 and 2 combined.")
   
   ### Admissions - NHSER ----
   admissionsNHSER = dpc$spim$getSPIMextract() %>% 
@@ -187,6 +198,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   ### Deaths - NHSER ----
   deathsNHSER = dpc$spim$getDeathsLineListIncidence(deathOrReport = "death") %>% 
     filter(codeType == "NHSER") %>% 
+    filter(code != "E99999999") %>%
     tsp$aggregateAge() %>% 
     tsp$aggregateGender() %>% 
     dpc$demog$findDemographics()
@@ -250,7 +262,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
 currentRtQuick = tsp$getDaily(id = "CURRENT-RT-QUICK", orElse=function() {
   set.seed(100)
   with(currentDataset, {
-    
+    # browser()
     finalRtAssumed = finalDataset %>%
       tsp$estimateRtWithAssumptions(quick = TRUE) %>%
       tsp$logIncidenceStats() %>%

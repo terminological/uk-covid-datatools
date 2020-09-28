@@ -64,7 +64,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     #TODO: check unequal lengths or non overlapping timeseries dates
     
-    tmp= tmp %>% dplyr::mutate(ageCat=NA)
+    tmp= tmp %>% dplyr::mutate(ageCat=NA_character_)
     tmp = tmp %>% 
       covidStandardDateGrouping() %>%
       dplyr::summarise(value = fn(value, ...)) %>%
@@ -81,7 +81,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by gender, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
     
-    tmp= tmp %>% dplyr::mutate(gender=NA)
+    tmp= tmp %>% dplyr::mutate(gender=NA_character_)
     tmp = tmp %>% 
       covidStandardDateGrouping() %>% 
       dplyr::summarise(value = fn(value, ...)) %>%
@@ -98,7 +98,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by subgroup, but not all items have a subgroup. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
   
-    tmp= tmp %>% dplyr::mutate(subgroup=NA)
+    tmp= tmp %>% dplyr::mutate(subgroup=NA_character_)
     tmp = tmp %>% 
       covidStandardDateGrouping() %>% 
       dplyr::summarise(value = fn(value, ...)) %>%
@@ -447,7 +447,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
         dplyr::filter(type == "incidence") %>%
         self$completeAndRemoveAnomalies() %>%
-        dplyr::mutate(I = value) %>%
+        dplyr::mutate(I = value, errors="") %>%
          
 
       groupedDf = groupedDf %>% covidStandardGrouping()
@@ -981,23 +981,35 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
 
-  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NA, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=NULL, ...) {
+  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=NULL, ...) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
     
     denominatorExpr = enexpr(denominatorExpr)
     
-    df = df %>% mutate(
-      x = date,
-      denom = !!denominatorExpr,
-      y = ifelse(!is.na(denom), value/denom, value),
-      yMid = ifelse(!is.na(denom), Est.Quantile.0.5.value/denom, Est.Quantile.0.5.value),
-      yMin1 = ifelse(!is.na(denom), Est.Quantile.0.025.value/denom, Est.Quantile.0.025.value),
-      yMax1 = ifelse(!is.na(denom), Est.Quantile.0.975.value/denom, Est.Quantile.0.975.value),
-      yMin2 = ifelse(!is.na(denom), Est.Quantile.0.25.value/denom, Est.Quantile.0.25.value),
-      yMax2 = ifelse(!is.na(denom), Est.Quantile.0.75.value/denom, Est.Quantile.0.75.value),
-    )
+    if (identical(denominatorExpr, NULL)) {
+      df = df %>% mutate(
+        x = date,
+        y = value,
+        yMid = Est.Quantile.0.5.value,
+        yMin1 = Est.Quantile.0.025.value,
+        yMax1 = Est.Quantile.0.975.value,
+        yMin2 = Est.Quantile.0.25.value,
+        yMax2 = Est.Quantile.0.75.value,
+      )
+    } else {
+      df = df %>% mutate(
+        x = date,
+        denom = !!denominatorExpr,
+        y = value/denom,
+        yMid = Est.Quantile.0.5.value/denom,
+        yMin1 = Est.Quantile.0.025.value/denom,
+        yMax1 = Est.Quantile.0.975.value/denom,
+        yMin2 = Est.Quantile.0.25.value/denom,
+        yMax2 = Est.Quantile.0.75.value/denom,
+      )
+    }
     
     colour = tryCatch(ensym(colour),error = function(e) NULL)
     p2 = self$plotDefault(df,events,dates, ylim=ylim)+ylab("Incidence")
@@ -1026,7 +1038,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NA, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, ...
+  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, ...
   ) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
@@ -1034,12 +1046,21 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     denominatorExpr = enexpr(denominatorExpr)
     
-    df = df %>% mutate(
-      x = date,
-      denom = !!denominatorExpr,
-      y = ifelse(!is.na(denom), value/denom, value),
-      yMid = ifelse(!is.na(denom), RollMean.value/denom, RollMean.value)
-    )
+    if (identical(denominatorExpr,NULL)) {
+      df = df %>% mutate(
+        x = date,
+        denom = !!denominatorExpr,
+        y = value,
+        yMid = RollMean.value
+      )
+    } else {
+      df = df %>% mutate(
+        x = date,
+        denom = !!denominatorExpr,
+        y = value/denom,
+        yMid = RollMean.value/denom
+      )
+    }
       
     p2 = self$plotDefault(df,events,dates,ylim=ylim)+ylab("Incidence")
     p2 = p2+
