@@ -1,0 +1,1250 @@
+---
+title: "Regional infectivity of COVID-19"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand/parameterisation/regional-infectivity" })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Estimates of regional infectivity of COVID-19 in the United Kingdom following imposition of social distancing measures
+
+Robert Challen^1,2^; Krasimira Tsaneva-Atanasova^1,3^; Martin Pitt^4^;
+Tom Edwards^2^; Luke Gompels^2^; Lucas Lacasa^5^; Ellen
+Brooks-Pollock^6^; Chris Martin^7^; Gareth Griffith^6,8^; Leon
+Danon^3,9^
+
+1)  EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2)  Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3)  The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4)  NIHR CLAHRC for the South West Peninsula, St Luke’s Campus, University of Exeter Medical School, Exeter, UK.
+5)  School of Mathematical Sciences, Queen Mary University of London, London E1 4NS, UK
+6)  Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+7)  Crystallise Ltd, Basildon, Essex, UK SS15 6SS
+8)  MRC Integrative Epidemiology Unit, University of Bristol, United Kingdom;
+9)  Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
+
+## Abstract
+
+***We describe regional variation in the reproduction number of
+SARS-CoV-2 infections observed using publicly reported data in the UK,
+with a view to understanding both if there are clear hot spots in viral
+spread in the country, or other spatial patterns. Based on case data up
+to the 9th April, we estimate that the viral reproduction number remains
+above 1 overall in the UK but that its trend is to decrease. This
+suggests the peak of the first wave of COVID-19 patients is imminent. We
+find that there is significant regional variation in the UK and that
+this is changing over time. Within England currently the reproduction
+number is lowest in the Midlands (1.11 95% CI 1.07; 1.14) , and highest
+in the North East of England (1.38 95% CI 1.33-1.42). There are long and
+variable time delays between infection and detection of cases, and thus
+it remains unclear whether the reduction in the reproduction number is a
+result of social distancing measures. If we are to prevent further
+outbreaks, it is critical that we both reduce the time taken for
+detection and improve our ability to predict the regional spread of
+outbreaks.***
+
+Keywords : COVID-19; SARS-CoV-2; reproduction number; regional
+variation;
+
+Competing interests: Support for RC and KTA’s research is provided by
+the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of
+the NHS Global Digital Exemplar programme (GDE); no financial
+relationships with any organisations that might have an interest in the
+submitted work in the previous three years, no other relationships or
+activities that could appear to have influenced the submitted work.
+
+Funding: RCh and KTA gratefully acknowledges the financial support of
+the EPSRC via grant EP/N014391/1 and NHS England, Global Digital
+Exemplar programme. LD and KTA gratefully acknowledges the financial
+support of The Alan Turing Institute under the EPSRC grant EP/N510129/1.
+LL acknowledges the financial support of the EPSRC via Early Career
+Fellowship EP/P01660X/1.
+
+Authors contributions: All authors discussed the concept of the article
+and RC wrote the initial draft. KTA, TE, LG, LL, EB-P, CM, GG and LD
+commented and made revisions. All authors read and approved the final
+manuscript. RC is the guarantor. The views presented here are those of
+the authors and should not be attributed to TSFT or the GDE.
+
+```{r setup}
+library(tidyverse)
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
+```
+
+## Background
+
+In late 2019 an outbreak of a novel infectious disease was detected. It
+manifested principally with severe acute respiratory distress, and
+pneumonia,[@huangClinicalFeaturesPatients2020]
+although many cases followed a mild course[@wuCharacteristicsImportantLessons2020].
+The pathogen was rapidly identified as a new species of coronavirus
+(severe acute respiratory syndrome coronavirus 2 - SARS-CoV-2), and the
+disease named COVID-19[@NamingCoronavirusDisease].
+Global transmission of the virus followed and major outbreaks have been
+observed in Europe, beginning with Italy[@ceredaEarlyPhaseCOVID192020].
+On the 31st Jan 2020 the first cases were identified in the UK[@mossLessonsManagingHighconsequence2020].
+This was initially managed using testing of suspected individuals in the
+community, contact tracing and isolation of affected cases. However this
+was successful only in delaying the spread of the disease and on 13th
+March 2020 the UK government moved towards a mitigation strategy
+reserving testing for hospital inpatients only[@publichealthenglandCOVID19InvestigationInitial2020].
+Following this, a stepwise implementation of social distancing measures
+were mandated by the government including voluntary self isolation of
+any symptoms & vulnerable people[
+[@publichealthenglandCOVID19GuidanceSocial2020],
+a ban on non essential travel worldwide[@foreignTravelAdviceCoronavirus2020]
+and school closures[@departmentforeducationClosureEducationalSettings2020].
+Finally on 23rd March 2020 the government mandated that everyone apart
+from essential workers should stay at home and away from others[@cabinetofficeFullGuidanceStaying2020]
+
+Epidemiological studies conducted during the outbreak in China have
+provided us with a number of estimates of the parameters describing the
+virus’s spread through the population including a reproduction number
+between 2.24 and 3.58[@zhaoPreliminaryEstimationBasic2020]
+and a median incubation period of 5.1 days (credible interval 4.5 to
+5.8)[@lauerIncubationPeriodCoronavirus2020].
+It is estimated that fewer than 2.5% of people will show signs before
+2.2 days and 97.5% of people who will develop symptoms will have done so
+by 11.2 days after exposure[@lauerIncubationPeriodCoronavirus2020].
+
+We investigated the reproduction number of SARS-CoV-2 in the UK in order
+to determine whether there are any obvious spatial or temporal patterns
+beyond those resulting from the social distancing measures imposed. 
+
+## Methods
+
+### Data
+
+Over the period of 7th March 2020 until the present day we have
+collected all the daily incidence statistics officially released on the
+Public Health England (PHE) COVID-19 website[@publichealthenglandTotalUKCOVID19].
+This includes a regional breakdown of cases in England by Unitary
+Authority and by NHS region. It also includes a country level summary of
+cases in England, Scotland, Wales and Northern Ireland. Regional
+breakdowns for Scotland and Wales are available from Public Health
+Wales[@PublicHealthWales]
+and Public Health Scotland[@CoronavirusScotlandGov]
+respectively. A regional breakdown in Northern Ireland is made available
+on weekdays, but at present a full time series is not available[@COVID19SurveillanceReports].
+
+The time series data is based on daily
+statistics in which there are various inconsistencies. The local
+breakdowns provided do not tally with the country wide figures as the
+locations of some cases were not confirmed at the time of publication.
+The cases with unknown location are necessarily left unresolved in our
+collated data. To adjust for these cases, which vary in quantity from
+day to day, we assumed that they are distributed across the locales in a
+manner proportional to the daily incidence of cases in the given locale
+(unitary authority or NHS region as appropriate).
+
+Less frequently, in the time series we find further data quality issues,
+presumably where cases may have been reassigned from one locale to
+another between daily publications. This can result in an apparent
+negative incidence of disease in a given locale for a given day. In this
+event we have assumed the incidence for that locale is zero. Both these
+data cleansing steps are performed by a publicly available R library
+(available at
+[*https://github.com/terminological/uk-covid-datatools*](https://github.com/terminological/uk-covid-datatools)).
+
+```{r}
+
+keyDates = tibble(
+  date = c(as.Date(c(
+    #"2020-03-16",
+    "2020-03-16",
+    "2020-03-23",
+    "2020-04-06",
+    "2020-04-20"
+  ))),
+    #)), max(ts$r0UKRegional$date, na.rm=TRUE)),
+  event = c(
+    #"Social isolation of vulnerable",
+    "1 wk pre-lockdown",
+    "Lockdown",
+    "2 wks post-lockdown",
+    "4 wks post-lockdown"#,
+  )
+  #  "Latest")
+) %>% mutate(label = paste0(date,": \n",event))
+
+# markup the timeseries data with key dates:
+
+ts$r0CombinedUK = ts$r0CombinedUK %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-14")) %>% filter(!stringr::str_starts(code,"N"))
+ts$r0EnglandNHS = ts$r0EnglandNHS %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09"))
+ts$r0UK = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region == "UK")
+ts$r0UKRegional = ts$r0UKRegional %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+ts$r0UKRegionalDeaths = ts$r0UKRegionalDeaths %>% left_join(keyDates, by="date") %>% filter(date >= as.Date("2020-03-09")) %>% filter(uk_region != "UK")
+
+```
+
+### Serial interval estimates
+
+Estimating the reproduction number of SARS-CoV-2 requires an estimate of
+the expected time interval between infections in a chain of transmission
+(the serial interval - SI). Case by case transmission data is not
+published in the UK however there are numerous estimates of the serial
+interval in the scientific literature from other geographical regions
+with established outbreaks [@biEpidemiologyTransmissionCOVID192020; @ceredaEarlyPhaseCOVID192020; @ganyaniEstimatingGenerationInterval2020; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleTransmissionIntervalEstimates2020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimeVaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhanweiduSerialIntervalCOVID192020; @zhaoEstimatingSerialInterval2020] 
+Where specified these articles generally describe the serial interval to
+be distributed as a gamma function, with parameters as summarised in
+table 1.
+
+*Table 1 - Literature estimates of serial interval for COVID-19
+infection.*
+
+![](media/image9.png){width="6.270833333333333in"
+height="4.333333333333333in"}
+
+From this data we calculate a weighted mean of the published parameters
+and inferred a serial interval described by a gamma distribution,
+parameterised with mean SI of 4.56 days (credible interval: 2.54 - 7.36)
+and standard deviation 4.53 days (credible interval 4.17 - 5.05). With a
+serial interval shorter than the estimated incubation period we expect
+that some transmission will occur before the index case has symptoms.
+
+```{r}
+SItable1 %>% group_by(`Reference`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,2,0.5,1))
+```
+
+## Used serial intervals
+
+```{r}
+
+#  wtSIs is the serial intervals
+tdp = function(x,y,z) sprintf("%1.2f (%1.2f - %1.2f)", x ,y, z)
+paste0("Serial interval mean plus 95% credible interval: ",tdp(wtSIs$mean_si, wtSIs$min_mean_si, wtSIs$max_mean_si))
+paste0("Serial interval standard deviation plus 95% credible interval: ",tdp(wtSIs$std_si, wtSIs$min_std_si, wtSIs$max_std_si))
+
+```
+
+## Significant dates in epididemic UK
+
+https://en.wikipedia.org/wiki/2020_coronavirus_pandemic_in_the_United_Kingdom
+
+* Surveillance testing: https://www.gov.uk/government/news/new-surveillance-system-for-early-detection-of-covid-19: 2020-02-26
+* Sport fixtures cancelled: 2020-03-13
+* Tests only for inpatients: https://www.gov.uk/government/publications/wuhan-novel-coronavirus-initial-investigation-of-possible-cases/investigation-and-initial-clinical-management-of-possible-cases-of-wuhan-novel-coronavirus-wn-cov-infection: 2020-03-13
+* Voluntary self isolation of any symptoms & vunerable people: https://www.gov.uk/government/publications/covid-19-guidance-on-social-distancing-and-for-vulnerable-people: 2020-03-16
+* Non essential travel worldwide banned: https://www.gov.uk/guidance/travel-advice-novel-coronavirus#history: 2020-03-19
+* School closures: https://www.gov.uk/government/publications/closure-of-educational-settings-information-for-parents-and-carers#history: 2020-03-19
+* Full lockdown: https://www.gov.uk/government/publications/full-guidance-on-staying-at-home-and-away-from-others - 2020-03-23
+
+```{r}
+glimpse(keyDates)
+
+```
+## Statistical methods
+
+Using the inferred serial interval distribution, we analysed the time
+series data using R[
+(](https://paperpile.com/c/792GNr/pZAu)[23)](https://paperpile.com/c/792GNr/pZAu)
+and the EpiEstim[
+(](https://paperpile.com/c/792GNr/0kKC+aetu+Z7k2+xlPK)[24–27)](https://paperpile.com/c/792GNr/0kKC+aetu+Z7k2+xlPK)
+library to estimate the time varying reproduction numbers between the
+11th March until the 9th April, with the underlying assumption that
+there is negligible mixing of populations between each geographical
+area. The validity of this assumption decreases as we consider smaller
+geographies, particularly in the early stages of the outbreak before
+unnecessary travel was restricted.
+
+Essentially, R(t) is estimated by inferring connections between pairs of
+cases based on the difference in their dates of symptom onset and an
+assumed serial interval. The EpiEstim package[
+(](https://paperpile.com/c/792GNr/xlPK)[27)](https://paperpile.com/c/792GNr/xlPK)
+implements the method outlined by Cori et al. (2013)[
+(](https://paperpile.com/c/792GNr/aetu)[25)](https://paperpile.com/c/792GNr/aetu),
+which is based on an original method from Wallinga and Teunis (\$1004)
+[(](https://paperpile.com/c/792GNr/Z7k2)[26)](https://paperpile.com/c/792GNr/Z7k2).
+The method uses a sliding time window during which the instantaneous
+reproduction number is assumed to be constant. We empirically decided on
+a 5 day sliding window for calculations of the time varying reproduction
+number, R(t), which aligns with the median incubation period of the
+virus, and offered a good trade off between noise and loss of detail.
+R(t) was visualised using ggplot and r-spatial libraries, using
+administrative maps from the UK Office for National Statistics[
+(](https://paperpile.com/c/792GNr/NYpa)[28)](https://paperpile.com/c/792GNr/NYpa).
+The R(t) calculation was performed for the various regions of the NHS in
+England and compared to the overall time series for England, using a two
+sided t-Test to detect the significance of regional differences between
+the observations.
+
+In the last part of our analysis we look at the rate of change in R(t)
+estimated using a simple linear regression. We calculated a regional
+estimate of the current rate of change of R(t), by fitting a linear
+equation to the last 10 points, and extracting the derivative of R(t),
+associated confidence intervals and measures of goodness of fit.
+
+# Results
+
+Figure 1 shows the time dependence of the reproduction number of
+SARS-CoV-2 in different regions of the UK. The value of R(t) is within
+the estimates described in other countries[
+(](https://paperpile.com/c/792GNr/gZqS)[1](https://paperpile.com/c/792GNr/gZqS)[1)](https://paperpile.com/c/792GNr/gZqS)
+(2.24 to 3.58) and is seen in all regions to be decreasing overall. R(t)
+remains above or equal to 1 at all times and hence within the region of
+exponential growth of COVID-19 cases. Over the period from March 19th to
+March 25th it is notable that, whilst decreasing in England, the
+reproduction number rose in Northern Ireland, Scotland and Wales before
+falling again. On the 8th April the R(t) was close to one in all regions
+apart from England. Two significant dates are marked on the time series.
+Firstly, the recommendation for specific social isolation of the
+vulnerable on the 16th March, and secondly, the widespread order to
+remain at home on the 23rd March. These dates represent the initial and
+final dates of implementation of social restrictions. The date of one
+serial interval post-lockdown is also shown.
+
+![](media/image4.png){width="6.270833333333333in" height="4.25in"}
+
+*Figure 1 - median value of R(t) and 95% confidence intervals for the
+individual countries in the United Kingdom. The dotted line at R=1
+represents the limit of exponential growth.*
+
+### UK coutries
+
+
+
+```{r fig.cap="The R(t) in the different countries of the UK in figure 1. This has fallen from a high initial level (2-3) to just over 1 by 2020-04-07 in all regions."}
+
+r0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey75")+
+  
+  coord_cartesian(ylim=c(0, 3))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  ggrepel::geom_text_repel(
+          aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
+  facet_wrap(vars(uk_region))
+
+r0ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig1_ukRegionRt")
+```
+```{r}
+r0ukregionalplotdeaths = ggplot(ts$r0UKRegionalDeaths, aes(x=date, y=`Median(R)`, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`))+
+  geom_ribbon(alpha=0.2)+geom_line()+
+  geom_hline(yintercept = 1, colour="grey75")+
+  
+  coord_cartesian(ylim=c(0, 3))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  ggrepel::geom_text_repel(
+          aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
+  facet_wrap(vars(uk_region))
+
+r0ukregionalplotdeaths %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig1_ukRegionRtDeaths")
+```
+```{r fig.cap="The rate of change of R(t) in the different countries of the UK. This shows the viral reproduction has been decelerating since 2020-03-31 in all regions."}
+
+deltaR0ukregionalplot = ggplot(ts$r0UKRegional, aes(x=date, y=slope, ymin=slopeLowerCi, ymax=slopeUpperCi))+
+  geom_ribbon(alpha=0.2)+geom_line(linetype="dashed")+
+  geom_hline(yintercept = 0, colour="grey75")+
+  coord_cartesian(ylim=c(-0.2, 0.2))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates, show.legend = FALSE)+
+  ggrepel::geom_text_repel(
+          aes(x=date, y=Inf, colour=event, label=event),data=keyDates, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(10/ggplot2:::.pt/(96/72)))+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust =0.5))+
+  facet_wrap(vars(uk_region))
+
+deltaR0ukregionalplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig5_deltaUkRegionRt")
+```
+
+
+Table 2 shows the current estimated values of R(t) for each individual
+administrative region of NHS England. The lowest values for R(t) are
+observed in the Midlands and in London, whilst higher values at this
+stage were seen in the North East and the South West. These point
+estimates are seen to change quite significantly over time.
+
+*Table 2 estimated R(t) for the different NHS regions on the 7th April
+2020. The point estimates are quite volatile and we observe change in
+the order from day to day.*
+
+![](media/image2.png){width="6.770833333333333in"
+height="1.5377821522309711in"}
+
+```{r}
+ts$r0EnglandNHS %>% filter(date == max(date)) %>% mutate(
+  `Median(R)` = sprintf("%1.2f", `Median(R)`),
+  `95% confidence interval`=sprintf("(%1.2f; %1.2f)",`Quantile.0.025(R)`,`Quantile.0.975(R)`)
+) %>% select(`NHS region`= england_nhs_region,`Median(R)`,`95% confidence interval`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table2_Rt_by_NHSregion", defaultFontSize = 8)
+```
+
+In Figure 2 we plot the absolute difference of R(t) in the 7 NHS England
+administrative regions, from the R(t) of England overall, as a baseline.
+This demonstrates the volatility described above and highlights the
+regional differences in R(t) over time. Prior to the imposition of
+social distancing the patterns observed are dominated by noise, as in
+the early phase of the outbreak the case numbers in individual regions
+were small. However from the 27th March onwards we can see a clearer
+trend emerging with the East of England, Midlands, South East and South
+Western regions approximately tracking the England baseline. London is
+consistently below this baseline and the North West, and less so North
+East & Yorkshire are consistently above the baseline. These trends of
+the differences between the 27th March to the 9th April were further
+analysed with a pairwise t-Test and presented in table 3 where we can
+see that the R(t) differences observed in London, the East, the North
+East and North West of England over this time period are statistically
+significant. The mean difference in R(t) between London and the North
+West could be about 0.35, which could have important consequences for
+the outbreak progression.
+
+![](media/image6.png){width="6.270833333333333in" height="4.25in"}
+
+*Figure 2 - median value of R(t) and 95% confidence intervals for the
+individual regions in NHS England as an absolute difference to the R(t)
+for the whole of England (as shown in the top left panel of figure 1).*
+
+
+
+## NHS regions
+
+The same analysis as above but looking at NHS regions. there is some evidence that viral replication is different in different areas.
+
+```{r}
+
+tmp = ts$r0UKRegional %>% filter(uk_region == "England") %>% select(date,baseline=`Median(R)`)
+englandnhsFromBaseline = ts$r0EnglandNHS %>% left_join(tmp, by="date") %>% mutate(
+  `R(t) from baseline`=`Median(R)`-baseline, ymin=`Quantile.0.025(R)`-baseline, ymax=`Quantile.0.975(R)`-baseline
+)
+
+#glimpse(ts$tidyEnglandNHS)
+englandnhsplot = ggplot(englandnhsFromBaseline, aes(x=date, y=`R(t) from baseline`, ymin=ymin, ymax=ymax))+
+  geom_ribbon(alpha=0.2)+geom_line(linetype="dotted")+
+  geom_hline(yintercept = 0, colour="grey75")+
+  facet_wrap(vars(england_nhs_region)) + 
+  standardPrintOutput::narrowAndTall()+
+  coord_cartesian(ylim=c(-1,1))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates)+
+  scale_x_date(date_breaks="1 week", date_labels = "%d-%b")+
+  theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
+
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig2-englandNHSRt")
+```
+
+*Table 3 - Regional variation in R(t), and associated confidence
+intervals, from the 27th March until the 9th April for each NHS region
+compared to a baseline for the whole of England.*
+
+Significance tests:
+
+* consider using a time series specific meausure:
+* e.g. https://cran.r-project.org/web/packages/TSdist/TSdist.pdf
+
+```{r}
+englandnhsFromBaselineSignificance = englandnhsFromBaseline %>% 
+  filter(date > as.Date("2020-03-27")) %>% 
+  group_by(england_nhs_region) %>%
+  group_modify(function(d,g,...) {
+    res = t.test(d$`Median(R)`,d$baseline,paired = TRUE)
+    return(tibble(
+      `R(t) effect size` = sprintf("%1.2f", res$estimate),
+      `95% CI` = sprintf("(%1.2f; %1.2f)", res$conf.int[1], res$conf.int[2]),
+      pValue = ifelse(res$p.value < 0.001, "<0.001", sprintf("%1.3f", res$p.value))
+    ))
+  }) %>% rename(`England NHS region`=england_nhs_region) 
+englandnhsFromBaselineSignificance %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table2-regionalSignificance", defaultFontSize = 8)
+
+```
+
+In figures 3 and 4 we present the detailed regional breakdown of
+reproduction number in the 149 unitary authorities in England. These are
+illustrated at time points representing the start of the 2 social
+distancing measures implemented by the UK government and described
+above, and marked on figures 1 and 2. In the individual unitary
+authority regions case numbers may be quite small so the estimates of
+R(t) may have wide confidence intervals which are not shown. The full
+regional breakdown including confidence intervals is available as
+supplementary materials. In the vast majority of regions and time points
+the reproduction number is greater than 1, but the same decreasing trend
+is present.
+
+```{r}
+data("UKCovidMaps")
+
+# https://github.com/tidyverse/ggplot2/issues/3391
+# some issues joining tibble onto sf - which 
+
+r0shapes = UKCovidMaps$reportingRegions %>% 
+  # fill in missing dates to prevent the map having disappearing / reappearing regions
+  crossing(tibble(date=unique(ts$r0CombinedUK$date))) %>% 
+  left_join(keyDates, by="date") %>%
+  left_join(
+    ts$r0CombinedUK,
+    by=c("code","date"), suffix=c("",".dup")) %>% 
+  mutate(ago=difftime(date,lubridate::now(),units="days")) %>% 
+  sf::st_as_sf()
+
+defaultR0Map = function(data) {
+  return(
+    ggplot(data)+
+    geom_sf(aes(fill=`Median(R)`))+
+    scale_fill_gradient2(
+      low="green",
+      mid="white",
+      high="red",
+      midpoint=0,
+      trans="log",
+      na.value = "grey80", 
+      limits=c(0.2,5), 
+      breaks=c(0.2,0.5,1,2,5), 
+      labels=c("<0.2","0.5","1","2",">5"),
+      oob=scales::squish)+
+    standardPrintOutput::narrowAndTall()+
+    standardPrintOutput::mapTheme()
+  )
+}
+
+defaultDeltaR0Map = function(data) {
+  return(
+    ggplot(data)+
+    geom_sf(aes(fill=slope))+
+    scale_fill_gradient2(
+      low="cyan",
+      mid="white",
+      high="magenta",
+      midpoint=0,
+      na.value = "grey80",
+      limits=c(-0.5,0.5), 
+      breaks=c(-0.5,-0.25,0,0.25,0.5), 
+      labels=c("<-0.5","-0.25","0","0.25",">0.5"),
+      oob=scales::squish)+
+    standardPrintOutput::narrowAndTall()+
+    standardPrintOutput::mapTheme()
+  )
+}
+```
+
+*Figure 3 - the median value of R(t) at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England* *Unitary Authority regions. Not all regions provided time
+regional series data over the period under investigation and these areas
+are represented in grey.*
+
+```{r}
+ukwide = 
+  defaultR0Map(r0shapes %>% filter(!is.na(label)))+
+  facet_wrap(vars(label), nrow = 1)
+ukwide %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig3_englandMap")
+
+```
+*Figure 4 - the median value of R(t) at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England Unitary Authority region in London*
+
+```{r}
+london = ukwide + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + standardPrintOutput::mapTheme()
+london %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_londonMap")
+```
+```{r}
+# birmingham = ukwide + coord_sf(crs = 4326,xlim = c(-2.3, -1.5), ylim = c(52.25, 52.75), expand = FALSE) + standardPrintOutput::mapTheme()
+# birmingham %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_birminghamMap")
+```
+In figure 5 we present the regional analysis of the current rate of
+change of R(t). This aims to demonstrate the magnitude in change of R(t)
+over time and hence give us a sense of whether social distancing
+measures are currently having the desired effect of reducing the overall
+velocity of infection. In this time series, if the rate of change of
+R(t) is positive, the infection is accelerating. Negative values, on the
+other hand, represent deceleration. We can see that in England, the
+viral infection has been decelerating from before the onset of the full
+social distancing policies of the 23rd March. In the other regions of
+the UK on the other hand we see a continued acceleration of the viral
+spread until approximately one serial interval after the 23rd March
+after which the infection begins to decelerate.
+
+![](media/image3.png){width="6.270833333333333in" height="4.25in"}
+
+*Figure 5 - the rate of change of R(t) per day in different regions of
+the UK.*
+
+In figures 6 and 7 we present a more detailed regional analysis of the
+rate of change of R(t) by Unitary Authority in England or Local Health
+Board in Scotland and Wales. We do not have complete data for this
+regional breakdown in Wales, but in the far right panel representing the
+most up to date time point, we see that in the vast majority of areas in
+England the rate of change is negative (cyan) representing a continued
+day on day fall in transmission. However there is seen to be regional
+variation in the preceding days and weeks, and that the widespread
+negative rate of change of R(t) is a relatively recent feature.
+
+![](media/image7.png){width="6.770833333333333in"
+height="4.597222222222222in"}
+
+*Figure 6 - the median value of R(t) at the time of announcement of
+different social interventions designed to prevent spread of SARS-CoV-2,
+by England Unitary Authority regions (England), and Local Health Boards
+(Scotland and Wales). Not all regions provided time regional series data
+over the period under investigation and these areas are represented in
+grey.*
+
+
+
+```{r}
+ukwideDelta = 
+  defaultDeltaR0Map(r0shapes %>% filter(!is.na(label)))+
+  facet_wrap(vars(label), nrow = 1)
+ukwideDelta %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig6_englandMapDelta")
+```
+
+![](media/image8.png){width="6.770833333333333in"
+height="3.4444444444444446in"}*Figure 7 - the median value of R(t) at
+the time of announcement of different social interventions designed to
+prevent spread of SARS-CoV-2, by England Unitary Authority region in
+London*
+
+```{r}
+londonDelta = ukwideDelta + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + standardPrintOutput::mapTheme()
+londonDelta %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig7_londonMapDelta")
+```
+```{r}
+# birminghamDelta = ukwideDelta + coord_sf(crs = 4326,xlim = c(-2.3, -1.5), ylim = c(52.25, 52.75), expand = FALSE) + standardPrintOutput::mapTheme()
+# birminghamDelta %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/regional-infectivity/Fig7_birminghamMapDelta")
+```
+
+
+# Discussion
+
+The results presented above demonstrate a regional and time based
+variation in the reproduction number of SARS-CoV-2. Currently the
+reproduction number is close to 1 in most regions and the rate of change
+is negative suggesting that we will see a peak to the infection shortly.
+
+There are several significant dates of both social distancing measures,
+and methodological changes, presented in this analysis. In interpreting
+the relationship between the dates and changes in the reproduction
+number we must remember that changes in reproduction number will lag the
+introduction of a social measure by at least the incubation period of
+SARS-CoV-2 (median 5.1 days - 95% IQR 2.2-11.2)[
+(](https://paperpile.com/c/792GNr/e8tU)[12)](https://paperpile.com/c/792GNr/e8tU).
+Given the testing strategy that is currently in place, COVID-19 cases
+will not be identified until a patient is admitted to hospital with
+symptoms, the test is performed and results obtained. This introduces
+further time delays which may vary in length from individual to
+individual. The delay between onset of symptoms and admission has been
+estimated at 5 to 9 days[
+(](https://paperpile.com/c/792GNr/wHvg)[29)](https://paperpile.com/c/792GNr/wHvg).
+The delay induced by the test processing is unknown. If we assume a 2
+day delay for testing, we would estimate that interventions begin to
+have an effect from 9 days after the intervention, have half of their
+impact in 14 days, and begin to have full impact after 22 days.
+
+In the accompanying supplementary materials we present an animation of
+the R(t) over time, and in the rate of change in R(t) over time. This
+animation raises the possibility of waves of increasing and decreasing
+R(t) spreading throughout the UK. If such waves can be identified and
+predicted we may be able to intercept them in the future, through a
+targeted application of community testing and a more localised social
+distancing intervention. For this to be an option however we will need
+much more granular data on the location of confirmed and suspected
+cases, and to as far as possible reduce the time delay between infection
+and detection.
+
+Globally COVID-19 case growth rates are observed to pass through
+different phases[
+(](https://paperpile.com/c/792GNr/yrcH)[30)](https://paperpile.com/c/792GNr/yrcH),
+with an initial 35% day on day growth rate, typically falling to 22%,
+presumably after both the introduction of social distancing measures,
+and as exponential growth in resolved cases reduces the size of the
+infective cohort. However, because of changes in test strategy, the step
+wise implementation of social distancing measures, and the variable lag
+introduced by the incubation period, it is difficult to get a picture of
+the causative influence of social distancing measures on the drop in
+R(t) rates over time[
+(](https://paperpile.com/c/792GNr/oxHL)[31)](https://paperpile.com/c/792GNr/oxHL).
+It is however possible to note that significant changes in both R(t),
+and the rate of change of R(t), predate the implementation of social
+distancing measures in the UK.
+
+Our analysis demonstrated significant regional variability exists, most
+notably at a country level, but it does not identify any single location
+that is a “hot spot” of viral infectivity within the UK, but rather that
+areas of increased viral reproduction migrates around the country over
+time. This migration does not seem entirely random, and is a focus of
+future investigation.
+
+# Limitations
+
+Due to the fragmented nature of reporting of the outbreak across the 4
+main countries of the UK there is insufficient time series data
+available to perform a UK wide regional breakdown of R(t). The
+availability of time series data is particularly challenging in Northern
+Ireland and Wales where we only have a very limited data set.
+
+The time series data we have collected has data quality issues
+identified in the methods section, which has required some data
+cleansing. Furthermore we believe changes in the methodology, and
+clinical criteria for testing patients has created an artifactual
+decrease in the apparent R(t) in the days after the 13th March, which
+influences the overall ability to draw conclusions.
+
+There was a change in testing strategies that took place around the 13th
+March, before which there were attempts at community tracing, and after
+which testing was only performed on hospital admissions for suspected
+COVID-19. One possible source of regional variation that would influence
+the results of this analysis is that of potentially differing
+implementations of testing strategies, and differing processing times
+for test results, which anecdotally have had long turn around times in
+some centres. If either of these were observed then the comparisons
+between regions would be difficult. However we have no evidence that
+this is the case as until recently the tests for SARS-CoV-2 have been
+centrally controlled through a network of public health laboratories.
+
+There is an inherent assumption that limited travel has occurred during
+the period of estimation, we would however expect that some people are
+moving from denser centres such as London to more rural regions, which
+could inflate rural figures, and may explain the surge in R(t) in Wales
+and Scotland, following the 23rd March.
+
+# Conclusions
+
+The analysis presented above reflects the state of the ongoing crisis of
+COVID-19 in the UK, but with a sense that the effective reproduction
+number is slowly coming under control. The interpretation of the time
+series data presented is particularly challenging due to the extensive
+time delay in identifying positive cases. As such it is impossible to
+conclude whether social distancing is the cause of this improvement.
+
+The current trends in improvement are encouraging and we hope to see
+bigger changes in the near future, however we note that this improvement
+is not uniformly distributed across the UK and policy makers will have
+to be cautious until we can be certain that COVID-19 is under control in
+all regions. The difference in apparent R(t) between London and the
+North Western region of the UK is currently approximately 0.35. Until
+that gap has closed it will be difficult to ease the current country
+wide restrictions.
+
+As we move forward, assuming we get to a phase after the first peak of
+SARS-CoV-2 infections has passed we will be in a new phase where the
+early detection and prevention of spread of emerging clusters SARS-CoV-2
+infections is critical to prevent large scale outbreaks. This will be
+challenging as the long incubation period and high rate of asymptomatic
+individuals makes undetected rapid spread easy. If it is possible to
+predict at a more localised level where in the community infections will
+spread, then we can focus both community testing and more targeted
+social interventions on high risk areas in the future.
+
+# References
+
+1\. [Huang C, Wang Y, Li X, Ren L, Zhao J, Hu Y, et al. Clinical features
+of patients infected with 2019 novel coronavirus in Wuhan, China. Lancet
+\[Internet\]. 2020 Feb 15;395](http://paperpile.com/b/792GNr/Hod4)[
+(](http://paperpile.com/b/792GNr/Hod4)[10223):497–506. Available from:
+](http://paperpile.com/b/792GNr/Hod4)[http://dx.doi.org/10.1016/S0140-6736](http://dx.doi.org/10.1016/S0140-6736(20)30183-5)[
+(](http://dx.doi.org/10.1016/S0140-6736(20)30183-5)[20)30183-5](http://dx.doi.org/10.1016/S0140-6736(20)30183-5)
+
+2\. [Wu Z, McGoogan JM. Characteristics of and Important Lessons From the
+Coronavirus Disease 2019](http://paperpile.com/b/792GNr/hBOY)[
+(](http://paperpile.com/b/792GNr/hBOY)[COVID-19) Outbreak in China:
+Summary of a Report of 72 314 Cases From the Chinese Center for Disease
+Control and Prevention. JAMA \[Internet\]. 2020 Feb 24; Available from:
+](http://paperpile.com/b/792GNr/hBOY)<http://dx.doi.org/10.1001/jama.2020.2648>
+
+3\. [Naming the coronavirus disease](http://paperpile.com/b/792GNr/FGmG)[
+(](http://paperpile.com/b/792GNr/FGmG)[COVID-19) and the virus that
+causes it \[Internet\]. \[cited 2020 Mar 26\]. Available from:
+](http://paperpile.com/b/792GNr/FGmG)[https://www.who.int/emergencies/diseases/novel-coronavirus-2019/technical-guidance/naming-the-coronavirus-disease-](https://www.who.int/emergencies/diseases/novel-coronavirus-2019/technical-guidance/naming-the-coronavirus-disease-(covid-2019)-and-the-virus-that-causes-it)[
+(](https://www.who.int/emergencies/diseases/novel-coronavirus-2019/technical-guidance/naming-the-coronavirus-disease-(covid-2019)-and-the-virus-that-causes-it)[covid-2019)-and-the-virus-that-causes-it](https://www.who.int/emergencies/diseases/novel-coronavirus-2019/technical-guidance/naming-the-coronavirus-disease-(covid-2019)-and-the-virus-that-causes-it)
+
+4\. [Cereda D, Tirani M, Rovida F, Demicheli V, Ajelli M, Poletti P, et
+al. The early phase of the COVID-19 outbreak in Lombardy, Italy
+\[Internet\]. arXiv \[q-bio.PE\]. 2020. Available from:
+](http://paperpile.com/b/792GNr/KjPi)<http://arxiv.org/abs/2003.09320>
+
+5\. [Moss P, Barlow G, Easom N, Lillie P, Samson A. Lessons for managing
+high-consequence infections from first COVID-19 cases in the UK. Lancet
+\[Internet\]. 2020 Mar 14;395](http://paperpile.com/b/792GNr/DAOG)[
+(](http://paperpile.com/b/792GNr/DAOG)[10227):e46. Available from:
+](http://paperpile.com/b/792GNr/DAOG)[http://dx.doi.org/10.1016/S0140-6736](http://dx.doi.org/10.1016/S0140-6736(20)30463-3)[
+(](http://dx.doi.org/10.1016/S0140-6736(20)30463-3)[20)30463-3](http://dx.doi.org/10.1016/S0140-6736(20)30463-3)
+
+6\. [Public Health England. COVID-19: investigation and initial clinical
+management of possible cases \[Internet\]. GOV.UK. GOV.UK; 2020 \[cited
+2020 Mar 25\]. Available from:
+](http://paperpile.com/b/792GNr/2kng)<https://www.gov.uk/government/publications/wuhan-novel-coronavirus-initial-investigation-of-possible-cases/investigation-and-initial-clinical-management-of-possible-cases-of-wuhan-novel-coronavirus-wn-cov-infection>
+
+7\. [Public Health England. COVID-19: guidance on social distancing and
+for vulnerable people \[Internet\]. GOV.UK. GOV.UK; 2020 \[cited 2020
+Mar 25\]. Available from:
+](http://paperpile.com/b/792GNr/BXyA)<https://www.gov.uk/government/publications/covid-19-guidance-on-social-distancing-and-for-vulnerable-people>
+
+8\. [Foreign, Commonwealth Office. Travel advice:
+coronavirus](http://paperpile.com/b/792GNr/0o9J)[
+(](http://paperpile.com/b/792GNr/0o9J)[COVID-19) \[Internet\]. GOV.UK.
+GOV.UK; 2020 \[cited 2020 Mar 25\]. Available from:
+](http://paperpile.com/b/792GNr/0o9J)<https://www.gov.uk/guidance/travel-advice-novel-coronavirus>
+
+9\. [Department for Education. Closure of educational settings:
+information for parents and carers \[Internet\]. GOV.UK. GOV.UK; 2020
+\[cited 2020 Mar 25\]. Available from:
+](http://paperpile.com/b/792GNr/ZTiY)<https://www.gov.uk/government/publications/closure-of-educational-settings-information-for-parents-and-carers>
+
+10\. [Cabinet Office. Full guidance on staying at home and away from
+others \[Internet\]. GOV.UK. GOV.UK; 2020 \[cited 2020 Mar 25\].
+Available from:
+](http://paperpile.com/b/792GNr/HkVU)<https://www.gov.uk/government/publications/full-guidance-on-staying-at-home-and-away-from-others>
+
+11\. [Zhao S, Ran J, Musa SS, Yang G, Lou Y, Gao D, et al. Preliminary
+estimation of the basic reproduction number of novel
+coronavirus](http://paperpile.com/b/792GNr/gZqS)[
+(](http://paperpile.com/b/792GNr/gZqS)[2019-nCoV) in China, from 2019 to
+2020: A data-driven analysis in the early phase of the outbreak
+\[Internet\]. bioRxiv. 2020 \[cited 2020 Mar 25\]. p. 2020.01.23.916395.
+Available from:
+](http://paperpile.com/b/792GNr/gZqS)<https://www.biorxiv.org/content/10.1101/2020.01.23.916395v1>
+
+12\. [Lauer SA, Grantz KH, Bi Q, Jones FK, Zheng Q, Meredith HR, et al.
+The Incubation Period of Coronavirus Disease
+2019](http://paperpile.com/b/792GNr/e8tU)[
+(](http://paperpile.com/b/792GNr/e8tU)[COVID-19) From Publicly Reported
+Confirmed Cases: Estimation and Application. Ann Intern Med
+\[Internet\]. 2020 Mar 10; Available from:
+](http://paperpile.com/b/792GNr/e8tU)<http://dx.doi.org/10.7326/M20-0504>
+
+13\. [Public Health England. Total UK COVID-19 Cases Update \[Internet\].
+\[cited Mar 07 2020 - Mar 25, 2020\]. Available from:
+](http://paperpile.com/b/792GNr/RphW)<https://www.arcgis.com/apps/opsdashboard/index.html#/f94c3c90da5b4e9f9a0b19484dd4bb14>
+
+14\. [Public Health Wales - Latest Statement \[Internet\]. \[cited 2020
+Mar 26\]. Available from:
+](http://paperpile.com/b/792GNr/9G8R)<https://covid19-phwstatement.nhs.wales/>
+
+15\. [Coronavirus in Scotland - gov.scot \[Internet\]. \[cited 2020 Mar
+26\]. Available from:
+](http://paperpile.com/b/792GNr/uTXw)<https://www.gov.scot/coronavirus-covid-19/>
+
+16\. [COVID-19 Surveillance Reports | HSC Public Health Agency
+\[Internet\]. \[cited 2020 Apr 9\]. Available from:
+](http://paperpile.com/b/792GNr/3cGB)<https://www.publichealth.hscni.net/publications/covid-19-surveillance-reports>
+
+17\. [Tindale L, Coombe M, Stockdale JE, Garlock E, Lau WYV, Saraswat M,
+et al. Transmission interval estimates suggest pre-symptomatic spread of
+COVID-19 \[Internet\]. Epidemiology. medRxiv; 2020. Available from:
+](http://paperpile.com/b/792GNr/ZYCG)<https://www.medrxiv.org/content/10.1101/2020.03.03.20029983v1.abstract>
+
+18\. [Zhanwei Du, Xiaoke Xu, Ye Wu, Lin Wang, Benjamin J. Cowling, Lauren
+Ancel Meyers. Serial Interval of COVID-19 among Publicly Reported
+Confirmed Cases. Emerging Infectious Disease journal \[Internet\].
+2020;26](http://paperpile.com/b/792GNr/k9JM)[
+(](http://paperpile.com/b/792GNr/k9JM)[6). Available from:
+](http://paperpile.com/b/792GNr/k9JM)<https://wwwnc.cdc.gov/eid/article/26/6/20-0357_article>
+
+19\. [Bi Q, Wu Y, Mei S, Ye C, Zou X, Zhang Z, et al. Epidemiology and
+Transmission of COVID-19 in Shenzhen China: Analysis of 391 cases and
+1,286 of their close contacts \[Internet\]. Infectious
+Diseases](http://paperpile.com/b/792GNr/uvAx)[
+(](http://paperpile.com/b/792GNr/uvAx)[except HIV/AIDS). medRxiv; 2020.
+Available from:
+](http://paperpile.com/b/792GNr/uvAx)<https://www.medrxiv.org/content/10.1101/2020.03.03.20028423v2.abstract>
+
+20\. [Ganyani T, Kremer C, Chen D, Torneri A, Faes C, Wallinga J, et al.
+Estimating the generation interval for COVID-19 based on symptom onset
+data \[Internet\]. Infectious
+Diseases](http://paperpile.com/b/792GNr/MiPh)[
+(](http://paperpile.com/b/792GNr/MiPh)[except HIV/AIDS). medRxiv; 2020.
+Available from:
+](http://paperpile.com/b/792GNr/MiPh)<https://www.medrxiv.org/content/10.1101/2020.03.05.20031815v1.abstract>
+
+21\. [Nishiura H, Linton NM, Akhmetzhanov AR. Serial interval of novel
+coronavirus](http://paperpile.com/b/792GNr/xch5)[
+(](http://paperpile.com/b/792GNr/xch5)[COVID-19) infections. Int J
+Infect Dis \[Internet\]. 2020 Mar 4; Available from:
+](http://paperpile.com/b/792GNr/xch5)<http://dx.doi.org/10.1016/j.ijid.2020.02.060>
+
+22\. [Li Q, Guan X, Wu P, Wang X, Zhou L, Tong Y, et al. Early
+Transmission Dynamics in Wuhan, China, of Novel Coronavirus-Infected
+Pneumonia. N Engl J Med \[Internet\]. 2020 Jan 29; Available from:
+](http://paperpile.com/b/792GNr/wLSK)<http://dx.doi.org/10.1056/NEJMoa2001316>
+
+23\. [R Core Team. R: A Language and Environment for Statistical
+Computing \[Internet\]. Vienna, Austria: R Foundation for Statistical
+Computing; 2017. Available from:
+](http://paperpile.com/b/792GNr/pZAu)[https://www.R-project.org/](https://www.r-project.org/)
+
+24\. [Cori A. Estimate Time Varying Reproduction Numbers from Epidemic
+Curves \[R package EpiEstim version 2.2-1\]. \[cited 2020 Mar 25\];
+Available from:
+](http://paperpile.com/b/792GNr/0kKC)[https://CRAN.R-project.org/package=EpiEstim](https://cran.r-project.org/package=EpiEstim)
+
+25\. [Cori A, Ferguson NM, Fraser C, Cauchemez S. A new framework and
+software to estimate time-varying reproduction numbers during epidemics.
+Am J Epidemiol \[Internet\]. 2013 Nov
+1;178](http://paperpile.com/b/792GNr/aetu)[
+(](http://paperpile.com/b/792GNr/aetu)[9):1505–12. Available from:
+](http://paperpile.com/b/792GNr/aetu)<http://dx.doi.org/10.1093/aje/kwt133>
+
+26\. [Wallinga J, Teunis P. Different epidemic curves for severe acute
+respiratory syndrome reveal similar impacts of control measures. Am J
+Epidemiol \[Internet\]. 2004 Sep
+15;160](http://paperpile.com/b/792GNr/Z7k2)[
+(](http://paperpile.com/b/792GNr/Z7k2)[6):509–16. Available from:
+](http://paperpile.com/b/792GNr/Z7k2)<http://dx.doi.org/10.1093/aje/kwh255>
+
+27\. [Thompson RN, Stockwin JE, van Gaalen RD, Polonsky JA, Kamvar ZN,
+Demarsh PA, et al. Improved inference of time-varying reproduction
+numbers during infectious disease outbreaks. Epidemics \[Internet\].
+2019 Dec;29:100356. Available from:
+](http://paperpile.com/b/792GNr/xlPK)<http://dx.doi.org/10.1016/j.epidem.2019.100356>
+
+28\. [Counties and Unitary
+Authorities](http://paperpile.com/b/792GNr/NYpa)[
+(](http://paperpile.com/b/792GNr/NYpa)[April 2019) Boundaries EW BUC
+\[Internet\]. \[cited 2020 Mar 25\]. Available from:
+](http://paperpile.com/b/792GNr/NYpa)<https://geoportal.statistics.gov.uk/datasets/d5dfaace0bbd4dea9255020b3c53284f_0>
+
+29\. [Linton NM, Kobayashi T, Yang Y, Hayashi K, Akhmetzhanov AR, Jung
+S-M, et al. Incubation Period and Other Epidemiological Characteristics
+of 2019 Novel Coronavirus Infections with Right Truncation: A
+Statistical Analysis of Publicly Available Case Data \[Internet\].
+Infectious Diseases](http://paperpile.com/b/792GNr/wHvg)[
+(](http://paperpile.com/b/792GNr/wHvg)[except HIV/AIDS). medRxiv; 2020.
+Available from:
+](http://paperpile.com/b/792GNr/wHvg)<https://www.medrxiv.org/content/10.1101/2020.01.26.20018754v2.abstract>
+
+30\. [CoVID 19 Growth Rate \[Internet\]. \[cited 2020 Mar 26\]. Available
+from:
+](http://paperpile.com/b/792GNr/yrcH)<http://nrg.cs.ucl.ac.uk/mjh/covid19/>
+
+31\. [Poots AJ, Reed JE, Woodcock T, Bell D, Goldmann D. How to attribute
+causality in quality improvement : lessons from epidemiology. BMJ Qual
+Saf \[Internet\]. 2017;0:1–6. Available from:
+](http://paperpile.com/b/792GNr/oxHL)<http://qualitysafety.bmj.com/content/qhc/early/2017/08/02/bmjqs-2017-006756.full.pdf>
+
+# Supplementary materials
+
+Time series spreadsheet:
+[*https://docs.google.com/spreadsheets/d/1snb-vYuH7fVpTuyoQrM8zWiABYoXbSrnn44w-zlhM90/edit?usp=sharing*](https://docs.google.com/spreadsheets/d/1snb-vYuH7fVpTuyoQrM8zWiABYoXbSrnn44w-zlhM90/edit?usp=sharing)
+
+Github repo:
+
+[*https://github.com/terminological/uk-covid-datatools*](https://github.com/terminological/uk-covid-datatools)
+
+Full R(t) time series by unitary authority:
+
+[*https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/Supplementary\_Rt\_Timeseries\_by\_Unitary\_Authority.csv?raw=true*](https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/Supplementary_Rt_Timeseries_by_Unitary_Authority.csv?raw=true)
+
+Animations:
+
+[*https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/UK\_Rt\_over\_time.gif*](https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/UK_Rt_over_time.gif)
+
+*Supplementary Figure 1 - Panel A: R(t) over time for unitary
+authorities in England and local health board boards in Scotland and
+Wales; Panel B: Rate of change of R(t) over time; Panel C: R(t) over
+time in London; Panel D: rate of change in R(t) in London. The animation
+covers the period from March the 7th to April the 9th. Significant dates
+are marked, on March 16th the government advised all vulnerable people
+to self isolate (purple) by March the 23rd (cyan) this was extended to
+all non essential people. March the 27th (green) marks one serial
+interval after that full “lock down” and April the 9th (red) is the
+latest time point available.*
+
+*This supplementary material is hosted by Eurosurveillance as supporting
+information alongside the article “Estimates of regional infectivity of
+COVID-19 following imposition of social distancing measures”, on behalf
+of the authors, who remain responsible for the accuracy and
+appropriateness of the content. The same standards for ethics,
+copyright, attributions and permissions as for the article apply.
+Supplements are not edited by Eurosurveillance and the journal is not
+responsible for the maintenance of any links or email addresses provided
+therein*
+
+
+## Create and save animated map
+
+Animated maps are viewable:
+
+* https://github.com/terminological/uk-covid-datatools/blob/master/vignettes/UK_Rt_over_time.gif
+
+```{r eval=FALSE}
+dates = tibble(date1=as.Date(min(r0shapes$date):max(r0shapes$date),origin=as.Date("1970-01-01")))
+barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
+  geom_rect(ymin=0,ymax=1) + 
+  ylim(c(0,1))+
+  geom_vline(aes(xintercept=date,colour=event),data=keyDates,size=4,show.legend = FALSE)+
+  # ggrepel::geom_text_repel(
+  #   aes(x=date, y=1.25, colour=event, label=event),data=keyDates, hjust=0.5,vjust=0, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+  #         size=(10/ggplot2:::.pt/(96/72)))+
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    panel.grid.minor.y = element_blank(), 
+    axis.title.x = element_blank()
+  )+
+  coord_cartesian(ylim = c(0, 1), clip = 'off')+
+  gganimate::transition_time(date1)
+
+timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60, nframes=200)
+
+
+ukwideAnim = 
+  defaultR0Map(r0shapes)+
+  guides(fill="none")+labs(subtitle="A")+
+  gganimate::transition_time(date)
+
+londonAnim = 
+  defaultR0Map(r0shapes)+
+  coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + 
+  standardPrintOutput::mapTheme()+labs(subtitle="C")+
+  gganimate::transition_time(date)
+
+ukwideDeltaAnim = 
+  defaultDeltaR0Map(r0shapes)+
+  guides(fill="none")+labs(subtitle="B")+
+  gganimate::transition_time(date)
+
+londonDeltaAnim = 
+  defaultDeltaR0Map(r0shapes)+
+  coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE) + 
+  standardPrintOutput::mapTheme()+labs(subtitle="D")+
+  gganimate::transition_time(date)
+
+ukWideGif = gganimate::animate(ukwideAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonGif = gganimate::animate(londonAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
+ukWideDeltaGif = gganimate::animate(ukwideDeltaAnim, renderer=gganimate::magick_renderer(), width=400, height=800, nframes=200)
+londonDeltaGif = gganimate::animate(londonDeltaAnim, renderer=gganimate::magick_renderer(), width=400,height=300, nframes=200)
+
+captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+
+layoutGifs = function(i) {
+  magick::image_append(c(
+  magick::image_append(c(ukWideGif[i], ukWideDeltaGif[i])),
+  magick::image_append(c(londonGif[i], londonDeltaGif[i])),
+  timeGif[i], captionTif[1]), stack=TRUE)
+}
+
+new_gif <- layoutGifs(1)
+for(i in 2:200){
+  combined <- layoutGifs(i)
+  new_gif <- c(new_gif, combined)
+}
+
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif",new_gif)
+magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time.gif")
+# ggplot(r0shapes, aes(x=date,y=`Median(R)`,colour=code))+geom_line(alpha=0.2,show.legend = FALSE)
+
+```
+
+```{r}
+
+UKCovidNeghbours = UKCovidMaps$reportingRegions %>% createNeighbourNetwork(code)
+write.csv(UKCovidNeghbours,"~/Git/uk-covid-datatools/vignettes/Rt_Timeseries_Neighbours.csv")
+
+```
+
+```{r}
+
+# captionTif = magick::image_read(path = "~/Git/uk-covid-datatools/vignettes/suppFig1Caption.png")
+# manGif = magick::image_read(path = "~/Dropbox/covid19/regional-infectivity/eurosurveillanceSubmission/UK_Rt_over_time_no_label.gif")
+# 
+# new_gif <- magick::image_append(c(manGif[1], captionTif[1]), stack=TRUE)
+# for(i in 2:100){
+#   combined <- magick::image_append(c(manGif[i], captionTif[1]), stack=TRUE)
+#   new_gif <- c(new_gif, combined)
+# }
+# 
+# magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/UK_Rt_over_time_2.gif")
+
+
+# rateOfChangeDist = ggplot(rateOfChange, aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))
+# 
+# ukRateOfChange = ggplot(rateOfChangeUKregion, aes(x=uk_region,y=slope,fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     #trans="log",
+#     na.value = "grey80",
+#     limits=c(-1,1), 
+#     breaks=c(-1,-0.5,0,0.5,1), 
+#     labels=c("<-1","-0.5","0","0.5",">1")
+#     ) + 
+#   geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)
+# 
+# (ukwideRateOfChange + londonRateofChange  + ukRateOfChange + rateOfChangeDist + plot_annotation(tag_levels = 'A')  + plot_layout(nrow = 2, guides="collect")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/regional-infectivity/Fig4_RateOfChangeMap")
+# 
+
+```
+
+```{r}
+
+# rateOfChange %>% ungroup() %>% filter(slopeLowerCi > 0) %>% arrange(desc(slope)) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table2_Top5UnitaryAuthoritiesByDeltaR_t")
+
+```
+
+```{r}
+
+# rateOfChange %>% ungroup() %>% filter(slopeUpperCi < 0) %>% arrange(slope) %>% head(5) %>% mutate(`95% CI` = sprintf("%1.2f; %1.2f",slopeLowerCi,slopeUpperCi)) %>% select(`Unitary authority`=name,`dR/dt`=slope, `95% CI` ,`R^2`=r_squared) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/regional-infectivity/Table3_Bottom5UnitaryAuthoritiesByDeltaR_t")
+
+```
+
+
+
+
+```{r}
+
+# tmpDeltaR0timeseries = 
+# 
+# rateOfChangeShapes = UKCovidMaps$reportingRegions %>%
+#   crossing(tibble(date=unique(tmpDeltaR0timeseries$date))) %>% 
+#   left_join(tmpDeltaR0timeseries, by=c("code","date")) %>%
+#   sf::st_as_sf() 
+# 
+# ukwideRateOfChange = ggplot(rateOfChangeShapes)+
+#   geom_sf(aes(fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     trans="pseudo_log",
+#     na.value = "grey80",
+#     limits=c(-1,1), 
+#     
+#     breaks=c(-1,-0.5,0,0.5,1), 
+#     labels=c("<-1","-0.5","0","0.5",">1")
+#     )+
+#   standardPrintOutput::mapTheme()
+# 
+# anim5 = ukwideRateOfChange + guides(fill="none")+#labs(title = 'Date: {frame_time}')+
+#   gganimate::transition_time(date)
+# gif5 = gganimate::animate(anim5, renderer=gganimate::magick_renderer(), width=400, height=800)
+# 
+# anim6 = ukwideRateOfChange + coord_sf(crs = 4326,xlim = c(-0.7, 0.5), ylim = c(51.25, 51.75), expand = FALSE)+
+#   gganimate::transition_time(date)
+# gif6 = gganimate::animate(anim6, renderer=gganimate::magick_renderer(), duration = 10, fps=10, width=400, height=300)
+
+```
+
+```{r}
+# dates = tibble(date1=as.Date(min(rateOfChangeShapes$date):max(rateOfChangeShapes$date),origin=as.Date("1970-01-01")))
+# barAnim = ggplot(dates,aes(xmax=date1+1,xmin=date1))+
+#   geom_rect(ymin=0,ymax=1) + 
+#   ylim(c(0,1))+
+#   geom_vline(aes(xintercept=date,colour=event),data=keyDates,size=4,show.legend = FALSE)+
+#   # ggrepel::geom_text_repel(
+#   #   aes(x=date, y=1.25, colour=event, label=event),data=keyDates, hjust=0.5,vjust=0, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+#   #         size=(10/ggplot2:::.pt/(96/72)))+
+#   theme(
+#     axis.text.y = element_blank(),
+#     axis.ticks.y = element_blank(), 
+#     panel.grid.major.y = element_blank(), 
+#     panel.grid.minor.y = element_blank(), 
+#     axis.title.x = element_blank()
+#   )+
+#   coord_cartesian(ylim = c(0, 1), clip = 'off')+
+#   gganimate::transition_time(date1)
+# 
+# timeGif = gganimate::animate(barAnim, renderer=gganimate::magick_renderer(), width=800, height=60)
+```
+
+```{r eval=FALSE}
+
+
+
+# ukRateOfChange = ggplot(deltaR0Regionaltimeseries, aes(x=uk_region,y=slope,fill=slope))+
+#   scale_fill_gradient2(
+#     low="cyan",
+#     mid="white",
+#     high="magenta",
+#     midpoint=0,
+#     #trans="log",
+#     na.value = "grey80",
+#     limits=c(-0.5,0.5), 
+#     breaks=c(-0.5,-0.25,0,0.25,0.5), 
+#     labels=c("<-0.5","-0.25","0","0.25",">0.5")
+#     ) + geom_bar(stat="identity", colour="black")+geom_errorbar(aes(ymin=slopeLowerCi,ymax=slopeUpperCi), width=0.2)+
+#   coord_cartesian(ylim=c(-0.25,0.25))#+
+#   #labs(title = 'Date: {frame_time}')
+# 
+# anim3 = ukRateOfChange+gganimate::transition_time(date)
+# gif3 = gganimate::animate(anim3, renderer=gganimate::magick_renderer(), width=400, height = 300)
+# #gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_by_uk_region_over_time.gif",gif)
+# 
+# rateOfChangeDist = ggplot(deltaR0timeseries %>% filter(!is.na(slope)), aes(x=slope))+geom_density()+geom_rug()+geom_vline(xintercept = 0, colour="blue")+coord_cartesian(xlim=c(-0.5,0.5))+labs(title = " ")
+# anim4 = rateOfChangeDist+gganimate::transition_time(date)
+# gif4 = gganimate::animate(anim4, renderer=gganimate::magick_renderer(), width=400, height = 200)
+# 
+# new_gif <- magick::image_append(c(
+#       magick::image_append(c(
+#         gif5[1],
+#         magick::image_append(c(
+#           gif3[1], 
+#           gif4[1],
+#           gif6[1]
+#         ),stack=TRUE)
+#       )),
+#       timeGif[1]
+# ),stack=TRUE) 
+# for(i in 2:100){
+#   combined <- magick::image_append(c(
+#       magick::image_append(c(
+#         gif5[i],
+#         magick::image_append(c(
+#           gif3[i], 
+#           gif4[i],
+#           gif6[i]
+#         ),stack=TRUE)
+#       )),
+#       timeGif[i]
+# ),stack=TRUE)
+#     
+#   new_gif <- c(new_gif, combined)
+# }
+# 
+# magick::image_write_gif(new_gif,path="~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif")
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_over_time.gif",new_gif)
+#gganimate::anim_save("~/Git/uk-covid-datatools/vignettes/delta_Rt_distribution_over_time.gif",gif)
+```
+
+
+```{r}
+# tmp = tempfile("google",fileext = ".pdf")
+# pdf = "https://www.gstatic.com/covid19/mobility/2020-03-29_GB_Mobility_Report_en.pdf"
+# download.file(pdf,tmp)
+```
+
+```{r}
+# pdfExtract = pdftools::pdf_text(tmp)
+# pdfExtract = pdfExtract[4:length(pdfExtract)-1]
+# pdfExtract[[1]] %>% stringr::str_split("\n")
+
+```

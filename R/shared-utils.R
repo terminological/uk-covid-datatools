@@ -102,20 +102,20 @@ printDataframeToString <- function(x)
 #' @param meanVar the mean
 #' @param sdVar the sd
 #' @export
-plotRibbons = function(meanVar, sdVar, colourExpr, ...) {
+plotRibbons = function(data=NULL, meanVar, sdVar, colourExpr, ...) {
   meanVar = ensym(meanVar)
   sdVar = ensym(sdVar)
   colourExpr = enexpr(colourExpr)
   q = qnorm(c(0.025,0.1,0.9,0.975))
   if (class(colourExpr) == "character") {
     return(list(
-      geom_line(aes(y=!!meanVar,...),colour=colourExpr),
-      geom_ribbon(aes(
+      geom_line(data=data,mapping=aes(y=!!meanVar,...),colour=colourExpr),
+      geom_ribbon(data=data,mapping=aes(
         ymin=(!!meanVar-q[1]*!!sdVar),
         ymax=(!!meanVar+q[4]*!!sdVar),
         ... #!!!dots
       ),fill=colourExpr,colour = NA,fill="black",alpha = 0.05,show.legend = FALSE),
-      geom_ribbon(aes(
+      geom_ribbon(data=data,mapping=aes(
         ymin=(!!meanVar+q[2]*!!sdVar),
         ymax=(!!meanVar+q[3]*!!sdVar),
         ... #!!!dots
@@ -123,20 +123,34 @@ plotRibbons = function(meanVar, sdVar, colourExpr, ...) {
     ))
   } else {
     return(list(
-      geom_line(aes(y=!!meanVar,colour=!!colourExpr,...)),
-      geom_ribbon(aes(
+      geom_line(data=data,mapping=aes(y=!!meanVar,colour=!!colourExpr,...)),
+      geom_ribbon(data=data,mapping=aes(
         ymin=(!!meanVar-q[1]*!!sdVar),
         ymax=(!!meanVar+q[4]*!!sdVar),
         group=!!colourExpr,
         ... #!!!dots
       ),colour = NA,fill="black",alpha = 0.05,show.legend = FALSE),
-      geom_ribbon(aes(
+      geom_ribbon(data=data,mapping=aes(
         ymin=(!!meanVar+q[2]*!!sdVar),
         ymax=(!!meanVar+q[3]*!!sdVar),
         group=!!colourExpr,
         ... #!!!dots
       ),colour = NA, fill="black",alpha = 0.065,show.legend = FALSE)
     ))
+  }
+}
+
+# date craziness ---------------
+
+maybeDMYorMDY = function(dateStringVec) {
+  out1 = as.Date(dateStringVec,"%d/%m/%Y")
+  out2 = as.Date(dateStringVec,"%m/%d/%Y")
+  if(
+    sum(is.na(out1)==is.na(dateStringVec)) >= sum(is.na(out2)==is.na(dateStringVec))
+  ) {
+    return(out1)
+  } else {
+    return(out2)
   }
 }
 

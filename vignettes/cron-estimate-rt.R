@@ -56,17 +56,17 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   ### Cases - CTRY ----
   casesCTRY = bind_rows(
     tmp4Nations %>% filter(statistic == "case" & codeType == "CTRY") %>% dpc$demog$findDemographics(),
-    dpc$spim$getLineListIncidence(specimenOrReport = "specimen") %>% 
-      filter(codeType == "CTRY" & subgroup=="Pillar 1") %>% 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
+      filter(codeType == "CTRY" & subgroup!="Y") %>% 
       tsp$aggregateAge() %>% 
-      tsp$aggregateGender() %>% #tsp$aggregateSubgroup() %>%
+      tsp$aggregateGender() %>% tsp$aggregateSubgroup() %>%
       dpc$demog$findDemographics()
   )
   
   finalCasesCTRY = casesCTRY %>% filter(!(name=="England" & source=="phe api")) %>% mutate(source = "aggregate PHE and linelist", subgroup=NA)
   rationale(codeType = "CTRY","case",
-            "4 nations case counts from 4 national PH sites, retrieved as timeseries from PHE API, England pillar 1 tests from linelist",
-            "Pillar 1 only tests preferred in England, over PH data which includes both pillar 1 & 2")
+            "4 nations case counts from 4 national PH sites, retrieved as timeseries from PHE API, England pillar 1 & 2 tests from linelist where not asymptomatic",
+            "Line list ")
   
   ### Admissions - CTRY ----
   # admissionsCTRY = dpc$spim$getSPIMextract() %>% 
@@ -169,15 +169,18 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   rationale(codeType = "NHSER","triage","SPI-M 111 feed","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch, in ages > 24.")
   
   ### Cases - NHSER ----
-  casesNHSER = dpc$spim$getLineListIncidence(specimenOrReport = "specimen") %>% 
+  casesNHSER = 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
     filter(codeType == "NHSER") %>% 
     filter(code != "E99999999") %>%
     tsp$aggregateAge() %>% 
-    tsp$aggregateGender() %>%
+    tsp$aggregateGender() %>% 
     dpc$demog$findDemographics()
-  finalCasesNHSER = casesNHSER %>% tsp$aggregateSubgroup() %>%
+  finalCasesNHSER = casesNHSER %>% 
+    filter(subgroup!="Y") %>%
+    tsp$aggregateSubgroup() %>%
     dpc$demog$findDemographics()
-  rationale(codeType = "NHSER","case","SPI-M line list","Line list aggregated by age and gender. unknown regions removed. Pillar 1 and 2 combined.")
+  rationale(codeType = "NHSER","case","SPI-M line list","Line list aggregated by age and gender. unknown regions removed. Pillar 1 and 2 combined - symptomatic and unknown only.")
   
   ### Admissions - NHSER ----
   admissionsNHSER = dpc$spim$getSPIMextract() %>% 
@@ -289,9 +292,16 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
       tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
+    final14DayRtDataset = finalDataset %>%
+      tsp$estimateRt(window = 14) %>%
+      tsp$logIncidenceStats(growthRateWindow = 14) %>%
+      tsp$adjustRtDates() %>%
+      tsp$estimateVolatilty(valueVar = `Mean(R)`)
+    
     final28DayRtDataset = finalDataset %>%
       tsp$estimateRt(window = 28) %>%
       tsp$logIncidenceStats(growthRateWindow = 28) %>%
+      tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
     # finalRtCorrected = finalDataset %>%
@@ -303,6 +313,7 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
     
     return(list(
       rt = finalRtDataset,
+      rt14 = final14DayRtDataset,
       rt28 = final28DayRtDataset#,
       #rtAssumed = finalRtCorrected
     ))

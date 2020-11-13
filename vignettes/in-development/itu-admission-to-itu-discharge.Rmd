@@ -1,0 +1,470 @@
+---
+title: "length of stay in hospital icu parameterisation"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge" )})
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+---
+
+```{r setup, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+devtools::load_all("~/Git/standard-print-output/")
+library(survival)
+
+devtools::load_all("~/Git/standard-print-output/")
+library(ggplot2)
+library(patchwork)
+
+standardPrintOutput::setDefaults()
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+reload()
+```
+
+Robert Challen^1,2^; Krasimira Tsaneva-Atanasova^1,3^; Leon Danon^3,4^
+
+1)  EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2)  Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3)  The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4)  Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
+
+# Abstract
+
+
+```{r}
+
+CHESS = dpc$spim$getSARI()
+cq = CHESS %>% chp$chessQuality()
+# ggplot(cq, aes(x=trustcode, y=records))+geom_bar(stat="identity")+standardPrintOutput::narrowAndTall()
+p = ggplot(cq, aes(x=knownOutcomePercent, y=knownAdmittedItuPercent, label=trustcode, colour=updatedRecords/records))+geom_point()+geom_vline(xintercept=0.1)+geom_hline(yintercept=0.5)+scale_color_gradient(low="red",high="green")+
+  standardPrintOutput::narrowAndTall()
+p2 = ggExtra::ggMarginal(p, type="histogram")
+p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/chessDataQuality")
+```
+
+```{r}
+CHESSClean = CHESS %>% chp$chessItuSubset(updatedWithin = 60) %>% 
+  mutate(
+    withDischdate = !is.na(dateleavingicu), 
+    withOutcomedate = !is.na(finaloutcomedate) )%>%
+  mutate(patientstillonicu = case_when(
+    finaloutcome == "Transferred" ~ "Unknown",
+    withDischdate ~ "No",
+    withOutcomedate ~ "No",
+    finaloutcome %in% c("Death","Discharged") ~ "No",
+    TRUE ~ "Unknown"
+  ))
+
+```
+
+# Survival model - Admission to outcome
+
+* Excludes hospitals which:
+* A) haven;t updated data from > 3 days
+* B) Have censored outcomes mode than one sd from the mean.
+* N.b. This is over half of the hospitals.
+
+* furthermore some other data quality issues e.g. outcome date before admission date
+* multiple admissions: just use first admission
+
+```{r}
+ituAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% 
+  mutate(
+    startDate = dateadmittedicu, 
+    endDate = pmin(dateleavingicu,finaloutcomedate,na.rm = TRUE)
+  )  %>%
+  srv$generateSurvivalData(
+  idVar = caseid,
+  startDateVar = startDate, 
+  endDateExpr = endDate, 
+  censoredDateExpr = pmin(dateupdated,censorDate,na.rm = TRUE), 
+  statusExpr = if_else(patientstillonicu=="No",1,0),
+  ageBreaks = c(-Inf,35,45,55,65,75,Inf),
+  ageLabels = c("<35","35-45","45-55","55-65","65-75","75+"),
+  ageReferenceCat = "<35",
+  #ageBreaks = c(-Inf,30,50,70,Inf),
+  #ageLabels = c("10-30","30-50","50-70","70+"),
+  #ageReferenceCat = "30-50",
+  statusLabels = c("unknown","discharged/died")
+) %>%
+  filter(!((status=="unknown") & is.na(dateupdated))) %>% 
+  filter(time>=0) %>%
+  select(
+  caseid, status, trustcode, finaloutcome, time, ageCat, sex, startDate, endDate, withDischdate, withOutcomedate, dateupdated
+)
+```
+
+## summarise data
+
+```{r}
+summary = bind_rows(
+  ituAdmissionToDischargeOrDeath %>% group_by(value = finaloutcome) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(ituAdmissionToDischargeOrDeath)*100)) %>% mutate(category="Outcome", value = if_else(is.na(value),"Inpatient",as.character(value))),
+  ituAdmissionToDischargeOrDeath %>% group_by(value = sex) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(ituAdmissionToDischargeOrDeath)*100)) %>% mutate(category="Gender", value = as.character(value)),
+  ituAdmissionToDischargeOrDeath %>% group_by(value = ageCat) %>% summarise(N=n(), `%age`=sprintf("%1.1f %%",n()/nrow(ituAdmissionToDischargeOrDeath)*100)) %>% mutate(category="Age", value = as.character(value)) %>% arrange(value),
+  ituAdmissionToDischargeOrDeath %>% summarise(N=n()) %>% mutate(category="Total", value = "", `%age`="" )
+)
+
+summary %>% group_by(category) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Table1_summary")
+```
+
+
+## fit a survival model
+
+```{r}
+tmp = ituAdmissionToDischargeOrDeath %>% rename(age = ageCat) %>% mutate(status = ifelse(status=="unknown",0,1))
+```
+
+
+```{r}
+fitByAgeCat = survival::survfit(survival::Surv(time,status) ~ age, tmp)
+```
+
+
+```{r}
+plot = survminer::ggsurvplot(
+  fitByAgeCat, data=tmp, conf.int = TRUE
+)+ylab("P(itu patient)")
+```
+
+
+```{r}
+(plot$plot+standardPrintOutput::defaultFigureLayout()) %>% 
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig1_kaplanMeierByAge")
+
+# summary(admissionToDischargeOrDeath)
+```
+
+
+```{r}
+survModel = survival::coxph(survival::Surv(time,status) ~ sex + age, tmp)
+# survModel %>% gtsummary::tbl_regression(exp = TRUE) 
+```
+
+
+```{r}
+survminer::ggforest(survModel,data = tmp) %>% 
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig2_coxModel")
+```
+
+Interpretation is that a high HR => discharge or death is more likely - i.e. an inpatient admission is likely to be shorter.
+
+# Distribution fitting
+
+Uses different age bands
+
+```{r}
+censoredItuAdmissionToDischargeOrDeath = CHESSClean %>% filter(age>15) %>% filter(!is.na(finaloutcome)) %>% 
+  mutate(
+    ageCat = tsp$cutByAge(age, ageBreaks = seq(15,85,5)),
+    ageCatMid = tsp$cutByAge(age, ageBreaks = seq(15,85,10)),
+    ageCatBig = tsp$cutByAge(age, ageBreaks = seq(15,75,20))
+  ) %>% #tsp$ageToAgeCat(age)) %>%
+  mutate(
+    startDate = dateadmittedicu, 
+    endDate = pmin(dateleavingicu,finaloutcomedate,na.rm = TRUE),
+    censorDate = pmin(dateleavingicu,finaloutcomedate,dateupdated,censorDate,na.rm = TRUE)
+  ) %>% 
+  mutate(
+    era = ifelse(startDate < "2020-06-16", "pre-dexa", "post-dexa"),
+    lowerTime = if_else(patientstillonicu=="No",as.numeric(endDate-startDate)+0.01,as.numeric(censorDate-startDate))+0.01,
+    upperTime = if_else(patientstillonicu=="No",as.numeric(endDate-startDate)+1.01,NA_real_)
+  ) %>% 
+  filter(lowerTime>0) %>%
+  select(ageCat,ageCatMid,ageCatBig,era,startDate,endDate,censorDate,lowerTime,upperTime,patientstillonicu,finaloutcome)
+  
+
+```
+
+
+```{r}
+
+fit = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))
+
+fitData = censoredItuAdmissionToDischargeOrDeath %>% group_by(ageCat) 
+fit$fromUncensoredData(fitData%>% filter(patientstillonicu=="No"), valueExpr = (lowerTime+upperTime)/2,bootstraps = 100)
+# fit$fromCensoredData(fitData%>% filter(patientstillonicu=="No"), lowerValueExpr = lowerTime, upperValueExpr = upperTime ,bootstraps = 100)
+
+fit$plot(xlim=c(0,60)) %>% 
+  standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/ITUlosByAgeFits")
+```
+
+
+## Fit with min AIC
+
+```{r}
+fitMinAIC = fit$clone()$filterModels(aic == min(aic))
+
+bestFitTable = fitMinAIC$printDistributionDetail() %>% ungroup() %>% 
+  filter(param %in% c("mean","sd")) %>% 
+  mutate(ci = sprintf("%1.2f (%1.2f; %1.2f)", mean, lower, upper)) %>%
+  select(-`Mean ± SD (95% CI)`, -dist,-aic,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>% 
+  pivot_wider(names_from = param, values_from = ci) %>%
+  rename(`Mean (95% CI)`=mean,`SD (95% CI)`=sd) %>%
+  rename(`Age group`=ageCat, N=n)
+bestFitTable %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/MinAICFittedModels",defaultFontSize = 8)
+```
+
+## Survival by age and time
+
+```{r}
+surfacesDf = fitMinAIC$discreteSurvival(q = 0:60, summarise = TRUE) %>% ungroup() 
+surfacesDf %>% select(-dist) %>% rename(daysPostAdmission = value) %>% write.csv(file="~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/ProbabilityInICUBedSurface.csv")
+```
+
+
+
+```{r}
+surfacesDf = surfacesDf %>% mutate(days = value, cdf = 1-Quantile.0.5.survival, cdf_lo=1-Quantile.0.025.survival, cdf_hi=1-Quantile.0.975.survival) %>% filter(days<40)
+                      
+surf1 = ggplot(surfacesDf,
+               aes(x=days,y=as.integer(ageCat),z=1-cdf, fill=1-cdf))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+ylab("age")+
+  metR::geom_contour2(colour="black", breaks=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+scale_y_continuous(
+    breaks = 4:17,
+    labels = c('15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'))+
+  metR::geom_contour2(colour="blue", breaks=c(0.5), size=1.5)+
+  metR::geom_text_contour(breaks=c(0.1,0.3,0.5,0.7,0.9),stroke=0.2)+guides(fill="none")
+  # theme(axis.title=element_blank(),
+  #       axis.text.y=element_blank())+guides(fill="none")
+
+
+surf_lo = ggplot(surfacesDf,
+                 aes(x=days,y=as.integer(ageCat),z=1-cdf_hi, fill=1-cdf_hi))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+
+  metR::geom_contour2(colour="black", breaks=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+scale_y_continuous(
+    breaks = 4:17,
+    labels = c('15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'))+
+  metR::geom_contour2(colour="blue", breaks=c(0.5), size=1.5)+
+  theme(axis.title=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank())+guides(fill="none")
+
+surf_hi = ggplot(surfacesDf,
+                 aes(x=days,y=as.integer(ageCat),z=1-cdf_lo, fill=1-cdf_lo))+geom_tile()+scale_fill_gradient2(high="red",mid="yellow",low="green", midpoint=0.5, guide="none", limits=c(0,1))+xlab("days")+
+  metR::geom_contour2(colour="black", breaks=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+scale_y_continuous(
+    breaks = 4:17,
+    labels = c('15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'))+
+  metR::geom_contour2(colour="blue", breaks=c(0.5), size=1.5)+
+  theme(axis.title=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank()
+  )+guides(fill="none")
+
+#surf = Nplot + surf1 + (surf_lo / surf_hi) + patchwork::plot_annotation(tag_levels = 'A') + patchwork::plot_layout(ncol=3,widths = c(0.3,2,1))
+surf = surf1 + (surf_lo / surf_hi) + patchwork::plot_annotation(tag_levels = 'A') + patchwork::plot_layout(ncol=2,widths = c(2,1))
+surf %>% 
+  standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/ITUlosByAgeSurfaces") 
+
+```
+
+
+## Pre and post dexa
+
+```{r}
+
+dfit2 = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom"))
+fits4 = censoredItuAdmissionToDischargeOrDeath %>% filter(patientstillonicu=="No") %>% group_by(era,ageCatBig) %>% 
+   dfit2$fromUncensoredData(valueExpr = (lowerTime+upperTime)/2,bootstraps = 100)
+
+# fits4 = censoredItuAdmissionToDischargeOrDeath %>% group_by(era,ageCatBig) %>% 
+#    dfit2$fromCensoredData(lowerValueExpr = lowerTime, upperValueExpr = upperTime,bootstraps = 100)
+
+fits4$plot(xlim=c(0,60)) %>% 
+  standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/ITUlosByPrePostDex")
+
+
+```
+
+## Statistical comparison
+
+<!-- # Post dexa -->
+
+<!-- ```{r} -->
+
+<!-- postDexa = DistributionFit$new(distributions = c("lnorm","gamma","weibull","nbinom")) -->
+
+<!-- postDexDf = censoredItuAdmissionToDischargeOrDeath %>% filter(era=="post-dexa") %>% group_by(ageCatMid)  -->
+
+<!-- postDexa$fromCensoredData(postDexDf, lowerValueExpr = lowerTime, upperValueExpr = upperTime,bootstraps = 100) -->
+<!-- # postDexa$fromUncensoredData(postDexDf %>% filter(patientstillonicu=="No"), valueExpr = (lowerTime+upperTime)/2,bootstraps = 100) -->
+
+<!-- postDexa$plot(xlim=c(0,60)) -->
+
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #postDexa$filterModels(aic == min(aic)) -->
+<!-- postDexa2 = postDexa$clone() -->
+<!-- postDexa2$filterModels(dist == "lnorm") -->
+
+<!-- postDexaBestFitTable = postDexa2$printDistributionDetail() %>% ungroup() %>%  -->
+<!--   filter(param %in% c("mean","sd")) %>%  -->
+<!--   mutate(ci = sprintf("%1.2f (%1.2f; %1.2f)", mean, lower, upper)) %>% -->
+<!--   select(-`Mean ± SD (95% CI)`, -dist,-aic,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>%  -->
+<!--   pivot_wider(names_from = param, values_from = ci) %>% -->
+<!--   rename(`Mean (95% CI)`=mean,`SD (95% CI)`=sd) %>% -->
+<!--   rename(`Age group`=ageCatMid, N=n) -->
+
+<!-- postDexaBestFitTable %>% standardPrintOutput::saveTable("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/LogNormPostDexaFittedModels",defaultFontSize = 8) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- survPostDex = postDexa2$discreteSurvival(q = 0:60, summarise = TRUE) %>% ungroup() -->
+<!-- survPostDex %>% select(-dist) %>% rename(daysPostAdmission = value) %>% write.csv(file="~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/PostDexaProbabilityInICUBedSurface.csv") -->
+<!-- ``` -->
+
+# References
+
+<div id="refs"></div>
+
+# Supplementary material
+
+```{r}
+suppTable = fit$printDistributionDetail() %>% ungroup() %>% 
+  select(-dist,-bic,-loglik,-mean,-sd,-lower,-upper,-shift) %>% 
+  rename(`Age group`=ageCat, Parameter= param, AIC= aic, N=n)  %>% group_by(`Age group`, N, AIC, Distribution) %>% arrange(AIC)
+suppTable %>% standardPrintOutput::saveTableLandscape("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/SuppTable1_fullBreakdownFittedModels",defaultFontSize = 7)
+```
+
+<!-- # generate log normal curves for each age group -->
+
+<!-- * A - "best fit" estimate -->
+<!-- * B - low CrI estimate -->
+<!-- * C - high CrI estimate -->
+
+<!-- ```{r} -->
+<!-- survSurf = out %>% createSurvivalSurfaces(days=40) -->
+<!-- surf = plotSurvivalSurface(survSurf, "gamma") -->
+<!-- surf %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig4_losDensity") -->
+
+
+
+<!-- ``` -->
+<!-- # median distribution -->
+
+<!-- ```{r} -->
+
+<!-- largerOf = function(x,y) {return(ifelse(x>y,x,y))} -->
+<!-- smallerOf = function(x,y) {return(ifelse(x<y,x,y))} -->
+
+<!-- (ggplot(survSurf %>% filter(model=="gamma") %>% mutate(median_lo = ifelse(is.na(median_lo),0,median_lo)),aes(x=ageCat,y=median,ymin=smallerOf(median_lo,median_hi),ymax=largerOf(median_lo,median_hi), group=1))+geom_line()+geom_ribbon(alpha=0.2)+xlab("age")+ylab("median length of stay")) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig5_losMedianByAge") -->
+
+<!-- ``` -->
+
+
+<!-- # incidence surfaces  -->
+
+<!-- more important for other transitions where we are looking at  -->
+
+<!-- ```{r} -->
+<!-- surf2 = plotIncidenceSurface(survSurf, "gamma") -->
+<!-- surf2 -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- survSurfcsv = out %>% createSurvivalSurfaces(timepoints = 0:45) -->
+<!-- write.csv( -->
+<!--   survSurfcsv %>% ungroup() %>% mutate(surv = 1-cdf), -->
+<!--   file="~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/itu-admission-to-itu-discharge.csv")         -->
+<!-- plotProbabilityMatrix(survSurfcsv,"gamma",pExpr=1-cdf) %>% saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/daily_probability_by_age") -->
+
+<!-- ``` -->
+
+
+<!-- # validate against Bristol data -->
+
+<!-- Do a set of Kolmogorov-Smirnov tests on different combinations of parameters and log normal distributions -->
+
+<!-- ```{r} -->
+<!-- bri = getBristolData(paths$bristol) -->
+<!-- bri2 = bri %>% bristolSurvivalSubset()  -->
+<!-- bri3 = bri2 %>% generateSurvivalData( -->
+<!--   idVar = record_number, -->
+<!--   startDateVar = admission_date, -->
+<!--   endDateExpr = discharge_date, -->
+<!--   statusLabels = c("censored","disch or died") -->
+<!-- ) -->
+
+<!-- doKSTest = function(d,g,paramNames,params,n) { -->
+<!--   sample = d$time -->
+<!--   params = as.list(params) -->
+<!--   names(params) = paramNames -->
+<!--   params$x = jitter(sample) -->
+<!--   params$y = "plnorm" -->
+<!--   # browser() -->
+<!--   ks = do.call("ks.test",params) -->
+<!--   return(tibble( -->
+<!--     testN = length(sample), -->
+<!--     referenceN = max(n), -->
+<!--     pValue = ks$p.value, -->
+<!--     dStatistic = ks$statistic -->
+<!--   )) -->
+<!-- } -->
+
+<!-- gofBri = bri3 %>% filter(status == "disch or died") %>% group_by(ageCat) %>% group_modify(function(d,g,...) { -->
+<!--   reference = out %>% filter(model == "lnorm" & ageCat == g$ageCat) -->
+<!--   out = bind_rows( -->
+<!--     doKSTest(d,g,reference$param, reference$value, reference$n) %>% mutate(estimate = "central"), -->
+<!--     doKSTest(d,g,reference$param, reference$low_ci, reference$n) %>% mutate(estimate = "low credible"), -->
+<!--     doKSTest(d,g,reference$param, reference$high_ci, reference$n) %>% mutate(estimate = "high credible") -->
+<!--   ) -->
+<!-- }) -->
+
+<!-- numbers = gofBri %>% select(ageCat,estimate,test=testN,fit=referenceN) %>% pivot_longer(cols=c("test","fit"),names_to = "source", values_to = "N") -->
+
+<!-- top = ggplot(gofBri, aes(x=ageCat,y=pValue,fill=estimate))+geom_bar(stat="identity", position="dodge", width=0.7, colour="black")+standardPrintOutput::narrowAndTall()+theme(axis.text.x = element_blank(), axis.title.x = element_blank())+ylab("P value") -->
+<!-- bottom = ggplot(numbers, aes(x=ageCat,y=source,label=N, colour = source))+geom_text()+guides(colour="none")+theme(panel.grid = element_blank(),axis.title.x = element_blank())+ylab("N") -->
+
+<!-- (top+bottom+patchwork::guide_area()+patchwork::plot_layout(ncol=1, heights = c(9,2,1), guides = "collect")) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/ventilator-demand/parameterisation/itu-admission-to-itu-discharge/Fig6_validateBristol") -->
+<!-- ``` -->
+
+<!-- Suggests the fitted distributions to the UK wide data reasonably describes the Bristol data from 30-70 year olds. The high credible estimates are closer to the bristol data in the older age group.  -->
+
+<!-- Possible that my exclusion of hospitals with high numbers of censoring was too enthusiastic, and this would tend to drive down the LOS. Alternatively Bristol OAPs stay longer in hospital as they don't die as quickly as the rest of the country. -->
+
+<!-- # unsing surv -->
+
+<!-- ```{r} -->
+
+
+<!-- crlnorm <- flexsurv::flexsurvreg(Surv(time, status != "censored") ~ ageCat, data = admissionToDischargeOrDeath, dist = "gamma") -->
+<!-- crlnorm -->
+
+<!-- ``` -->

@@ -1,0 +1,424 @@
+---
+title: "Estimates of regional infectivity of COVID-19 in the United Kingdom following imposition of social distancing measures"
+#date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output:
+  pdf_document:
+    fig_caption: yes
+    keep_tex: true
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(
+    inputFile,
+    encoding = encoding,
+    output_dir = "~/Dropbox/covid19/current-rt", output_file=paste0('current-rt-',Sys.Date(),'.pdf'))
+  })
+# output:
+#   word_document :
+#     fig_caption: yes
+#     fig_width: 7
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(
+#     inputFile,
+#     encoding = encoding,
+#     output_dir = "~/Dropbox/covid19/current-rt", output_file=paste0('current-rt-',Sys.Date(),'.docx'))
+#   })
+# TODO: https://www.reed.edu/data-at-reed/software/R/markdown_multiple_reports.html
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}    
+
+
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{Regional infectivity of COVID-19}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align="center"
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+devtools::load_all("~/Git/standard-print-output/")
+#library(rgdal)
+library(ggplot2)
+#library(ggspatial)
+#library(rgeos)
+#library(maptools)
+#library(lubridate)
+library(patchwork)
+#library(sp)
+
+standardPrintOutput::setDefaults()
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+
+#source("~/Git/uk-covid-datatools/vignettes/cron-estimate-rt.R")
+currentRt = c(
+  readRDS("~/Git/uk-covid-datatools/vignettes/current-rt/CURRENT-DATASET-2020-08-19.rda"),
+  #readRDS("~/Dropbox/covid19/current-rt/submission/CURRENT-RT-QUICK-2020-08-19.rda"),
+  readRDS("~/Git/uk-covid-datatools/vignettes/current-rt/CURRENT-RT-SLOW-2020-08-19.rda")
+)
+
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+
+
+reload()
+usedSerial = SerialIntervalProvider$resampledSerialInterval(dpc)
+ 
+```
+
+Robert Challen^1,2^; Krasimira Tsaneva-Atanasova^1,3^; Martin Pitt^4^;
+Tom Edwards^2^; Luke Gompels^2^; Lucas Lacasa^5^; Ellen
+Brooks-Pollock^6^; Leon Danon^3,6,7^
+
+1)  EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2)  Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3)  The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4)  NIHR CLAHRC for the South West Peninsula, St Luke’s Campus, University of Exeter Medical School, Exeter, UK.
+5)  School of Mathematical Sciences, Queen Mary University of London, London E1 4NS, UK
+6)  Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+7)  Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
+
+# Abstract
+
+***The SARS-CoV-2 reproduction number has become an essential parameter for monitoring disease transmission across settings and guiding interventions. The UK published weekly estimates of the reproduction number in the UK starting in May 2020 which are formed from multiple independent estimates. In this paper, we describe methods used to estimate the time-varying SARS-CoV-2 reproduction number for the UK. We used multiple data sources and estimated a serial interval distribution from published studies. We describe regional variability and how estimates evolved during the early phases of the outbreak, until the relaxing of social distancing measures began to be introduced in early July. Our analysis is able to guide localised control and provides a longitudinal example of applying these methods over long timescales.***
+
+Keywords : COVID-19; SARS-CoV-2; reproduction number; regional
+variation;
+
+Competing interests: Support for RC and KTA’s research is provided by the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of the NHS Global Digital Exemplar programme (GDE); no financial relationships with any organisations that might have an interest in the submitted work in the previous three years, no other relationships or activities that could appear to have influenced the submitted work.
+
+Funding: RC and KTA gratefully acknowledges the financial support of the EPSRC via grant EP/N014391/1 and NHS England, Global Digital Exemplar programme. LD and KTA gratefully acknowledges the financial support of The Alan Turing Institute under the EPSRC grant EP/N510129/1. LL acknowledges the financial support of the EPSRC via Early Career Fellowship EP/P01660X/1. LD and EBP are supported by Medical Research Council (MRC) (MC/PC/19067). EBP was partly supported by the NIHR Health Protection Research Unit in Behavioural Science and Evaluation at University of Bristol, in partnership with Public Health England (PHE).
+
+Authors contributions: All authors discussed the concept of the article and RC wrote the initial draft. KTA, MP, TE, LG, LL, EB-P and LD commented and made revisions. All authors read and approved the final manuscript. RC is the guarantor. The views presented here are those of the authors and should not be attributed to TSFT or the GDE.
+
+# Introduction
+
+In late 2019 an outbreak of a novel infectious disease was detected. It manifested principally with severe acute respiratory distress, and pneumonia, [@huangClinicalFeaturesPatients2020] although many cases followed a mild course [@wuCharacteristicsImportantLessons2020]. The pathogen was rapidly identified as a new species of coronavirus (severe acute respiratory syndrome coronavirus 2, SARS-CoV-2), and the disease named COVID-19 [@NamingCoronavirusDisease]. Global transmission of the virus followed and major outbreaks have been observed in Europe, beginning with Italy [@ceredaEarlyPhaseCOVID192020a]. On the 31st Jan 2020 the first cases were identified in the UK [@mossLessonsManagingHighconsequence2020]. This was initially managed using testing of suspected individuals in the community, contact tracing and isolation of affected cases. However this was successful only in delaying the spread of the disease and on 13th March 2020 the UK government moved towards a mitigation strategy reserving testing for hospital inpatients only [@publichealthenglandCOVID19InvestigationInitial2020]. Following this, a step wise implementation of social distancing measures were mandated by the government including voluntary self isolation of any symptoms & vulnerable people [@publichealthenglandCOVID19GuidanceSocial2020], a ban on non essential travel worldwide [@foreignTravelAdviceCoronavirus2020] and school closures [@departmentforeducationClosureEducationalSettings2020]. Finally on 23rd March 2020 the government mandated that everyone apart from essential workers should stay at home and away from others [@cabinetofficeFullGuidanceStaying2020], instituting a countrywide “lock-down”.
+
+Epidemiological studies conducted during the outbreak in China have provided us with a number of estimates of the parameters describing the virus’s spread through the population including a reproduction number between 2.24 and 3.58 [@zhaoPreliminaryEstimationBasic2020a] and a median incubation period of 5.1 days (credible interval 4.5 to 5.8) [@lauerIncubationPeriodCoronavirus2020]. It is estimated that fewer than 2.5% of people will show signs before 2.2 days and 97.5% of people who will develop symptoms will have done so by 11.2 days after exposure [@lauerIncubationPeriodCoronavirus2020].
+
+We investigated the reproduction number of SARS-CoV-2 in the UK to determine whether there are any spatial or temporal patterns beyond those resulting from the imposition of social distancing measures, and to track the progression of the outbreak. This article summarizes the methodology and interpretation of national and regional estimates of the time varying reproduction number (*R~t~*) of the SARS-CoV-2 outbreak in the United Kingdom. These estimates were provided to the Scientific Pandemic Influenza Group on Modelling (SPI-M) [@ScientificPandemicInfluenza] and formed part of the weekly UK *R~t~* estimates [@NumberGrowthRate].
+
+# Methods
+
+This section describes  the data sources, their processing and combination and our methodology for estimating the serial interval of SARS-CoV-2 infections, and calculation of *R~t~* estimates.
+
+## Data
+
+We integrate data from a variety of sources, both publicly available and provided to the Scientific Pandemic Influenza Group - Modelling (SPI-M) [@ScientificPandemicInfluenza] by Public Health England (PHE) and the Defence Science and Technology Laboratory (DSTL) [@DefenceScienceTechnology]. We use these data to estimate *R~t~* and the exponential growth rate for the UK as a whole, for the four nations of the UK (CTRY), and for the seven NHS regions in England (NHSER).
+
+At the UK level, data are available on cases and deaths through the PHE coronavirus tracker [@publichealthenglandTotalUKCOVID19]. The tracker publishes an overall number of cases and deaths in the UK on a daily basis. It also provides a regional breakdown of the 4 nations, which exclude tests performed in private laboratories (Pillar 2 tests). At the time of this analysis, historical time series of the UK level data was not made available though the PHE site, however this information was collected prospectively and curated by Tom White’s aggregated COVID 19 UK data github site [@whiteCovid19ukdata]. Cumulative case counts from both the PHE headline UK figure and the combined sum of the 4 nations are compared as these numbers differ.
+
+Hospital admission data are available from NHS trusts across the UK via the DSTL, which in turn aggregate the situation reports (SitReps) provided by NHS hospital trusts. These are aggregated to UK level. Although referred to here as "hospital admission" it includes admissions of patients who are subsequently identified as COVID-19 cases in hospital, but identified in hospital, and patients with known COVID-19 who are then admitted to hospital.
+
+For the four devolved nations of the UK we used different data sources for each nation. In England we used data from the SPI-M provided line lists for cases and deaths in England. Cases are restricted to those processed in NHS labs (Pillar 1), and are available by date of specimen collection. For the other three nation states of the UK, as above, both historical cases and death data are aggregated from Public Health Wales [@PublicHealthWales] and Scotland's [@CoronavirusScotlandGov] sites, and from Northern Ireland's HSC site [@COVID19SurveillanceReports] respectively, using a time series retrieved from Tom White's aggregated COVID 19 UK data github site [@whiteCovid19ukdata] for Scotland, Wales and Northern Ireland. Death data from the 4 nations are provided via the CHESS data set [@CoronavirusCOVID19Using]. Death data are subject to a weekly periodicity due to reporting delay over the weekend which is mitigated by using date of death rather than date of report.
+
+At the level of the NHS England regions, we take the case data from anonymised test result line listings. Mortality data for NHS England is provided by PHE in a canonical line list of deaths, and is used alongside the CHESS data set[@CoronavirusCOVID19Using]. Admissions data is available from DSTL feeds, and ICU admissions from CHESS data set[@CoronavirusCOVID19Using].
+
+For England as a nation and for the NHS England regions we also have data available from triage telephone calls from NHS 111 and 999 services. The data on the calls made to 111 & 999 as well as the outcome of that call are provided as aggregate numbers broken down by age.
+
+For all data sources cumulative case figures are converted into daily incidence figures, and any data which is broken down by age, or by gender, are combined. In case and death data, the final 5 days of the time series are discarded to account for possible reporting delay. The resulting time series are analysed for outlying data points, which are more than 5 standard deviations away from the mean of the nearest 14 data points. Outlying or missing data are imputed from a linear interpolation of the logarithm of incidence figures, implemented in the R ‘forecast’ library [@ForecastingFunctionsTime], and the results are truncated to ensure no negative incidence figures. A smoothing function (a linear spline interpolation) is then fitted to the logarithm of incidence applied over a 7 day window [@loaderLocfitLocalRegression2020]. This is needed as all the data sources have some degree of weekly periodicity regardless of source.
+
+## Combination of data sources
+
+Our estimates are based on an aggregation of the various data sources described above. We generate four estimates of *R~t~* based on single time series from each data stream:
+
+a) deaths (EpiEstim/Deaths), 
+b) cases (EpiEstim/4NationsCases), 
+c) telephone triage (EpiEstim/Triage), 
+d) hospital admissions.
+
+The aggregation procedure is kept simple and combines multiple data sources when applicable using the mean. Any possible biases this introduces are consistent throughout the time series so that it does not affect relative changes and hence either estimates of *R~t~* or growth rates. The resulting time series are manually inspected for consistency and to check there are not abrupt changes in the data streams. The source of the combined data sets and more information about the processing steps used is shown in `r ref$stab("data-source")`. 
+
+## The serial interval of SARS-CoV-2 infections, *R~t~*, and time delay of estimates
+
+The serial interval and the generation interval are closely related measures. The generation interval is a measure of the time taken for an infection to pass from one person (infector) to another (infectee) in a chain of transmission. The serial interval, on the other hand, is a measure of the time between the appearance of clinical symptoms in the infector and infectee. The generation interval cannot be observed directly as both infection events are only detectable once the virus has incubated and become symptomatic. The serial interval is often used as an observable proxy for the generation interval. The use of the serial interval as a proxy for the generation interval is known to produce biased estimates for the reproduction number [@brittonEstimationEmergingEpidemics2019a; @gosticPracticalConsiderationsMeasuring2020a], but has the advantage of being directly observed through contact tracing.
+
+Assumptions about the serial interval of SARS-CoV-2 have an impact on the absolute level of our estimates of *R~t~*. We have used multiple approaches to estimate the serial interval. Firs, a UK specific serial interval was calculated from early case tracking data (the FF100 case data provided by DSTL). Second, a literature review was conducted and the serial intervals from a range of sources [@biEpidemiologyTransmissionCOVID192020a; @ceredaEarlyPhaseCOVID192020a; @duSerialIntervalCOVID192020; @ganyaniEstimatingGenerationInterval2020a; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleEvidenceTransmissionCOVID192020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimevaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhaoEstimatingSerialInterval2020] pooled [@challenImpactUncertaintySerial2020]. The serial interval can be well described by a `r usedSerial$printSerialInterval()`. This uncertainty in the serial interval distribution is propagated to our estimates of *R~t~* and used to determine confidence intervals. In other work we have analysed the effect of the pragmatic use of serial interval instead of generation interval and find the effect on estimates of Rt to be small (~5% of the absolute value) when it is close to one. This choice does not influence the estimate of time when Rt transitions from growth to decay [@challenImpactUncertaintySerial2020].
+
+Using the inferred serial interval distribution, we analysed the time series data using forward equation method [@coriEstimateTimeVarying], implemented in the EpiEstim R library [@coriEstimateTimeVarying; @coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019a], to estimate the time varying reproduction numbers during the outbreak. 
+
+The renewal equation method is predicated on a time series of infections, and on the infectivity profile - a measure of the probability that a secondary infection occurred on a specific day after the primary case, given a secondary infection occurred [@coriEstimateTimeVarying]. A Bayesian framework is then used to update a prior probabilistic estimate of *R~t~* on any given day with both information gained from the time series of infections in the epidemic to date and the infectivity profile to produce a posterior estimate. In both the original [@coriNewFrameworkSoftware2013] and revised [@thompsonImprovedInferenceTimevarying2019a] implementations of this method, the authors acknowledge the pragmatic use of the serial interval distribution, as a proxy measure for the infectivity profile, and the incidence of symptom onset or case identification as a proxy for the incidence of infection, with the caveat that these introduce a time lag into the estimates of *R~t~*. We make the simplifying assumption that there is negligible mixing of populations between each geographical area and treat each location independently.
+
+The method uses a sliding time window during which the instantaneous reproduction number is assumed to be constant. We used both a 7 day and a 28 day sliding window for calculations of the time varying reproduction
+number which provides two estimates with alternative trade offs between noise and loss of detail. Our *R~t~* estimate is calculated using a loosely informed prior estimate of *R~t~* as a gamma distribution with mean of 1 and standard deviation 2. This prior distribution is based on an assumption of the approximate value of *R~t~* on the conditions following lock-down, rather than reflecting values of *R~0~* commonly described in the literature [@zhaoPreliminaryEstimationBasic2020a] as those are based on the situation without social distancing measures in place.
+
+Other events in the timeline of an infection also serve as a proxy for observations of infections in the past including positive testing, hospitalization for severe disease, or death. Although best practice is to calculate *R~t~* using a generation interval distribution and infection events [@gosticPracticalConsiderationsMeasuring2020a], neither the generation interval distribution nor the infection event data can be  directly observed, and inferring them can also introduce potential bias and uncertainty. As a pragmatic initial step, we use the serial interval distribution described above in lieu of the generation interval, and the various observations available to us, including triage contacts, cases, admissions and deaths as a proxy of prior transmission events, and compare those results.
+
+There is a time delay between infection, symptom onset, case identification, hospital admission and ultimately death, and this affects the timing of our estimation of *R~t~*. In a separate analysis we estimated these time delays (shown in `r ref$stab("time-delays")`) and apply these estimates as a correction to the time of our estimates of *R~t~* to align them to the date of presumed infection.
+
+Code and processed data involved in this analysis are available on GitHub [@robchallenTerminologicalUkcoviddatatoolsZenodo2020].
+
+# Results
+
+## UK Overview
+
+```{r}
+tidyUp = function(df) {
+  return(df %>%
+    mutate(
+      `Count per 1M per day (95% CI)` = sprintf("%1.1f (%1.1f; %1.1f)",Est.value/population*1000000, Est.Quantile.0.025.value/population*1000000, Est.Quantile.0.975.value/population*1000000),
+      source = ifelse(source=="4NationsCases","Cases",source),
+      `R(t) (95% CI)` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)
+    )       
+  )
+}
+
+latestDate = as.Date("2020-07-04")
+earliestDate1 = as.Date("2020-02-12")
+earliestDate2 = as.Date("2020-03-21")
+events1 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Feb half term","Tracing stop","Lockdown","VE day","All shops reopen","Hotels and bars reopen"))
+events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","All shops reopen","Hotels and bars reopen"))
+
+```
+
+Our estimate of the median value of *R~t~* based for the United Kingdom based on cases, deaths and hospital admissions from the 4th July 2020 is presented in `r ref$tab("uk-rt")`. 
+
+`r cap$tab("uk-rt","Estimates of the value of *R~t~* in the UK on 4th July 2020")`
+
+```{r}
+#r0UK = currentRt$rtAssumed %>% tsp$adjustRtCorrFac() %>% tidyUp() %>% filter(codeType=="UK") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate)
+#r0UK = currentRt$rtAssumed %>% tidyUp() %>% filter(codeType=="UK") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate)
+r0UK = currentRt$rt %>% tidyUp() %>% filter(codeType=="UK") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate)
+#r0UK = currentRt$rt %>% tidyUp() %>% filter(codeType=="UK") %>% filter(date > earliestDate1 & date <= latestDate)
+r0UK %>% filter(date==latestDate) %>% ungroup() %>% select(`Observation`=source,`R(t) (95% CI)`, `Count per 1M per day (95% CI)`) %>% 
+  #standardPrintOutput::mergeCells()
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table2_ukRt",defaultFontSize = 8)
+
+maxRcases = r0UK %>% filter(statistic=="case") %>% pull(`Median(R)`) %>% max() %>% sprintf(fmt = "%1.1f")
+maxRadmissions = r0UK %>% filter(statistic=="hospital admission") %>% pull(`Median(R)`) %>% max() %>% sprintf(fmt = "%1.1f")
+maxRdeaths = r0UK %>% filter(statistic=="death") %>% pull(`Median(R)`) %>% max() %>% sprintf(fmt = "%1.1f")
+```
+
+In `r ref$fig("uk-rt-timeseries")`A, we show the incidence per million people of cases, deaths, and hospital admissions due to COVID-19 in the UK over the outbreak. Panel B shows the associated values for *R~t~*. The 3 data sources show similar patterns of exponential increase, with admissions and deaths lagging cases followed by a slower phase of exponential decline, beginning 2-3 weeks after the lock-down. In `r ref$fig("uk-rt-timeseries")`B we see the estimates of *R~t~* corrected to date of infection. There is a prominent single initial peak in *R~t~* from admissions and deaths  in late February, followed by a decline over the course of the next few months. *R~t~* crosses 1 at the beginning of April, after which it remains  below 1 during the lock-down period. Estimates based on cases show a biphasic pattern with an initial peak in mid February and a second smaller peak in early March,  follow the same pattern as other estimates. The peak values of *R~t~* vary by observation with peak *R~t~* by admissions being `r maxRadmissions`, by cases `r maxRcases` and by deaths `r maxRdeaths`. These are within the confidence limits of estimates described in other countries [@zhaoPreliminaryEstimationBasic2020a].
+
+```{r fig1}
+
+p1 = tsp$plotIncidenceQuantiles(
+    r0UK, 
+    denominatorExpr = population/1000000, 
+    events = events1, 
+    dates = c(earliestDate1, latestDate),
+    colour=statistic, 
+    ylim=c(0,150))+
+  #facet_wrap(vars(name),ncol=4)#+
+  #theme(axis.title.x = element_blank(),axis.text.x = element_blank())+
+  xlab("date of observation")+
+  scale_color_brewer(palette="Dark2",aesthetics = c("colour","fill"))+
+  scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("Count per 1M per day")
+p2 = tsp$plotRt(
+    r0UK, 
+    events = events1, 
+    dates = c(earliestDate1, latestDate),
+    colour=statistic, 
+    rtlim = c(0.5,9), ribbons=TRUE)+xlab("date of infection")+
+    scale_color_brewer(palette="Dark2",aesthetics = c("colour","fill"))
+  #facet_wrap(vars(name),ncol=4)+
+  #theme(legend.position = "bottom")
+
+r0ukplot = p1+p2+patchwork::plot_annotation(tag_levels = "A") +patchwork::plot_layout(ncol=1,guides = "collect")
+r0ukplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig1_ukRt")
+
+```
+
+`r cap$fig("uk-rt-timeseries", "Timeline of cases  and estimates of *R~t~* based on cases reported by PHE and NHS labs (green), deaths reported in NHS trusts (red) and best available data for hospital admissions (blue). A) Number of cases (Pillar 1), deaths and admissions per million. B) estimates of *R~t~* Red points are either missing values or identified as anomalies and replacements imputed.")`
+
+<!-- TODO: test positivity rates: http://freerangestats.info/blog/2020/05/09/covid-population-incidence -->
+
+## Countries in the UK
+
+Estimates of *R~t~* in the different countries of the UK, based on cases, deaths, hospital admissions or triage calls for the 4th July 2020 are presented in `r ref$tab("ctry-rt")` and `r ref$fig("ctry-rt-timeseries")`. Triage figures based on 111 & 999 coronavirus pathway calls were available for England only; we do not have access to the full time series of all information for all countries. We show estimates based on a 28 day rolling window as cases and deaths in Northern Ireland, and Scotland, have fallen to a level which makes estimates over a shorter window unreliable. With insufficient information the Bayesian method used reverts to the prior value of $R_0$ supplied which we set to 1. These estimates show the median value of *R~t~* is below 1 for all four nations, using all data sources. The pattern in all nations is similar with *R~t~* rapidly decreasing following lock-down on the 23rd March and becoming less than one in early April. Northern Ireland and Scotland have maintained a lower *R~t~* for a longer period of time than England and Wales, with *R~t~* values in Northern Ireland and Scotland at or below 0.75 for much of May, June and July compared to those in England and Wales which have been between 0.75 and 1 for the same period.
+
+`r cap$tab("ctry-rt", "Estimates of Mean *R~t~* and 95% confidence intervals for the individual countries in the United Kingdom, based on cases, deaths and hospital admissions on the 4th July 2020")`
+
+```{r}
+r0CTRY = currentRt$rt28 %>% tidyUp() %>% filter(codeType=="CTRY") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate)
+r0CTRY %>% filter(date==latestDate) %>% ungroup() %>% select(`Country`=name,`Observation`=source,`R(t) (95% CI)`, `Count per 1M per day (95% CI)`) %>% group_by(Country) %>%
+  #standardPrintOutput::mergeCells()
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table3_ukCountryRt",defaultFontSize = 8)
+```
+
+```{r fig2}
+r0nationsplot = tsp$plotRt(
+    r0CTRY, 
+    events = events2, 
+    dates = c(earliestDate2, latestDate), 
+    colour=statistic, 
+    rtlim = c(0.5,1.5), 
+    ribbons=TRUE
+  )+
+  scale_color_brewer(palette="Dark2",aesthetics = c("colour","fill"))+
+  facet_wrap(vars(name),ncol=2)
+#r0ukplot = p1+p2+patchwork::plot_layout(ncol=1,guides = "collect")
+r0nationsplot %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/Fig2_ukRegionRtDeaths")
+```
+
+`r cap$fig("ctry-rt-timeseries", "The median value of *R~t~* and 95% confidence intervals for the individual countries in the United Kingdom, based on cases, deaths and hospital admissions, and a 28 day rolling window. For each data source, red points represent data points that were missing and have been imputed")`
+
+## *R~t~* by England NHS region
+
+In `r ref$fig("nhser-rt-timeseries")` (and, for completeness, `r ref$stab("nhser-rt")`) we present the same results as above but with a focus on the NHS regions in England. On the 4th July 2020 the estimates of the mean of *R~t~* were largely below 1 in the individual NHS regions. The observed count of different observations demonstrates a clear regional difference between London and the South West and the rest of the country with lower rates of all indicators than other regions. The time series of regional estimates of *R~t~* reflect the overall patterns of England, albeit with more volatility due to the different windowing size between `r ref$fig("ctry-rt-timeseries")` and `r ref$fig("nhser-rt-timeseries")`. It is however possible to see higher levels of uncertainty in the South West reflecting the smaller case numbers and to a lesser extent the same in London.
+
+
+```{r fig3}
+#p1=tsp$plotIncidencePer100K(r0UK,group = statistic,linetype=version,events=events,dates = "2020-03-21")+scale_y_continuous(trans="log1p")
+r0NHSER = currentRt$rt %>% tidyUp() %>% filter(codeType=="NHSER" & statistic != "icu admission") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate)
+r0regionsplot=tsp$plotRt(
+    r0NHSER, 
+    events = events2, 
+    dates = c(earliestDate2,latestDate),
+    colour=statistic, 
+    rtlim = c(0.25,1.75), ribbons=TRUE)+
+  scale_color_brewer(palette="Dark2",aesthetics = c("colour","fill"))+
+  facet_wrap(vars(name),ncol=2)
+#r0ukplot = p1+p2+patchwork::plot_layout(ncol=1,guides = "collect")
+r0regionsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig3-NHSregionRt")
+```
+
+`r cap$fig("nhser-rt-timeseries", "The median value of *R~t~* and 95% confidence intervals for the sub-national regions of NHS England, based on cases, deaths and hospital admissions, and a 7 day rolling window.")`
+
+
+## *R~t~* differences from England baseline
+
+In `r ref$fig("nhser-delta-rt")` we plot the absolute difference of *R~t~* in the seven NHS England administrative regions, from the *R~t~* of England overall, as a baseline for each data source. This is based on 28 day window estimates due to the volatility observed in `r ref$fig("nhser-rt-timeseries")`. This analysis highlights the regional differences in *R~t~* over time. Over the period of the lock-down, the East of England, Midlands and South East regions approximately tracked the England baseline. The South West was seen to initially following the national average but from June demonstrates a trend towards a lower value, although our confidence in these estimates is low. When lock-down started, London was initially well below the England average, by most indicators, and this continued until some point in late May, after which the trend reversed. On the other hand the North West, and less so North East & Yorkshire were consistently above the rest of the country until late May when they eventually reached the England average, and since mid June the *R~t~* estimates in the North West have been lower than this average. The impact this variation has had on case loads is seen in `r ref$tab("nhser-delta-counts")` which shows the pre and post lock-down rates of newly identified cases in each NHS region.
+
+
+```{r}
+
+tmp = currentRt$rt28 %>% tidyUp() %>% 
+  filter(codeType=="CTRY") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate) %>% 
+  filter(name == "England") %>% select(date,source,baseline=`Median(R)`)
+
+englandnhsFromBaseline = 
+  currentRt$rt28 %>% tidyUp() %>% 
+  filter(codeType=="NHSER") %>% tsp$adjustRtDates(window=0, extraCols="R(t) (95% CI)") %>% filter(date > earliestDate1 & date <= latestDate) %>% 
+  inner_join(tmp, by=c("date","source")) %>% mutate(
+  `*R~t~* from baseline`=`Median(R)`-baseline, ymin=`Quantile.0.025(R)`-baseline, ymax=`Quantile.0.975(R)`-baseline
+)
+
+#glimpse(ts$tidyEnglandNHS)
+englandnhsplot = tsp$plotDefault(data = englandnhsFromBaseline, events = events2, dates = c("2020-03-23","2020-07-04"), ylim=c(-0.15,0.15))+
+  geom_ribbon(aes(ymin=ymin, ymax=ymax,group=source),alpha=0.065,fill="black")+
+  geom_line(aes(colour=source, x=date, y=`*R~t~* from baseline`),linetype="f1")+
+  geom_hline(yintercept=0,colour="grey50")+
+  scale_color_brewer(palette="Dark2",aesthetics = c("colour","fill"))+
+  facet_wrap(vars(name)) + ylab(latex2exp::TeX("$\\Delta R_t$ from baseline"))
+  
+englandnhsplot %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/current-rt/Fig4-NHSregionDeltaRt")
+```
+
+`r cap$fig("nhser-delta-rt", "The difference of *R~t~* estimates for NHS regions and baseline *R~t~* estimates for England, based on cases, deaths and hospital admissions, and a 28 day rolling window.")`
+
+`r cap$tab("nhser-delta-counts", "Estimates of the burden of disease before and after lock-down in the different NHS regions.")`
+
+```{r}
+r0NHSER %>% filter(date %in% c(earliestDate2,latestDate), source=="Cases") %>% ungroup() %>% select(`NHS Region`=name,`Date` = date,`Count per 1M per day (95% CI)`) %>% 
+  mutate(Date = paste0("Cases per 1M per day (95% CI) on ", as.character.Date(Date,"%d %b"))) %>%
+  pivot_wider(names_from = `Date`, values_from = `Count per 1M per day (95% CI)`) %>% 
+  #standardPrintOutput::mergeCells()
+  standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/Table4_NHSERDeltaCases",defaultFontSize = 8,colWidths = c(1,1,1))
+```
+
+# Discussion
+
+In this paper, we estimated the reproduction number, *R~t~*,  for COVID-19 in the UK using multiple data sources over a range of geographies and time points, and the same methodology. We find that, after the initial peak, different data sources produce similar results, without evidence of systematic bias for estimates based on more immediate measures (cases), compared to those based on longer term measures (deaths).  In the UK, *R~t~* peaked in mid February 2020,  coinciding with the end of the school holidays. We find that using different data sources affects the estimated size of peak burden although with considerable uncertainty. 
+
+We find that *R~t~* declined rapidly following lock-down on the 23rd March but did not reach the critical threshold (*R~t~* less than one) separating growth and decline until early April. This delay is likely to be the combination of ongoing transmission within households, care homes and hospitals, or outbreaks in factories in key industries such as food production. Other factors that may influence the timing are delays in case identification and reporting and limitations in the estimation methods. Subsequent to mid-April we estimate Rt largely remained below one until the end of the lock-down period. 
+
+The multiple data sources we considered each have their advantages and drawbacks. Counts of test-positive cases and telephone triage calls provide a rapid indication of infection risk and capture a broad representation of age groups, but may be influenced by changes in behaviour and testing policy. In the UK, initial attempts at community tracing were abandoned when case numbers started to outstrip test availability and afterwards testing was only performed on hospital admissions for suspected COVID-19 [@publichealthenglandCOVID19InvestigationInitial2020]. Later, test capacity was increased and the policy reversed to include more community cases, again altering the nature of the population being tested. Although a regional breakdown of testing capacity was not available at the time of this analysis, we do know that capacity was exceeded in the early phase of the epidemic, and this is one reason why case based Rt estimates must be interpreted with caution until the middle of April. Hospital admissions and death data are less subject to changes in sampling strategy, although are subject to reporting delays and biases in ascertainment. As COVID-19 mortality is overwhelmingly in the elderly, statistics based on deaths mainly represent older  groups. Due to reduced contact in the elderly we propose the outbreak took longer to become established in those age groups. Counts of admissions may be unreliable when there is delay in identifying a COVID-19 case, or when there is significant hospital transmission, as was the case in the early outbreak.
+
+We took a pragmatic approach for sub-national analyses, based on data availability.  In early April 2020, immediately following lock-down, estimates of *R~t~* were lowest in London and highest in the North West and North East of England. At this time, the burden of cases was highest in London at nearly 50 cases per million people per day, but this reduced 25 fold over the lock-down period. In early July 2020, at the relaxation of lock-down, the case rates per capita were lowest in the South West, due to the smaller initial outbreak size, followed by London due to the larger impact of social distancing. However the benefit of lower case rates in London were offset by relative increases in *R~t~*. When case numbers are low *R~t~* ceases to be a uniform statistic over a geographical area, because significant town to town variation will exist as clusters of infection become apparent. This was seen in South West of England towards the end of the lock-down where increasing variability in regional estimates of *R~t~* became less obviously significant. This reinforces the point that *R~t~* is a relative measure and should not be interpreted without information about the incidence rate.
+
+Our approach has a number of limitations. Our method  treats the whole system and each region as independent and isolated.  In reality, regions are connected via travel, although this was reduced during early social distancing measures in March and April. Furthermore, in the early phases, importation rates were high [@PreliminaryAnalysisSARSCoV22020], and this would lead to our approach overestimating the true *R~t~*. 
+
+# Conclusion
+
+We present a description of the methodology and data sources used in providing estimates of *R~t~* in the UK for SPI-M [@NumberGrowthRate]. Our approach is pragmatic and designed to produce timely, useful information to policy makers. Despite this, we find that using a number of data sources and careful interpretation helps elucidate the regional differences in *R~t~* and shows they existed from the outset of lock-down and persisted during lock-down. Due to compound nature of *R~t~* the result of this variation is higher case loads in Northern regions in the UK exiting lock-down. 
+
+As we move forward early detection and prevention of spread of emerging clusters SARS-CoV-2 infections is critical to prevent large scale outbreaks. This will be challenging as the long incubation period and high rate of asymptomatic individuals makes undetected rapid spread easy. Prediction at a more localised level is needed to focus both community testing and more targeted social interventions on high risk areas in the future.
+
+Critical to this work continues to be rapid access to information about the spread of SARS-CoV-2 in the community both with high spatial resolution, but also with a short time lag from infection to observation. As test and trace activities ramp up we expect to see similar biases in case related data as testing volumes change locally in response to outbreaks. Our existing approaches to estimating *R~t~* principally use hospital based metrics and as such may not provide the perspective on the outbreak that is needed in the future. Telephone triage data is one potential source of information about local outbreaks, and an area for future investigation [@leclercAnalysisTemporalTrends2020].
+
+# References
+
+<div id="refs"></div>
+
+\newpage
+# Estimates of regional infectivity of COVID-19 in the United Kingdom following imposition of social distancing measures
+
+Robert Challen^1,2^; Krasimira Tsaneva-Atanasova^1,3^; Martin Pitt^4^;
+Tom Edwards^2^; Luke Gompels^2^; Lucas Lacasa^5^; Ellen
+Brooks-Pollock^6^; Leon Danon^3,6,7^
+
+1)  EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2)  Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3)  The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4)  NIHR CLAHRC for the South West Peninsula, St Luke’s Campus, University of Exeter Medical School, Exeter, UK.
+5)  School of Mathematical Sciences, Queen Mary University of London, London E1 4NS, UK
+6)  Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+7)  Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
+
+# Supplementary material
+
+## `r cap$stab("data-source","The combined data sources")`
+
+```{r}
+currentRt$rationale %>% select(`Resolution`=codeType, Measure = statistic, `Data source`=sources, `Processing` = processing) %>% group_by(Resolution,Measure) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/TableS1_MethodsDataSources",defaultFontSize = 8)
+```
+
+## `r cap$stab("time-delays","Estimated correction of *R~t~* offset based on incubation period and observation delay")`
+
+```{r}
+ukcovidtools::ukCovidObservationDelays %>% arrange(mean) %>% select(c(-mean,-sd,-lower,-upper)) %>%
+  rename(Observation=to) %>%
+  standardPrintOutput::saveTable(filename="~/Dropbox/covid19/current-rt/TableS2_TimeCorrectionsFromIncubationPeriodAndDelayToObservation",defaultFontSize = 8)
+```
+
+## `r cap$stab("nhser-rt", "Estimates of mean values of *R~t~* and 95% confidence intervals for the sub-national regions of NHS England, based on 111 calls, cases, deaths and hospital admissions on the 4th July 2020")`
+
+```{r}
+r0NHSER %>% filter(date==latestDate) %>% ungroup() %>% select(`NHS Region`=name,`Observation`=source,`R(t) (95% CI)`, `Count per 1M per day (95% CI)`) %>% group_by(`NHS Region`) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/TableS3_NHSRegionRt",defaultFontSize = 8)
+
+```
+

@@ -71,13 +71,24 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
        TRUE ~ "unknown")
    },
    
+   normaliseAgeCat = function(ageCat) {
+      tmp_ageCat = ageCat %>% as.character() %>% stringr::str_replace(">([0-9]+)","\\1-120") %>% stringr::str_replace("<([0-9]+)","0-\\1") %>% stringr::str_replace("([0-9]+)\\+","\\1-120")
+      tmp_ageCat = ifelse(is.na(tmp_ageCat) | tmp_ageCat == "0-120" | stringr::str_to_lower(tmp_ageCat)=="unknown","120-120",tmp_ageCat)
+      tmp_ageMin = (tmp_ageCat %>% stringr::str_split_fixed("-",2))[,1]
+      tmp_ageMax = (tmp_ageCat %>% stringr::str_split_fixed("-",2))[,2]
+      tmp_rank = dense_rank(as.numeric(tmp_ageMin)*1000+as.numeric(tmp_ageMax))
+      tmp_ageCat = ifelse(tmp_ageCat == "120-120","unknown",tmp_ageCat)
+      tmp_ageCat = tmp_ageCat %>% stringr::str_replace("^0-","<")
+      tmp_ageCat = tmp_ageCat %>% stringr::str_replace("-120$","+")
+      tmp_labels = unique(tmp_ageCat[order(tmp_rank,tmp_ageCat)])
+      return(factor(tmp_rank,labels=tmp_labels[!is.na(tmp_labels)]))
+   },
+   
    #TODO: is this the right place for this?
    cutByAge = function(age, ageBreaks = NULL) {
+      # if no break specified return a column of NAs
      if(identical(ageBreaks,NULL)) return(rep(NA_character_, length(age)))
-     ageLabels = c(
-       paste0("<",ageBreaks[1]),
-       paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
-       paste0(ageBreaks[length(ageBreaks)],"+"))
+     ageLabels = self$labelsFromBreaks(ageBreaks)
      ageBreaks2 = c(-Inf,ageBreaks,Inf)
      ageCat = forcats::fct_explicit_na(
        cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE),
@@ -86,9 +97,17 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
      return(ageCat)
    },
    
+   # convert an ageCat string into a set of breaks
    breakFromCats = function(ageCat) {
      tmp = ageCat %>% unique() %>% stringr::str_extract("[0-9]+") %>% unique() %>% as.numeric()
-     return(tmp[!is.na(tmp)])
+     return(tmp[!is.na(tmp) & tmp>0 & tmp<119])
+   },
+   
+   labelsFromBreaks = function(ageBreaks) {
+      c(
+         paste0("<",ageBreaks[1]),
+         paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
+         paste0(ageBreaks[length(ageBreaks)],"+"))
    },
    
    #' @description ordered factor from age range labels

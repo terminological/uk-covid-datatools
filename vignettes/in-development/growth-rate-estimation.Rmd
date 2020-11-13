@@ -1,0 +1,183 @@
+---
+title: "Growth rate estimation"
+author: "Rob Challen"
+date: "25/06/2020"
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}    
+
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/growth-rates/", output_file='growth-rates.pdf') })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+bibliography: current-rt.bib
+csl: current-rt.csl
+vignette: >
+  %\VignetteIndexEntry{COVID-19 Growth rate estimation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+
+---
+
+Robert Challen ^1,2^; Krasimira Tsaneva-Atanasova ^1,^3; Leon Danon ^3,4^;
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r setup}
+library(tidyverse)
+
+# devtools::load_all("~/Git/uk-covid-datatools/")
+# devtools::install_github("terminological/uk-covid-datatools")
+# library(ukcovidtools)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(lubridate)
+library(patchwork)
+library(sp)
+devtools::load_all("~/Git/standard-print-output/")
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+```
+
+# Background
+
+Our purpose in this paper is to demonstrate and test different methods of generating the growth rate of incidence of COVID-19. As we are producing phenomenological estimates for SPI-M we are limited somewhat in our approach, as we have no estimate of prevalence of COVID infection in the community. There are however a range of possible methods we have investigated for observing the growth rate from a purely observational standpoint. We have implemented these methods in our processing pipeline and summarise them here.
+
+```{r}
+devtools::load_all("~/Git/uk-covid-datatools/")
+dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+tsp = dpc$timeseriesProcessor()
+```
+
+# Method
+
+We calculate growth rates for two time series. Time series one is artificial, constructed from 100 time points starting form Jan 1st 2020 at 1, and growing exponentially with a day on day increase given by 1.5 for days 1-29 days, followed by 0.8 for 20-49, then 1.1 for 50-69 days, 0.7 for 70-89, then steady at 1 for the last 10 days. Timeseries 2 is based on case counts published on the Public Health England coronavirus website for England. It has a few missing values.
+
+```{r}
+testData = tibble(time = 1:100) %>% mutate(growth_rate = case_when(
+  time < 30 ~ 1.5,
+  time < 50 ~ 0.8,
+  time < 70 ~ 1.1,
+  time < 90 ~ 0.7,
+  TRUE ~ 1
+), value = growth_rate ) %>% mutate(type = "incidence", value = cumprod(growth_rate), date = as.Date("2020-01-01")+time)
+
+testTs = tsp$importTimeseries(testData,dateVar = date,valueExpr = value,statisticExpr = "cases",typeExpr = "incidence")
+testTs = testTs %>%
+  tsp$logIncidenceStats(window=14) %>%
+  tsp$smoothAndSlopeTimeseries(smoothExpr = value,window=14) %>%
+  tsp$estimateLittleR(window = 14, nocache=TRUE)
+
+
+ukts = dpc$datasets$getPHEDashboard() %>% 
+  filter(name=="England" & type=="incidence") %>%
+  tsp$logIncidenceStats(window=14) %>%
+  tsp$smoothAndSlopeTimeseries(smoothExpr = value,window=14) %>%
+  tsp$estimateLittleR(window = 14, nocache=TRUE)
+```
+
+```{r fig1, fig.cap="Epidemic curve based on (A) an artifical and (B) a real timeseries of lab positive cases in England as published on the PHE dashboard, on a log1p scale."}
+p1=ggplot(testTs,aes(x=date,y=value))+geom_bar(stat="identity", width=0.6)+scale_y_continuous(trans="log1p")+labs(subtitle="Artificial")
+p2= ggplot(ukts,aes(x=date,y=value))+geom_bar(stat="identity", width=0.6)+scale_y_continuous(trans="log1p")+labs(subtitle="PHE England cases")
+(p1+p2+patchwork::plot_annotation(tag_levels = "A") +patchwork::plot_layout(nrow=1)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/growth-rates/Fig1_EpidemicCurves")
+```
+
+The rate of growth of these distributions is calculated using 3 methods all of which are applied over a rolling window. In all 3 methods the same 14 day window has been chosen, as the real data has a strong weekly cycle and windows shorter than 14 days become unstable.
+
+The 3 methods explored are Poisson distribution fitting, direct estimation of the rate of change incidence as a fraction of incidence, and estimation of the rate of change of the logarithm of incidence.
+
+Poisson fitting is conducted using the R glm library on a 14 day subsection of the data. The lambda parameter of the Poisson distribution is used as an estimate of the growth rate.
+
+The second method, direct estimation of the rate of change assumes that the incidence is a noisy sample of a smooth function. Estimation of the value and first derivative of that smooth function is done by applying a local regression direct to incidence figures. The regression is linear over the 14 day window, and performed with the locfit R package. The estimate of the growth rate is the estimated gradient at any given timepoint divided by estimated value. The fitting is conducted with a degree 1 polynomial, the locfit alpha parameter is set to ensure that fitting algorithm is using the correct numbers of points of data (alpha = window/N in a timeseries of N points).
+
+$$
+r = \frac{\delta I_t}{\delta t}I_t^{-1}
+$$
+
+The third method assumes that the incidence curve is a smooth function obeying exponential growth dynamics. To estimate this the incidence curve is shifted by 1 and log transformed, and the slope of this curve is estimated, again using the locfit library, with degree 1 and alpha determined as above. The slope of this curve is a direct estimate of the growth rate.
+
+$$
+I_{t+\delta t} \sim I_t(1+e^{r\delta t})
+$$
+$$
+r = \frac{\delta}{\delta t} log(I_t+1)
+$$
+Both approaches 2 & 3 rely on smoothing of the discrete incidence values to a continuous function. These both can be affected by outlying data points, so prior to calculation of the local gradient outlier detection must be applied. This is currently being done using the forecast R package (tsclean) which detects and imputes local values for outlying and missing data in a time series.
+
+# Results
+
+TODO: update this with artificial time-series from projections package
+
+```{r}
+
+#install.packages("projections")
+
+seed = incidence::incidence(dates = as.Date(unlist(lapply(as.Date("2020-01-01"):as.Date("2020-01-10"),function(x) rep(x,runif(1,90,110)))),"1970-01-01"))
+proj_3 <- projections::project(x = seed, R = c(1,1.2,0.7), si = Flu2009$si_distr, n_days = 60, time_change = c(20,40), R_fix_within = TRUE)
+
+plot(proj_3)
+
+tmp = as.data.frame(proj_3,long=TRUE) %>% group_by(sim) %>% mutate(incidence = as.numeric(incidence))
+```
+
+Figure 2 shows the 3 methods applied to an artificial time series with defined growth rate. In the panel A we see the Poisson method closely estimates the artifical series with a predictable delay introduced by the windowing. The implementation estimates growth rates using values prior to the point of estimation. 
+
+In panel B we see estimates fo the growth rate using a direct method. As mentioned above this method is dependent on the determination of an underlying function, which is assumed to be smooth. The outlier detection algorithm has kicked in (turquoise points in the rug plot) due to the excessive spikiness of the exponential growth phase the early part of the artificial time series.
+
+In panel C we have the estimates based on local exponential fitting. This performs in a similar fashion to A but the timing of the delay is variable as the locally fitted exponential will use points ahead as well as points behind when these are available. This has the somewhat undesirable effect to compressing the resulting time series towards the end. This is less affected by the imputation algorithm as the log incidence curve is less spiky but around the transitions we can again see that the outlier detection function has made changes to the raw data. We need to continue investigation on this.
+
+```{r fig2, fig.cap="Comparison of 3 methods for growth rate estimation in an artificial time series."}
+
+
+p1 = ggplot(testTs, aes(x=date)) +geom_line(aes(y=log(growth_rate)), colour = "black")+ plotRibbons(`Mean(Growth rate)`,`Sd(Growth rate)`, "red")+labs(y="r",subtitle="Poisson \U03BB")+coord_cartesian(ylim=c(-1,1))
+p2 = ggplot(testTs, aes(x=date)) +geom_line(aes(y=log(growth_rate)), colour = "black")+ plotRibbons(`Ratio.value`,`Ratio.SE.value`, "blue")+geom_rug(aes(colour=Imputed.value),show.legend = FALSE)+labs(y="r",subtitle=expression(frac(delta*I,delta*t) * I^-1))+coord_cartesian(ylim=c(-1,1))
+p3 = ggplot(testTs, aes(x=date)) +geom_line(aes(y=log(growth_rate)), colour = "black")+ plotRibbons(`Growth`,`Growth.SE`,"magenta")+geom_rug(aes(colour=`Imputed.log(value + 1)`),show.legend = FALSE)+labs(y="r",subtitle=expression(frac(delta*log(I+1),delta*t)))+coord_cartesian(ylim=c(-1,1))
+
+(p1+p2+p3+patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(nrow=1)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/growth-rates/Fig2_ArtificalTest")
+
+```
+
+Figure 3 shows the same 3 algorithms applied to the real incidence curves in figure 1B. 
+
+In panel A the Poisson fitting algorithm demonstrates narrow confidence intervals compared to stability of the underlying value. This is reflecting the reality of reporting delay, but this is despite us employing a 14 day window. The method could be seen as over sensitive, and we also seen this in time series generated with EpiEstim unless they are heavily smoothed.
+
+In panel B the direct estimation method again demonstrates some value but is influenced by our outlier detection algorithm which has been triggered by the noise at the height of the peak, and in the early fall, this has produced an inappropriately smooth and high confidence area. 
+
+In panel C the local fitting of exponential produces a smooth estimate with appropriate confidence intervals. It is difficult to say whether it is over smoothed. We can empirically adjust windowing functions to see what effect that will have in the future.
+
+```{r fig3, fig.cap="Comparison of 3 smoothing methods in a real time series."}
+p1 = ggplot(ukts, aes(x=date)) + plotRibbons(`Mean(Growth rate)`,`Sd(Growth rate)`, "red")+labs(y="r",subtitle="Poisson \U03BB")+coord_cartesian(ylim=c(-0.25,0.5))
+p2 = ggplot(ukts, aes(x=date)) + plotRibbons(`Ratio.value`,`Ratio.SE.value`, "blue")+geom_rug(aes(colour=Imputed.value),show.legend = FALSE)+labs(y="r",subtitle=expression(frac(delta*I,delta*t) * I^-1))+coord_cartesian(ylim=c(-0.25,0.5))
+p3 = ggplot(ukts, aes(x=date)) + plotRibbons(`Growth`,`Growth.SE`,"magenta")+geom_rug(aes(colour=`Imputed.log(value + 1)`),show.legend = FALSE)+labs(y="r",subtitle=expression(frac(delta*log(I+1),delta*t)))+coord_cartesian(ylim=c(-0.25,0.5))
+
+(p1+p2+p3+patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(nrow=1)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/growth-rates/Fig3_RealTest")
+
+```
+
+# Conclusion
+
+We've presented 3 methods for estimating the growth rates, which produce comparable estimates to each other which are in line with those expected in an artificial time series. As we have been asked to produce estimates of growth rate, in the short term we will the method based on local fitting of exponential growth as these seem to have a good trade off between signal and noise. It is clear that we need to revisit our outlier detection algorithm as this is having excessive influence particularly in smoothing the peak of the incidence curve. This is the only place where it is used in this way - and in our estimates of R(t) the outlier detection is used on the log1p data, where it is not triggered. It's worth also clarifying that a less invasive smoothing algorithm is employed during Rt estimation, and this is under continuous review.
+
+# Limitations
+
+None of these methods account for estimates of the prevalence, and hence a "true" growth rate from an epidemic sense. The estimates of growth rate will tend to be biased on the low side during the growth phase of the epidemic. For the methods based on local fitting algorithm it is possible that weighting the local fitting using a convolution of the serial interval distribution could address this.
+

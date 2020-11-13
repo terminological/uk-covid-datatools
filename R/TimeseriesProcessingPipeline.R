@@ -65,10 +65,22 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     #TODO: check unequal lengths or non overlapping timeseries dates
     
     tmp= tmp %>% dplyr::mutate(ageCat=NA_character_)
-    tmp = tmp %>% 
-      covidStandardDateGrouping() %>%
-      dplyr::summarise(value = fn(value, ...)) %>%
-      dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+    if ("population" %in% colnames(tmp)) {
+      tmp = tmp %>% 
+        covidStandardDateGrouping() %>%
+        dplyr::summarise(
+          value = fn(value, ...),
+          population = fn(population, ...)
+        ) %>%
+        dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+    } else {
+      tmp = tmp %>% 
+        covidStandardDateGrouping() %>%
+        dplyr::summarise(
+          value = fn(value, ...)
+        ) %>%
+        dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+    }
     return(tmp %>% dplyr::ungroup())
   }},
   
@@ -331,8 +343,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         }
         # calculate derivative using a loess method
         # tmp = locfit::locfit(log(value+1) ~ day,loessTest,deg = 2,alpha=0.25,deriv=1)
-        tmp_intercept_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha)
-        tmp_slope_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha, deriv=1)
+        tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts)
+        #tmp_intercept_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha)
+        tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts, deriv=1)
+        #tmp_slope_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha, deriv=1)
         tmp_intercept = predict(tmp_intercept_model, tmp_ts$x, band="local")
         tmp_slope = predict(tmp_slope_model, tmp_ts$x, band="local")
         tmp_ts[[paste0("Est.",smoothLabel)]] = ifelse(tmp_intercept$fit < 0, 0, tmp_intercept$fit) # prevent negative smoothing.
@@ -624,6 +638,36 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
   
+  adjustRtConfidence = function(covidRtResult, sdMultiplier, predicate=NULL) {
+    predicate = enexpr(predicate)
+    doQuant = function(meanVec,sdVec,p) {
+      ifelse(sdVec>meanVec,NA, qgamma(shape = meanVec^2/sdVec^2, rate = meanVec/sdVec^2,p=p))
+    }
+    if(!identical(predicate,NULL)) {
+      covidRtResult %>% mutate(
+        `Quantile.0.025(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.025),`Quantile.0.025(R)`),
+        `Quantile.0.05(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.05),`Quantile.0.05(R)`),
+        `Quantile.0.25(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.25),`Quantile.0.25(R)`),
+        `Median(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.5),`Median(R)`),
+        `Quantile.0.75(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.75),`Quantile.0.75(R)`),
+        `Quantile.0.95(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.95),`Quantile.0.95(R)`),
+        `Quantile.0.975(R)` = ifelse(!!predicate, doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.975),`Quantile.0.975(R)`),
+        `Std(R)` = ifelse(!!predicate, `Std(R)` * sdMultiplier,`Std(R)`)
+      )
+    } else {
+      covidRtResult %>% mutate(
+        `Quantile.0.025(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.025),
+        `Quantile.0.05(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.05),
+        `Quantile.0.25(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.25),
+        `Median(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.5),
+        `Quantile.0.75(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.75),
+        `Quantile.0.95(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.95),
+        `Quantile.0.975(R)` = doQuant(`Mean(R)`,`Std(R)` * sdMultiplier,0.975),
+        `Std(R)` = `Std(R)` * sdMultiplier
+      )
+    }
+  },
+  
   adjustRtDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
     
     adjustable = c(
@@ -637,6 +681,37 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       offset = round(window/2+offsetAssumptions[[g$statistic]])
       tmp = d %>% covidStandardGrouping(statistic) %>% group_modify(function(d2,g2,...) {
       
+        d2 = tibble(date = as.Date((min(d2$date)-offset):(min(d2$date)-1),"1970-01-01")) %>% bind_rows(d2)
+        cols = colnames(d2)[colnames(d2) %in% adjustable]
+        for (col in cols) {
+          col = as.symbol(col)
+          d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+        }
+        return(d2)
+        
+      })
+      return(tmp)
+      
+    })
+    
+    return(tmp7)
+  },
+  
+  adjustGrowthRateDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
+    
+    adjustable = c(
+      "Growth.value","Growth.SE.value","Growth.ProbPos.value",
+      "Growth.windowed.value","Growth.windowed.SE.value","Growth.windowed.ProbPos.value",
+      "doublingTime.Quantile.0.025","doublingTime.Quantile.0.25","doublingTime","doublingTime.Quantile.0.75","doublingTime.Quantile.0.975",
+      "doublingTime.windowed.Quantile.0.025","doublingTime.windowed.Quantile.0.25","doublingTime.windowed","doublingTime.windowed.Quantile.0.75","doublingTime.windowed.Quantile.0.975",
+      extraCols
+    )
+    
+    tmp7 = covidRtResult %>% group_by(statistic) %>% group_modify(function(d,g,...) {
+      #browser()
+      offset = round(window/2+offsetAssumptions[[g$statistic]])
+      tmp = d %>% covidStandardGrouping(statistic) %>% group_modify(function(d2,g2,...) {
+        
         d2 = tibble(date = as.Date((min(d2$date)-offset):(min(d2$date)-1),"1970-01-01")) %>% bind_rows(d2)
         cols = colnames(d2)[colnames(d2) %in% adjustable]
         for (col in cols) {
@@ -879,7 +954,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       }
       p2 = p2 + 
         geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,...))+
-        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
       
     } else {
       
@@ -893,7 +968,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       }
       p2 = p2 +
         geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,colour=!!colour,...))+
-        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
       
     }
     p2 = p2 + geom_hline(yintercept = 1,colour="grey50")
@@ -916,13 +991,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = "black")
+      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = "black",...)
       else p2 = p2 + geom_line(aes(y=`Growth.value`,...))
     } else {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = !!colour)
+      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = !!colour,...)
       else p2 = p2 + geom_line(aes(y=`Growth.value`,colour=!!colour, ...))
     }
-    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.value`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.value`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
     
     return(p2)
   },
@@ -937,19 +1012,22 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     df = covidRtTimeseries %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
-    colour = tryCatch(ensym(colour),error = function(e) NULL)
+    colour = enexpr(colour)
     
     p2 = self$plotDefault(df, events,dates, ylim=rlim) + ylab(latex2exp::TeX("$r$"))
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.windowed.value`,`Growth.windowed.SE.value`,colourExpr = "black")
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = "black",...)
       else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`,...))
+    } else if (class(colour) == "character") {
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = !!colour,...)
+      else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`, ...),colour=!!colour)
     } else {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.windowed.value`,`Growth.windowed.SE.value`,colourExpr = !!colour)
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = !!colour,...)
       else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`,colour=!!colour, ...))
     }
-    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.windowed.value`),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.windowed.value`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
     
     return(p2)
   },
@@ -1021,9 +1099,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           geom_ribbon(aes(ymin=yMin1, ymax=yMax1, group=!!colour, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
           geom_ribbon(aes(ymin=yMin2, ymax=yMax2, group=!!colour, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
-        geom_line(aes(y=yMid,colour=!!colour,...)) +
-        geom_point(aes(y=y,colour=!!colour),size=0.5, alpha=0.5, shape=16,show.legend = FALSE)+
-        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(aes(y=y,colour=!!colour),size=0.25, alpha=0.5, shape=16,show.legend = FALSE)+
+        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
+        geom_line(aes(y=yMid,colour=!!colour,...))
     } else {
       if(ribbons) p2 = p2 + 
         # geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,alpha=0.1,show.legend = FALSE) + 
@@ -1031,9 +1109,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
         geom_ribbon(aes(ymin=yMin2, ymax=yMax2, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
-        geom_line(data=df,mapping=aes(x=date,y=yMid,...)) +
-        geom_point(aes(y=y),colour="black",size=0.5, alpha=0.5, shape=16,show.legend = FALSE)+
-        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+        geom_point(aes(y=y),colour="black",size=0.25, alpha=0.5, shape=16,show.legend = FALSE)+
+        geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
+        geom_line(data=df,mapping=aes(x=date,y=yMid,...))
     }
     return(p2)
   },
@@ -1064,9 +1142,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
     p2 = self$plotDefault(df,events,dates,ylim=ylim)+ylab("Incidence")
     p2 = p2+
-      geom_point(aes(y=y,...),alpha=0.5,size=0.5)+
-      geom_line(aes(y=yMid,...),alpha=0.5)+
-      geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=1, alpha=1, shape=16,show.legend = FALSE)
+      geom_point(aes(y=y,...),alpha=0.5,size=0.25)+
+      geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
+      geom_line(aes(y=yMid,...),alpha=1)
     return(p2)
   }#,
   

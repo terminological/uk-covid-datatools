@@ -21,7 +21,7 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
                                   ageVar = "age", 
                                   ageBreaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
                                   ageLabels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
-                                  ageReferenceCat = NA,
+                                  ageReferenceCat = NA_character_,
                                   statusLabels = c("censored","died")
   ) {
     out = self$generateNoAgeSurvivalData(df,{{idVar}},{{startDateVar}},{{endDateExpr}},{{statusExpr}},{{censoredDateExpr}}, statusLabels)
@@ -96,7 +96,7 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
   transitionMatrix = function(...) {
     dots=enexprs(...)
     states = unique(c(names(dots),sapply(dots, as_label)))
-    transMatrix = matrix(rep(NA,length(states)*length(states)),nrow=length(states),dimnames = list(states,states))
+    transMatrix = matrix(rep(NA_real_,length(states)*length(states)),nrow=length(states),dimnames = list(states,states))
     for (i in 1:length(dots)) {
       from = names(dots)[i]
       to = sapply(dots, as_label)[[i]]
@@ -118,7 +118,7 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
                 startDateCol=names(allowableTransitions)[1],
                 ageBreaks = c(-Inf,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,Inf),
                 ageLabels = c('0-4','5-9','10-14','15-19','20-24','25-29','30-34','35-39','40-44','45-49','50-54','55-59','60-64','65-69','70-74','75-79','80+'),
-                ageReferenceCat = NA,
+                ageReferenceCat = NA_character_,
                 ...) {
     
     ageVar = ensym(ageVar)

@@ -118,7 +118,7 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           }
           if (!completeDates) {
             d = d %>% mutate(
-              value = ifelse(!(date %in% seenDates), NA, value),
+              value = ifelse(!(date %in% seenDates), NA_real_, value),
               Implicit = ifelse(!(date %in% seenDates), FALSE, Implicit)
             )
           }
@@ -200,7 +200,7 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
   #' @return a covidTimeseriesFormat dataframe
   fixDatesAndNames = function(covidTimeseries, truncate) {
     tmp5 = covidTimeseriesFormat(covidTimeseries)
-    if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA)
+    if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA_character_)
     tmp5 = tmp5 %>% 
       dplyr::ungroup() %>%
       dplyr::select(-name) %>%
@@ -238,7 +238,7 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
       if(any(is.na(d$tmp_value))) errs = c(errs,"NAs in values")
       if(any(g$type == "incidence" & d$tmp_value<0)) errs = c(errs,"Negative values in incidence figures")
       
-      if (identical(errs,NULL)) errs = NA 
+      if (identical(errs,NULL)) errs = NA_character_ 
       else errs = paste0(errs,collapse="; ")
       
       return(d %>% dplyr::mutate(errors = errs))

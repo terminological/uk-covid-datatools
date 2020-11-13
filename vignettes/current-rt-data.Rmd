@@ -2,16 +2,36 @@
 title: "Current R(t): Data selection and QA"
 author: "Rob Challen"
 date: '`r format(Sys.Date(), "%d-%m-%Y")`'
-output: 
-  ioslides_presentation:
-    widescreen: true
-    smaller: true
-    css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
-    # self_contained: false
-    # lib_dir: ~/Dropbox/covid19/current-rt/data/libs
+output:
+  beamer_presentation:
+    slide_level: 2
+    theme: "Singapore"
+    colortheme: "seagull"
+    fig_width: 7
+    fig_height: 5
+classoption: "aspectratio=169"
+fontsize: 10pt
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/current-rt/data", output_file=paste0('current-rt-data-',Sys.Date(),'.html')) })
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/current-rt/data", output_file=paste0('current-rt-data-',Sys.Date(),'.pdf')) })
+# output: 
+#   ioslides_presentation:
+#     widescreen: true
+#     smaller: true
+#     css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
+#     # self_contained: false
+#     # lib_dir: ~/Dropbox/covid19/current-rt/data/libs
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/current-rt/data", output_file=paste0('current-rt-data-',Sys.Date(),'.html')) })
 ---
+
+
+## Background
+
+- Complex selection of data for different geographical resolutions
+-- Triage; Cases; Hospital Admissions; ICU Admissions; Deaths
+-- CTRY; UK; NHSER
+- Inconsistencies & other quality issues
+- Key dates
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -22,7 +42,7 @@ knitr::opts_chunk$set(
 devtools::load_all("~/Git/standard-print-output/")
 standardPrintOutput::setDefaults()
 setwd("~/Git/uk-covid-datatools/vignettes/")
-devtools::load_all("~/Git/uk-covid-datatools//")
+devtools::load_all("~/Git/uk-covid-datatools/")
 source("cron-estimate-rt.R")
 
 datasrc = function(ct, st) {
@@ -33,28 +53,12 @@ proc = function(ct, st) {
   (currentRt$rationale %>% filter(codeType==ct & statistic == st))$processing
 }
 
-```
-
-## Background
-
-- Complex selection of data for different geographical resolutions
--- Triage; Cases; Hospital Admissions; ICU Admissions; Deaths
--- CTRY; UK; NHSER
-- Inconsistencies & other quality issues
-- Key dates
-
-```{r}
 events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","Anti-racism demos","Hotels and bars reopen","Start autumn term"))
 events %>% select(`Start date`,Classification,Label) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Table1_events")
+
 ```
 
 # Data sources
-
-## CTRY
-
-- Many feeds only are available for England
-- 4 public health sites publishing data
-- Not all data is collected in comparable way
 
 ## Triage calls - CTRY
 
@@ -374,10 +378,11 @@ p2 %>%
 
 ```
 
-## Most recent $R_t$ 
-
 ```{r}
-currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate(Estimate = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`)) %>% select(name,statistic,date,Estimate) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6)
+currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate(
+  `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`),
+  `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`)
+  ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
 ```
 
 ## Combined data set - 7 day growth rates
@@ -397,6 +402,47 @@ p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/da
 ```
 
 
+## Combined data set - 14 day $R_t$
+
+```{r}
+events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day"))
+
+p2 = tsp$plotRt(
+    currentRt$rt14 %>% filter(statistic != "icu admission"), 
+    events = events2,dates = "2020-05-01", 
+    colour=statistic, 
+    rtlim = c(0.5,2), ribbons=TRUE)+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p2 %>% 
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_Rt14_AllGeogsAllModels")
+
+```
+
+```{r}
+currentRt$rt14 %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% 
+  group_by(name,statistic) %>% mutate(
+  `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`),
+  `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`)
+  ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab22_Rt14_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
+```
+
+## Combined data set - 14 day growth rates
+
+```{r}
+p3 = tsp$plotWindowedGrowthRate(
+    currentRt$rt14 %>% filter(statistic != "icu admission"), 
+    colour=statistic, 
+    events = events2,
+    dates = "2020-05-01",
+    ribbons = TRUE, 
+    rlim = c(-0.125,0.125))+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig23_GrowthRate14_AllGeogsAllModels")
+
+```
+
 ## Combined data set - 28 day $R_t$
 
 ```{r}
@@ -410,7 +456,7 @@ p2 = tsp$plotRt(
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
-  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig23_Rt28_AllGeogsAllModels")
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_Rt28_AllGeogsAllModels")
 
 ```
  
@@ -426,7 +472,7 @@ p3 = tsp$plotWindowedGrowthRate(
     rlim = c(-0.125,0.125))+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
-p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_GrowthRate28_AllGeogsAllModels")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig25_GrowthRate28_AllGeogsAllModels")
 
 ```
 

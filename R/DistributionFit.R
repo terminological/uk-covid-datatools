@@ -549,6 +549,16 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     else return(tmp)
   },
   
+  discreteSurvival = function(q, summarise=TRUE) {
+    tmp = self$calculateCumulativeDistributions(q, summarise=FALSE) %>% ungroup() %>% 
+      group_by(across(c(-value,-cumulative))) %>% 
+      arrange(value) %>%
+      mutate(survival = 1-cumulative) %>%
+      select(-cumulative)
+    if (summarise) return(tmp %>% self$sevenNumbers(survival))
+    else return(tmp)
+  },
+  
   sampledProbabilities = function(q, summarise=TRUE) {
     #TODO: offset? shift?
     if(identical(self$samples, NULL)) self$generateSamples()
@@ -635,7 +645,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   #' @param padLeft - what can we assume about the run in to the current values? default NA.
   #' @return a list of matrices
   
-  tsParameterizedConvolution = function(groupedDf, distributionsDf, outputVar = "output", valueVar = "value", dateVar="date", distributionVar = "dist", paramNameVar = "param", paramValueVar = "paramValue", days = 30, timepoints = 0:days, padLeft = NA, padRight = NA) {
+  tsParameterizedConvolution = function(groupedDf, distributionsDf, outputVar = "output", valueVar = "value", dateVar="date", distributionVar = "dist", paramNameVar = "param", paramValueVar = "paramValue", days = 30, timepoints = 0:days, padLeft = NA_real_, padRight = NA_real_) {
     grps = groupedDf %>% groups()
     distributionVar = ensym(distributionVar)
     paramNameVar = ensym(paramNameVar)
@@ -675,7 +685,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   #' @param padRight - what can we assume about the run in to the current values? default NA.
   #' @return a list of matrices
   
-  tsDiscreteConvolution = function(groupedDf, discreteDistDf, outputVar = "output", valueVar="value", dateVar="date", pExpr="prob", padLeft=NA, padRight=NA ) {
+  tsDiscreteConvolution = function(groupedDf, discreteDistDf, outputVar = "output", valueVar="value", dateVar="date", pExpr="prob", padLeft=NA_real_, padRight=NA_real_ ) {
     grps = groupedDf %>% groups()
     valueVar = ensym(valueVar)
     dateVar = ensym(dateVar)
@@ -717,7 +727,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   #' @param bootstraps - number of bootstrap iterations 
   #' @return the full bootstrap result (i.e. not summarized) which can be futher convoluted (asd long as the number of bootstrap iterations are kept the same).
   
-  tsBootstrapConvolution = function(groupedDf, distributionDistDf, bootstraps=100, outputVar = "output", valueVar="value", dateVar="date", days = 30, timepoints = 0:days, padLeft=NA, padRight=NA) {
+  tsBootstrapConvolution = function(groupedDf, distributionDistDf, bootstraps=100, outputVar = "output", valueVar="value", dateVar="date", days = 30, timepoints = 0:days, padLeft=NA_real_, padRight=NA_real_) {
     grps = groupedDf %>% groups()
     tmp = groupedDf %>% crossing(tibble(bootstrapNumber = 1:bootstraps)) %>% group_by(!!!grps,bootstrapNumber)
     distributionDistDf = distributionDistDf %>% group_by(!!!grps)
@@ -870,7 +880,7 @@ DistributionFit$unconvertParameters = function(
 
 DistributionFit$convertParameters = function(
     paramDf,
-    N = NA,
+    N = NA_integer_,
     dist="gamma",
     confint = c(0.025,0.975),
     bootstraps = 1000, 

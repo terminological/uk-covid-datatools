@@ -40,18 +40,18 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataPro
   #' @param CHESSdf - the raw chess data set
   #' @param date - the date of the data set
   #' @return a data frame of stats by trust representing reporting quality.
-  chessItuSubset = function(CHESSdf = self$getCHESS(), date = max(CHESSdf$dateupdated,na.rm=TRUE)) {
+  chessItuSubset = function(CHESSdf = self$getCHESS(), updatedWithin = 14, date = max(CHESSdf$dateupdated,na.rm=TRUE)) {
     CHESS_date = as.Date(date,"1970-01-01")
-    # hospitals must have updated their data in last 3 days
-    # and have fewer than 5 outcomes recorded with unknown dates
+    # hospitals must have updated their data in last 14 days
+    # and have fewer than 10% outcomes recorded with unknown dates
     incHosp = self$chessQuality(CHESSdf) %>%
       filter(
-        as.Date(recentDate) >= CHESS_date-3 & 
+        as.Date(recentDate) >= CHESS_date-updatedWithin & 
           outcomeWithoutDates/knownOutcomes < 0.1
       )
     
     return(
-      CHESSdf %>% chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
+      CHESSdf %>% self$chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
         inner_join(incHosp %>% dplyr::select(-trustname), by="trustcode") %>% 
         filter(!is.na(dateadmittedicu)) %>% 
         mutate(censorDate = as.Date(recentDate))

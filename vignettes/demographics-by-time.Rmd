@@ -1,10 +1,22 @@
 ---
-title: "Demographics of Covid 19 cases over time"
-output: 
-  pdf_document:
-    fig_caption: yes
+title: "COVID-19 age breakdown"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output:
+  beamer_presentation:
+    slide_level: 2
+    theme: "Singapore"
+    colortheme: "seagull"
+classoption: "aspectratio=169"
 knit: (function(inputFile, encoding,...) {
-  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age")})
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demograpics-',Sys.Date(),'.pdf') ) })
+# output: 
+#   ioslides_presentation:
+#     widescreen: true
+#     smaller: true
+#     css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demograpics-',Sys.Date(),'.html') ) })
 fig_width: 7
 fig_height: 5
 out.width: "100%"
@@ -12,144 +24,350 @@ bibliography: current-rt.bib
 csl: current-rt.csl
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(
-	echo = FALSE,
-	# message = FALSE,
-	# warning = FALSE,
-	collapse = TRUE,
-	comment = "#>"
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
 )
+
 devtools::load_all("~/Git/standard-print-output/")
 devtools::load_all("~/Git/uk-covid-datatools/")
 library(tidyverse)
 library(patchwork)
-library(reticulate)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(patchwork)
+library(sp)
+library(sf)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+
 standardPrintOutput::setDefaults()
 
-paths = findDatafile()
-#py_install("sympy")
-# py_config()
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+
+dpc = tsp = chp = srv = mwp = NULL
+
+reload = function() {
+  devtools::load_all("~/Git/uk-covid-datatools/")
+  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
+  tsp <<- dpc$timeseriesProcessor()
+  # tsp$printSerialInterval()
+  chp <<- dpc$chessProcessor()
+  srv <<- dpc$survivalProcessor()
+  mwp <<- dpc$metawardProcessor()
+}
+
+reload()
 ```
 
-## R Markdown
+## Authors
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Robert Challen ^1,2^;  Krasimira Tsaneva-Atanasova ^1,3,5^; Ellen Brooks-Pollock^4^; Leon Danon ^3,5^
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
 
-```{r cars}
-ll = ukcovidtools::getLineList(paths$lineList)
-# uses LTLA as most detailed geography
+Report: `r Sys.Date()`
 
-# ONS age breakdown deaths
-# https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fbirthsdeathsandmarriages%2fdeaths%2fdatasets%2fweeklyprovisionalfiguresondeathsregisteredinenglandandwales%2f2020/publishedweek172020.xlsx
+```{r}
+casesPerPillar = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = pillar)
+casesPerSymptomatic = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = asymptomatic_indicator)
+casesPerEthnicity = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = ethnicity_final)
+casesPerIMD = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = imd_decile)
+
+breakdown111 = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01"))
+
+deathsPerResidence = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = residence_type)
+deathsPerEthicity = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = ethnicity_final)
+deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85))
+
+others = dpc$spim$getSPIMextract()
+
+icuAdmissions = others %>% filter(source == "chess_icu_admissions" & !is.na(ageCat) & codeType %in% c("CTRY","NHSER"))
+admissions = others %>% filter(source %in% c("hospital_inc","hospital_inc_new") & !is.na(ageCat) & codeType %in% c("CTRY","NHSER"))
+
+# negatives = dpc$spim$getNegatives()
+
+
 # 
+# 
+# positivityByPillarAndAge = negatives %>% tsp$aggregateGender()  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% tsp$aggregateGender() %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos/(pos+neg), ageCat = tsp$ageCatToFactor(ageCat)) 
+# 
+# volumesByPillarAndAge = negatives %>% tsp$aggregateGender()  %>% filter(codeType == "CTRY") %>% rename(neg=value) %>% inner_join(cases %>% tsp$aggregateGender() %>% select(date,codeType,subgroup,ageCat,gender,pos=value), by=c("date","codeType","subgroup","ageCat","gender"), suffix=c(".neg",".pos")) %>%  mutate(value = pos+neg, ageCat = tsp$ageCatToFactor(ageCat)) %>% dpc$demog$findDemographics()
 
-# IMD:
-# http://data-communities.opendata.arcgis.com/datasets/indices-of-multiple-deprivation-imd-2019
-# LSOA2011 and LAD2019
 
-ages = c("0-19","20-49","50-59","60-69","70-79","80+")
-
-llDemog = ll %>% mutate(
-  ageCat = ukcovidtools::ageToAgeCat(age, ageLabels = ages), 
-  gender=stringr::str_sub(sex,1,1), 
-  specimen_date=as.Date(specimen_date))
-
-#%>% group_by(sex,ageCat,lab_report_date) %>% summarise(incidence = n())
-ukDemog = UKDemographics2018$byNationAgeAndGender  %>% filter(nation == "England") %>% mutate(
-  ageCat = ukcovidtools::ageToAgeCat(age, ageLabels = ages)
-) %>% group_by(nation, ageCat, gender) %>% summarise(count = sum(count))
-
-sex=c("MALE","FEMALE")
-dateRange = tibble(specimen_date = as.Date(min(llDemog$specimen_date):max(llDemog$specimen_date),"1970-01-01")) %>% 
-  crossing(ages) %>% 
-  crossing(sex) %>%
-  rename(ageCat=ages)
-
-demog2 = llDemog %>% inner_join(ukDemog,by=c("ageCat","gender")) %>%   
-    group_by(ageCat,sex,specimen_date) %>% summarise(
-      incidence = n(),
-      incidencePer100K = n()/first(count)*100000,
-    ) 
-
-demog2 = dateRange %>% left_join(demog2,by=c("specimen_date","ageCat","sex")) %>% 
-  mutate(
-    incidence = ifelse(is.na(incidence),0,incidence),
-    incidencePer100K = ifelse(is.na(incidencePer100K),0,incidencePer100K)
-  )
-
-demog2 = demog2 %>% group_by(ageCat,sex) %>% arrange(specimen_date) %>% group_modify(function(d,g,...) {
-  d = d %>% mutate(
-      #smooth_incidence = signal::sgolayfilt(incidence,p = 2,n = 7),
-      #smooth_incidencePer100K = signal::sgolayfilt(incidencePer100K,p = 2,n = 7),
-      smooth_incidence = stats::filter(incidence, rep(1,7)/7, sides=1),
-      smooth_incidencePer100K = stats::filter(incidencePer100K, rep(1,7)/7, sides=1),
-    )
-  return(d)
-}) %>% ungroup() %>% mutate(ageCat= ukcovidtools::ageCatToFactor(ageCat, ageLabels = ages)) %>% filter(specimen_date < max(specimen_date)-4)
 ```
 
 ```{r}
-# ggplot(demog2,aes(x=specimen_date, y=incidencePer100K, colour=sex))+geom_line()+facet_wrap(vars(ageCat))#+scale_y_continuous(trans="sqrt")
-incidencePlot = ggplot(demog2,
-  aes(x=specimen_date, y=smooth_incidencePer100K,colour=sex))+
-  geom_line()+
-  geom_vline(xintercept = as.Date("2020-03-23"), colour="black", linetype="dashed")+
-  facet_wrap(vars(ageCat))+
-  xlab("date")+scale_x_date(date_breaks = "2 week",date_labels = "%d-%m")+
-  ylab("daily incid per 100K")+#theme(axis.text.x = element_text(angle=90,vjust=0.5))+
-  coord_cartesian(xlim=c(as.Date("2020-03-01"),max(demog2$specimen_date,na.rm = TRUE)))+
-  standardPrintOutput::narrowAndTall()
-  
-incidencePlot %>% saveThirdPageFigure("~/Dropbox/covid19/by-age/incidenceDynamics")
-#+scale_y_continuous(trans="sqrt")
+events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% filter(Label %in% c("Hotels and bars reopen","End summer term","Start autumn term","Start univerity term","England 2nd lockdown"))
+
 ```
+
+<!-- ## Gender differences -->
+
+<!-- ```{r} -->
+<!-- tmp = casesPerSymptomatic %>% filter(codeType == "CTRY") %>% tsp$aggregateSubgroup() %>% dpc$demog$findDemographics()  -->
+<!-- tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=gender) + facet_wrap(vars(ageCat)) + scale_y_continuous(trans="log1p") -->
+
+<!-- ``` -->
+
+<!-- ## Asymptomatic and symptomatic case numbers -->
+
+<!-- ```{r} -->
+<!-- tmp = casesPerSymptomatic %>% filter(codeType == "CTRY") %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()  -->
+<!-- p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=subgroup, events = events,dates = "2020-07-01") + facet_wrap(vars(ageCat),ncol=4) + scale_y_continuous(trans="log1p",breaks = c(1,10,20,50,100,200,500,1000))+ylab("cases per 1M per day")+guides(colour=guide_legend("asymptomatic")) -->
+
+<!-- ``` -->
+
+<!-- ## Asymptomatic and symptomatic case numbers  -->
+
+<!-- ```{r} -->
+<!-- tmp = casesPerSymptomatic %>% filter(codeType == "NHSER" & name=="London") %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()  -->
+<!-- p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=subgroup, events = events,dates = "2020-07-01") + facet_wrap(vars(ageCat),ncol=4) + scale_y_continuous(trans="log1p",breaks = c(1,10,20,50,100,200,500,1000))+ylab("cases per 1M per day")+guides(colour=guide_legend("asymptomatic")) -->
+<!-- p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_CasesBySymptoms") -->
+
+<!-- ``` -->
+
+## Materials
+
+* Cases: Pillar 1 & 2 excluding asymptomatics from linelists
+* Admissions: Sum of "hospital_inc" & "hospital_inc_new" fields (All_SPIM_trust)
+* ICU admissions: "chess_icu_admissions" (All_SPIM_trust)
+* Deaths: Linelist
+* 111 calls: 111 linelists
+
+## Symptomatic covid positive cases by age
 
 ```{r}
-source("./covid-serial-interval.R")
-demog3 = demog2 %>% group_by(specimen_date, ageCat) %>% summarise(src_incidence = sum(incidence)) %>% ungroup() %>% group_by(ageCat) %>%
-  arrange(specimen_date) %>% mutate(incidence = stats::filter(src_incidence, rep(1,7)/7)) %>% group_by(ageCat) %>% tidyEstimateRt(cfg,dateVar = specimen_date,incidenceVar = incidence,window = 7) %>% deltaR0timeseries(dateVar = specimen_date)
+tmp = casesPerSymptomatic %>% filter(codeType == "CTRY" & subgroup != "Y" & ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01") + facet_wrap(vars(ageCat),ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500,2000))+ylab("cases per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CTRY_SymptomaticCasesByAge")
 ```
+
+## Symptomatic covid positive cases by age and region
 
 ```{r}
-plotRt(demog3,dateVar = specimen_date, facetVars = vars(ageCat), rtlim = c(0.5,1.5)) %>% saveThirdPageFigure("~/Dropbox/covid19/by-age/rtByAge")
+tmp = casesPerSymptomatic %>% filter(codeType == "NHSER" & subgroup != "Y" & name != "Unknown (England)" & ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01") + facet_wrap(vars(ageCat),ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("cases per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_SymptomaticCasesByAgeAndRegion")
+
 ```
+
+## Symptomatic covid positive cases by region and age
+
+```{r}
+tmp = casesPerSymptomatic %>% filter(codeType == "NHSER" & subgroup != "Y" & name != "Unknown (England)" & ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=ageCat, events = events,dates = "2020-07-01") + facet_wrap(vars(name),ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("cases per 1M per day")+guides(colour=guide_legend("age")) + scale_color_viridis_d()
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_SymptomaticCasesByRegionAndAge")
+
+```
+
+
+## Hospital admissions and in hospital COVID by age
+
+```{r}
+tmp = admissions %>% filter(codeType == "CTRY") %>% mutate(ageCat = factor(ageCat,c("0-5","6-17","18-64","65-84","85+"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01", ylim = c(0,500)) + facet_wrap(vars(ageCat), ncol=3) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("admissions per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CTRY_AdmissionsByAge")
+```
+
+## Hospital admissions and in hospital COVID by age and region
+
+```{r}
+tmp = admissions %>% filter(codeType == "NHSER" & name != "Unknown (England)" & ageCat!="unknown") %>% mutate(ageCat = factor(ageCat,c("0-5","6-17","18-64","65-84","85+"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01", ylim = c(0,500)) + facet_wrap(vars(ageCat),ncol=3) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("admissions per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_AdmissionsByAgeAndRegion")
+```
+
+## Hospital admissions and in hospital COVID by region and age
+
+```{r}
+tmp = admissions %>% filter(codeType == "NHSER" & name != "Unknown (England)" & ageCat!="unknown") %>% mutate(ageCat = factor(ageCat,c("0-5","6-17","18-64","65-84","85+"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=ageCat, events = events,dates = "2020-07-01", ylim = c(0,500)) + facet_wrap(vars(name),ncol=4) + scale_color_viridis_d()+
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("admissions per 1M per day")+guides(colour=guide_legend("age"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_AdmissionsByRegionAndAge")
+```
+
+## ICU admissions by age
+
+```{r}
+tmp = icuAdmissions %>% filter(codeType == "CTRY")  %>% mutate(ageCat = tsp$ageCatToFactor(ageCat,c("<1","1-4","5-14","15-24","25-44","45-54","55-64","65-74","75-84",">85"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01", ylim = c(0,20)) + facet_wrap(vars(ageCat)) + 
+  scale_y_continuous(trans="log1p",breaks = c(2,5,20,50,200,500))+ylab("ICU admissions per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CTRY_IcuAdmissionsByAge")
+```
+
+## ICU admissions by age and region
+
+```{r}
+tmp = icuAdmissions %>% filter(codeType == "NHSER") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat,c("<1","1-4","5-14","15-24","25-44","45-54","55-64","65-74","75-84",">85"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01", ylim = c(0,20)) + facet_wrap(vars(ageCat)) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("ICU admissions per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_IcuAdmissionsByAgeAndRegion")
+```
+
+## ICU admissions by region and age
+
+```{r}
+tmp = icuAdmissions %>% filter(codeType == "NHSER") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat,c("<1","1-4","5-14","15-24","25-44","45-54","55-64","65-74","75-84",">85"))) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=ageCat, events = events,dates = "2020-07-01", ylim = c(0,20)) + facet_wrap(vars(name)) + 
+  scale_y_continuous(trans="log1p",breaks = c(2,5,20,50,200,500))+ylab("ICU admissions per 1M per day")+guides(colour=guide_legend("age")) +scale_colour_viridis_d()
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_IcuAdmissionsByRegionAndAge")
+```
+
+## Deaths
+
+```{r}
+tmp = deaths %>% filter(codeType == "CTRY") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01",ylim=c(0,250)) + facet_wrap(vars(ageCat), ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CTRY_DeathsByAge")
+```
+
+## Deaths by age and region
+
+```{r}
+tmp = deaths %>% filter(codeType == "NHSER" & ageCat!="unknown") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = "2020-07-01",ylim=c(0,250)) + facet_wrap(vars(ageCat), ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_DeathsByAgeAndRegion")
+```
+
+## Deaths by region and age
+
+```{r}
+tmp = deaths %>% filter(codeType == "NHSER" & ageCat!="unknown") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=ageCat, events = events,dates = "2020-07-01",ylim=c(0,250)) + facet_wrap(vars(name), ncol=4) + 
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("age"))+scale_color_viridis_d()
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_DeathsByRegionAndAge")
+```
+
+## Acute outcome 111 calls
+
+```{r}
+tmp = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01")) %>% 
+  tsp$aggregateGeography(targetCodeTypes = "CTRY",keepOriginal = FALSE) %>% #tsp$logIncidenceStats(growthRateWindow = 14,smoothingWindow = 21) %>%
+  filter(subgroup %in% c("urgent clinical review", "emergency ambulance")) %>%
+  tsp$aggregateSubgroup() %>%
+  mutate(ageCat = ageCat %>% tsp$ageCatToFactor(ageLabels = c("<1","1-4","5-14","15-24","25-44","45-54","55-64","65-74","75-84","85+","Unknown"))) %>% 
+  dpc$demog$findDemographics() %>% 
+  filter(!ageCat %in% c("<1","Unknown")) 
+
+p = tsp$plotIncidenceQuantiles(tmp, denominatorExpr = population/1000000, events = events, colour=name)+
+    facet_wrap(vars(ageCat))+
+    scale_y_continuous(trans="log1p", breaks = c(5,20,50,200,500,2000,5000))+ylab("per 1M per day")
+
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CTRY_111CallsByAge")
+```
+
+## Acute outcome 111 calls by region
+
+```{r}
+tmp = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01")) %>% 
+  tsp$aggregateGeography(targetCodeTypes = "NHSER",keepOriginal = FALSE) %>% tsp$logIncidenceStats(growthRateWindow = 14,smoothingWindow = 21) %>%
+  filter(subgroup %in% c("urgent clinical review", "emergency ambulance")) %>%
+  tsp$aggregateSubgroup() %>%
+  mutate(ageCat = ageCat %>% tsp$ageCatToFactor(ageLabels = c("<1","1-4","5-14","15-24","25-44","45-54","55-64","65-74","75-84","85+","Unknown"))) %>% 
+  dpc$demog$findDemographics() %>% 
+  filter(!ageCat %in% c("<1","Unknown")) 
+
+p = tsp$plotIncidenceQuantiles(tmp, denominatorExpr = population/1000000, events = events, colour=name)+
+    facet_wrap(vars(ageCat))+
+    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+ylab("per 1M per day")
+
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_111CallsByAge")
+```
+
+## University age vs gen pop cases
+
+```{r}
+events2 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% filter(Label %in% c("Start autumn term","Start univerity term","Testing capacity limited"))
+
+uniVsRestCasesPerSymptomatic = dpc$spim$getLineListIncidence(ageBreaks = c(6,11,18,23,60,75),subgroup = asymptomatic_indicator) %>% filter(ageCat !="unknown") %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
+p = (uniVsRestCasesPerSymptomatic %>% filter(codeType=="CTRY") %>% tsp$plotIncidenceQuantiles(colour = subgroup, denominatorExpr = population/1000000, dates = "2020-08-01", events = events2)) + facet_wrap(vars(ageCat)) + scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500,1500,5000,15000))+guides(color=guide_legend("asymptomatic"))
+p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/UniversityCases")
+```
+
+## University age vs gen pop growth rate (symptomatics)
+
+```{r}
+totalUni = uniVsRestCasesPerSymptomatic %>% filter(subgroup!="Y") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
+p2 = totalUni %>% filter(codeType=="CTRY") %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$adjustGrowthRateDates() %>%  tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events2) + facet_wrap(vars(ageCat))
+# tsp$estimateRt(window = 14) %>%  tsp$plotRt(dates = "2020-08-01", events = events2) + facet_wrap(vars(ageCat))
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/UniversityRt")
+```
+
 
 
 ```{r}
-anim = ggplot(demog2, aes(x=ageCat,fill=sex,y=smooth_incidencePer100K))+geom_histogram(stat="identity",position="dodge", size=0.7,binwidth = 1)+#scale_y_continuous(trans="sqrt")+
-  gganimate::transition_time(specimen_date)
 
-gif = gganimate::animate(anim, renderer=gganimate::magick_renderer(), width=800, height=600, nframes=100)
+dmg = dpc$demog$getDemographicsForShape(mapId = "LAD19",ageBreaks = c(6,11,18,23,60,75), combineGenders = TRUE)
 
-#gif
-```
+tmp = dpc$spim$getLineListIncidence(ageBreaks = c(6,11,18,23,60,75),subgroup = asymptomatic_indicator, codeTypes = "LAD") %>% 
+  filter(subgroup!="Y" & ageCat !="unknown" & ageCat != "<6") %>% mutate(ageCat=as.character(ageCat)) %>%
+  tsp$aggregateGender() %>% tsp$aggregateSubgroup() %>% inner_join(dmg %>% mutate(ageCat=as.character(ageCat)), by=c("code","ageCat"), suffix=c("","rhs")) %>% rename(population=count)
 
-## Generalised Richards Model
+tmp2 = tmp %>% bind_rows(
+  tmp %>% tsp$aggregateAge() %>% mutate(ageCat="All")
+) %>% mutate(ageCat = factor(ageCat,levels=c("6-10","11-18","19-22","23-59","60-75","75+","All"),ordered=TRUE))
 
-```{python, warning=TRUE, results="asis"}
+uniVsRestCasesGeog = tmp2 %>% tsp$logIncidenceStats()
+maxDate = (tmp2 %>% pull(date) %>% max())-4
 
-import sympy as sp
-sp.init_printing()
-
-t, r, K, a = sp.symbols('t r K a')
-C = sp.Function("C")(t)
-dCdt = C.diff(t)
-expr = sp.Eq(dCdt, r*C*(1-(C/K)**a))
-expr
-#print('<math>')
-#sp.print_mathml(expr)
-#print('</math>')
-#print('<div>'+sp.print_mathml(expr)+'</div>')
-#print("$$ "+sp.latex(expr)+" $$")
-
-d2Cdt2 = dCdt.diff(t)
-expr2 = sp.Eq(d2Cdt2, sp.diff(r*C*(1-(C/K)**a),t))
-expr2
-#d2Cdt2.expand()
-
+map = dpc$geog$getMap("LAD19") %>% inner_join(uniVsRestCasesGeog %>% filter(date == maxDate) %>% select(-name,-codeType), by=c("code"))
 ```
 
 
+## University age va gen pop growth rates by region `r maxDate`
+
+```{r}
+p3 = ggplot(map %>% ungroup() %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + facet_wrap(vars(ageCat), ncol = 5) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_gradient2(
+  midpoint=0, low="#008837", mid="#f7f7f7", high="#7b3294", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/UniversityGrowth")
+```
+
+
+## University age vs gen pop $P(r>0)$ on `r maxDate`
+
+```{r}
+p3 = ggplot(map %>% ungroup() %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.ProbPos.value),size = 0.05) + facet_wrap(vars(ageCat), ncol = 5) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_viridis_c(name="P(growth rate>0)") #trans="log1p")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/UniversityGrowthProbPos")
+```
+
+
+<!-- # ```{r} -->
+<!-- # # Cases for Ellen: -->
+<!-- #  -->
+<!-- # tmp = casesPerSymptomatic %>% filter(codeType %in% c("CTRY","NHSER") & subgroup != "Y" & ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics() -->
+<!-- #  -->
+<!-- # tmp2 = tmp %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$estimateRt(window = 14) -->
+<!-- #  -->
+<!-- # tmp2 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/by-age/symptomaticCases_AgeAndRegionStratifiedRtAndGrowthRate_",Sys.Date(),".csv")) -->
+<!-- # ``` -->

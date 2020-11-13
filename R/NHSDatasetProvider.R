@@ -89,7 +89,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         out2 = out2 %>% 
           #dplyr::group_by(gender,ageCat,code,name,source) %>% 
           #dplyr::arrange(date) %>% 
-          dplyr::mutate(codeType = "CCG20", type="incidence",statistic="triage",subgroup=NA, note=NA, source=paste0(source,"-public")) %>% 
+          dplyr::mutate(codeType = "CCG20", type="incidence",statistic="triage",subgroup=NA_character_, note=NA_character_, source=paste0(source,"-public")) %>% 
           dplyr::rename(value=incidence)
         # out2 = out2 %>% dplyr::select(-name) %>% self$codes$findNamesByCode(outputCodeTypeVar = NULL)
         return(out2 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
@@ -335,9 +335,63 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
       }))
     },
     
-    getPHEApi = function(areaType = "nation", areaName= NULL, areaCode = NULL, ...) {
+    
+    #' Extracts paginated data by requesting all of the pages
+    #' and combining the results.
+    #'
+    #' @param filters    API filters. See the API documentations for 
+    #'                   additional information.
+    #'                   
+    #' @param structure  Structure parameter. See the API documentations 
+    #'                   for additional information.
+    #'                   
+    #' @return list      Comprehensive list of dictionaries containing all 
+    #'                   the data for the given ``filter`` and ``structure`.`
+    getPHEPaginatedData = function (filters, structure) {
       
-      endpoint <- "https://api.coronavirus.data.gov.uk/v1/data"
+      endpoint     <- "https://api.coronavirus.data.gov.uk/v1/data"
+      results      <- list()
+      current_page <- 1
+      
+      repeat {
+        
+        httr::GET(
+          url   = endpoint,
+          query = list(
+            filters   = paste(filters, collapse = ";"),
+            structure = jsonlite::toJSON(structure, auto_unbox = TRUE),
+            page      = current_page
+          ),
+          httr::timeout(10)
+        ) -> response
+        
+        # Handle errors:
+        if ( response$status_code >= 400 ) {
+          err_msg = httr::http_status(response)
+          stop(err_msg)
+        } else if ( response$status_code == 204 ) {
+          break
+        }
+        
+        # Convert response from binary to JSON:
+        json_text <- httr::content(response, "text")
+        dt        <- jsonlite::fromJSON(json_text)
+        results   <- rbind(results, dt$data)
+        
+        if ( is.null( dt$pagination$`next` ) ){
+          break
+        }
+        
+        current_page <- current_page + 1;
+        
+      }
+      
+      return(results)
+      
+    },
+    
+    
+    getPHEApi = function(areaType = "nation", areaName= NULL, areaCode = NULL, ...) {
       
       # Create filters:
       filters = sprintf("areaType=%s", areaType)
@@ -355,42 +409,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         admission = "newAdmissions"
       )
       
-      # The "httr::GET" method automatically encodes 
-      # the URL and its parameters:
-      httr::GET(
-        # Concatenate the filters vector using a semicolon.
-        url = endpoint,
-        
-        # Convert the structure to JSON (ensure 
-        # that "auto_unbox" is set to TRUE).
-        query = list(
-          filters = paste(filters, collapse = ";"),
-          structure = jsonlite::toJSON(structure, auto_unbox = TRUE)
-        ),
-        
-        # The API server will automatically reject any
-        # requests that take longer than 10 seconds to 
-        # process.
-        httr::timeout(10)
-      ) -> response
-      
-      # Handle errors:
-      if (response$status_code >= 400) {
-        url <- response$url
-        print(url)
-        err_msg = httr::http_status(response)
-        stop(err_msg)
-      }
-      
-      # Convert response from binary to JSON:
-      json_text <- httr::content(response, "text")
-      data = jsonlite::fromJSON(json_text)
-      
-      # Store the encoded URL for inspection:
-      # url <- response$url
-      # print(url)
-      
-      ts = data$data
+      ts = self$getPHEPaginatedData(filters,structure)
       
       ts = ts %>% pivot_longer(cols=c("case","death","admission"),names_to = "statistic",values_to = "value") %>%
         mutate(
@@ -403,14 +422,14 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
             TRUE ~ NA_character_
           ),
           source = "phe api",
-          subgroup = NA,
-          ageCat = NA,
-          gender = NA,
-          note = NA,
+          subgroup = NA_character_,
+          ageCat = NA_character_,
+          gender = NA_character_,
+          note = NA_character_,
           statistic = ifelse(statistic == "admission","hospital admission",statistic),
           date = as.Date(date,"%Y-%m-%d")
         )
-      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(2) %>% self$complete())
     },
     
     ####TODO: ----
