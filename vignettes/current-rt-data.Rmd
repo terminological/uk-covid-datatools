@@ -361,45 +361,45 @@ p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/dat
 
 ```  
 
-## Combined data set - 7 day $R_t$
+<!-- ## Combined data set - 7 day $R_t$ -->
 
-```{r}
-events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day"))
+<!-- ```{r} -->
+<!-- events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day")) -->
 
-p2 = tsp$plotRt(
-    currentRt$rt %>% filter(statistic != "icu admission"), 
-    events = events2,dates = "2020-05-01", 
-    colour=statistic, 
-    rtlim = c(0.5,2), ribbons=TRUE)+
-  facet_wrap(vars(name),ncol=4)+
-  theme(legend.position = "bottom")
-p2 %>% 
-  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels")
+<!-- p2 = tsp$plotRt( -->
+<!--     currentRt$rt %>% filter(statistic != "icu admission"),  -->
+<!--     events = events2,dates = "2020-05-01",  -->
+<!--     colour=statistic,  -->
+<!--     rtlim = c(0.5,2), ribbons=TRUE)+ -->
+<!--   facet_wrap(vars(name),ncol=4)+ -->
+<!--   theme(legend.position = "bottom") -->
+<!-- p2 %>%  -->
+<!--   standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels") -->
 
-```
+<!-- ``` -->
 
-```{r}
-currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate(
-  `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`),
-  `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`)
-  ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
-```
+<!-- ```{r} -->
+<!-- currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate( -->
+<!--   `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), -->
+<!--   `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`) -->
+<!--   ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6) %>% invisible() -->
+<!-- ``` -->
 
-## Combined data set - 7 day growth rates
+<!-- ## Combined data set - 7 day growth rates -->
 
-```{r}
-p3 = tsp$plotWindowedGrowthRate(
-    currentRt$rt %>% filter(statistic != "icu admission"), 
-    colour=statistic, 
-    events = events2,
-    dates = "2020-05-01",
-    ribbons = TRUE, 
-    rlim = c(-0.125,0.125))+
-  facet_wrap(vars(name),ncol=4)+
-  theme(legend.position = "bottom")
-p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels")
+<!-- ```{r} -->
+<!-- p3 = tsp$plotWindowedGrowthRate( -->
+<!--     currentRt$rt %>% filter(statistic != "icu admission"),  -->
+<!--     colour=statistic,  -->
+<!--     events = events2, -->
+<!--     dates = "2020-05-01", -->
+<!--     ribbons = TRUE,  -->
+<!--     rlim = c(-0.125,0.125))+ -->
+<!--   facet_wrap(vars(name),ncol=4)+ -->
+<!--   theme(legend.position = "bottom") -->
+<!-- p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels") -->
 
-```
+<!-- ``` -->
 
 
 ## Combined data set - 14 day $R_t$
@@ -443,36 +443,36 @@ p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/da
 
 ```
 
-## Combined data set - 28 day $R_t$
+<!-- ## Combined data set - 28 day $R_t$ -->
 
-```{r}
-events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day"))
+<!-- ```{r} -->
+<!-- events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day")) -->
 
-p2 = tsp$plotRt(
-    currentRt$rt28 %>% filter(statistic != "icu admission"), 
-    events = events2,dates = "2020-05-01", 
-    colour=statistic, 
-    rtlim = c(0.5,2), ribbons=TRUE)+
-  facet_wrap(vars(name),ncol=4)+
-  theme(legend.position = "bottom")
-p2 %>% 
-  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_Rt28_AllGeogsAllModels")
+<!-- p2 = tsp$plotRt( -->
+<!--     currentRt$rt28 %>% filter(statistic != "icu admission"),  -->
+<!--     events = events2,dates = "2020-05-01",  -->
+<!--     colour=statistic,  -->
+<!--     rtlim = c(0.5,2), ribbons=TRUE)+ -->
+<!--   facet_wrap(vars(name),ncol=4)+ -->
+<!--   theme(legend.position = "bottom") -->
+<!-- p2 %>%  -->
+<!--   standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig24_Rt28_AllGeogsAllModels") -->
 
-```
- 
-## Combined data set - 28 day growth rates
+<!-- ``` -->
 
-```{r}
-p3 = tsp$plotWindowedGrowthRate(
-    currentRt$rt28 %>% filter(statistic != "icu admission"), 
-    colour=statistic, 
-    events = events2,
-    dates = "2020-05-01",
-    ribbons = TRUE, 
-    rlim = c(-0.125,0.125))+
-  facet_wrap(vars(name),ncol=4)+
-  theme(legend.position = "bottom")
-p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig25_GrowthRate28_AllGeogsAllModels")
+<!-- ## Combined data set - 28 day growth rates -->
 
-```
+<!-- ```{r} -->
+<!-- p3 = tsp$plotWindowedGrowthRate( -->
+<!--     currentRt$rt28 %>% filter(statistic != "icu admission"),  -->
+<!--     colour=statistic,  -->
+<!--     events = events2, -->
+<!--     dates = "2020-05-01", -->
+<!--     ribbons = TRUE,  -->
+<!--     rlim = c(-0.125,0.125))+ -->
+<!--   facet_wrap(vars(name),ncol=4)+ -->
+<!--   theme(legend.position = "bottom") -->
+<!-- p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig25_GrowthRate28_AllGeogsAllModels") -->
+
+<!-- ``` -->
 

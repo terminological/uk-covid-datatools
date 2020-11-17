@@ -24,7 +24,7 @@ fig_width: 7
 fig_height: 5
 out.width: "100%"
 bibliography: current-rt.bib
-csl: current-rt.csl
+csl: sage-vancouver.csl
 ---
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
@@ -111,6 +111,9 @@ ageBreaks = c(6,11,18,23,60,75);
 cases = dpc$spim$getLineListIncidence(ageBreaks = ageBreaks,subgroup = asymptomatic_indicator) %>% filter(ageCat !="unknown")
 deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = ageBreaks)
 
+events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
+  filter(Label %in% c("Lockdown","VE day","Hotels and bars reopen","Relaxation shielding","Shielding ends (excl Wales)","End summer term","Start autumn term","Start univerity term","England 2nd lockdown"))
+
 events2 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
   filter(Label %in% c("Start autumn term","Start univerity term","Testing capacity limited","England 2nd lockdown","School half term"))
 
@@ -126,9 +129,9 @@ We conducted an analysis of the evolving second wave of the COVID-19 outbreak in
 
 # Materials and methods
 
-* Case data is pillar 1 & 2 test data from the line list provided by PHE. We excluded Pillar 2 cases marked a "asymptomatic". These data are potentially affected by saturation when test demand outstrips availability. This bias is discussed below and see `r ref$sfig("SymptomaticVsAsymptomatic")` for details.
-* Deaths data is from the line list provided by PHE.
-* Maps & demographic information is from the ONS, and based on mid year 2019 estimates.
+* Case data is pillar 1 & 2 test data from the line list provided by PHE[@publichealthenglandPHEDataSeries2020]. We excluded Pillar 2 cases marked a "asymptomatic". These data are potentially affected by saturation when test demand outstrips availability. This bias is discussed below and see `r ref$sfig("SymptomaticVsAsymptomatic")` for details.
+* Deaths data is from the line list provided by PHE[@publichealthenglandPHEDataSeries2020].
+* Maps & demographic information is from the ONS, and based on mid year 2019 estimates.[@PopulationEstimatesOffice]
 * Daily exponential growth rates calculated from the gradient of a one sided local linear regression on log of incidence of cases or deaths.
 * Daily growth rate estimates are combined over a 14 day window up to the date of the estimate.
 
@@ -243,14 +246,14 @@ p3 %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/by-age/Cas
 
 # Discussion
 
-* Growth dynamics within regional age groups suggest the timing of the second wave has been driven by infections in school an university age people, but that growth was established in these groups well before the return their respective terms started.
+* Growth dynamics within regional age groups suggest the timing of the second wave has been driven by infections in school and university age people, but that growth was established in these groups well before the return their respective terms started.
 * The national level is a superposition of various regional age group outbreaks, and resolving outbreaks can mask worsening picture in other age groups within the same area. The different NHS regions are not homogenous and local outbreaks in care homes coupled with falling cases in universities will not be reflected in national metrics such as the reproduction number.
 * There seems to be a delay in the outbreak in regions such as the South West, compared to the North West, possibly as a result of the tiering system, however this delay is apparent before the introduction of tiering, and could reflect more fundamental differences in the nature of social and workplace contacts between the regions.
 * It is possible the timing of the second lockdown will benefit regions that have had lower case loads to date, but have currently higher growth rates, such as the South West, more than those with high rates and low current growth such as the North West.
 
-<!-- # References -->
+# References
 
-<!-- <div id="refs"></div> -->
+<div id="refs"></div>
 
 # Supplemental Material
 
@@ -260,6 +263,22 @@ p %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/Symptoma
 ```
 
 `r cap$sfig("SymptomaticVsAsymptomatic","Symptomatic (red) and asymptomatic (blue) pillar 2 cases, and pillar 1 cases (green) over time. During the time period of limited testing capacity asymptomatic cases were deprioritised leading to a bias in the data. This was less pronounced (but still present) in the symptomatic pillar 2 and pillar 1 cases which we combine for our case estimate. The case count we use still shows a satuation effect particularly in younger age groups which were deprioritised, and we interpret with caution.")`
+
+```{r}
+totalCases2 = totalCases %>% tsp$logIncidenceStats()
+totalCases2 = totalCases2 %>% group_by(date,codeType,code,name) %>% mutate(totalAllAges = sum(Est.value), percentAllAges = Est.value/sum(Est.value))
+
+ggplot(totalCases2 %>% filter(name=="England" & date > "2020-03-15"),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+facet_wrap(vars(name))+ylab("%age of total") + scale_x_date(date_breaks = "2 weeks",date_labels = "%d-%m")+tsp$plotEvents(events,labelSize = 10,labelY=75)
+```
+
+`r cap$sfig("propCTRY","The relative proportion of each age group as a percentage of total cases per day for pre-school, primary school, secondary school, university, working age, late middle age and elderly age groups, over the course of the epidemic.")`
+
+* Daily proportion of different age groups initially dominated by elderly as they were the ones being tested in hospitals.
+* Proportion of younger age groups being detected as a fraction of total cases has increased steadily - much of this will be due to increased testing.
+* Resulting decrease in proportion of elderly until early September but this age group not making up greater proportion of total.
+* These figures not adjusted by population in age group and slightly hard to interpret.
+
+
 
 
 

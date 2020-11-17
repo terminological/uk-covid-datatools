@@ -351,9 +351,9 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     
     grps = self$grps
     if (length(grps) == 2) {
-      p1 = p1 + facet_grid(rows = vars(!!grps[[1]]), cols = vars(!!grps[[2]]), scales="free") 
+      p1 = p1 + facet_grid(rows = vars(!!grps[[1]]), cols = vars(!!grps[[2]]), scales="free", shrink = TRUE) 
     } else if(length(grps) != 0) {
-      p1 = p1 + facet_wrap(facets = grps, scales="free")
+      p1 = p1 + facet_wrap(facets = grps, scales="free", shrink = TRUE)
     }
     return(p1)
   },

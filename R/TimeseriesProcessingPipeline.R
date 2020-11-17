@@ -1014,7 +1014,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       self$logIncidenceStats()
     colour = enexpr(colour)
     
-    p2 = self$plotDefault(df, events,dates, ylim=rlim) + ylab(latex2exp::TeX("$r$"))
+    p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$"))
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
@@ -1032,13 +1032,25 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotDefault = function(data, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL) {
+  plotEvents = function(events,labelSize=7,labelY=Inf,...) {
+    rects = events %>% filter(!is.na(`End date`))
+    lines = events %>% filter(is.na(`End date`))
+    return(list(
+      geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90",alpha=0.5),
+      geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE),
+      ggrepel::geom_text_repel(
+          aes(x=`Start date`, y=labelY, label=`Label`),data=events, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(labelSize/ggplot2:::.pt/(96/72)))
+    ))
+  },
+  
+  plotDefault = function(data, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, labelSize = 7,...) {
     p = ggplot(data, aes(x=date))
     if (identical(dates,NULL)) {
       dates = as.Date(c(min(data$date),max(data$date)),"1970-01-01")
     } else {
       dates = as.Date(dates)
-      if (length(dates) == 1) dates = c(dates,Sys.Date())
+      if (length(dates) == 1) dates = c(dates,max(data$date))
     }
     rects = events %>% filter(!is.na(`End date`))
     p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
@@ -1047,7 +1059,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     p = p +
       ggrepel::geom_text_repel(
         aes(x=`Start date`, y=Inf, label=`Label`),data=events, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
-        size=(7/ggplot2:::.pt/(96/72)))+
+        size=(labelSize/ggplot2:::.pt/(96/72)))+
       scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")
     if (!identical(ylim,NULL)) {
       p =p+coord_cartesian(xlim=dates, ylim=ylim)
@@ -1090,7 +1102,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }
     
     colour = tryCatch(ensym(colour),error = function(e) NULL)
-    p2 = self$plotDefault(df,events,dates, ylim=ylim)+ylab("Incidence")
+    p2 = self$plotDefault(df,events,dates, ylim=ylim,...)+ylab("Incidence")
     
     if(!identical(colour,NULL)) {
       if(ribbons) p2 = p2 + 
@@ -1140,7 +1152,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       )
     }
       
-    p2 = self$plotDefault(df,events,dates,ylim=ylim)+ylab("Incidence")
+    p2 = self$plotDefault(df,events,dates,ylim=ylim,...)+ylab("Incidence")
     p2 = p2+
       geom_point(aes(y=y,...),alpha=0.5,size=0.25)+
       geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +

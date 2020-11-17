@@ -29,6 +29,7 @@ rtConfig = tsp$serial
 export14dayRt = currentRt$rt14 %>% 
   tsp$adjustRtConfidence(sdMultiplier = 4, predicate = statistic=="case" & date > "2020-09-01" & date < "2020-09-21") %>%
   tsp$adjustRtConfidence(sdMultiplier = 2, predicate = statistic=="case" & date > "2020-09-21") %>%
+  filter(date > "2020-07-01") %>%
   filter(source %in% c("4NationsCases","Admissions","Deaths")) %>% 
   filter(
     source != "Deaths" | name %in% c("United Kingdom","England")
@@ -42,6 +43,7 @@ export14dayRt = currentRt$rt14 %>%
   ) %>% ungroup()
 
 export14dayGrowth = currentRt$rt14 %>% 
+  filter(date > "2020-07-01") %>%
   filter(source %in% c("4NationsCases","Admissions","Deaths")) %>% 
   filter(
     source != "Deaths" | name %in% c("United Kingdom","England")

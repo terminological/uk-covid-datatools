@@ -56,7 +56,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   ### Cases - CTRY ----
   casesCTRY = bind_rows(
     tmp4Nations %>% filter(statistic == "case" & codeType == "CTRY") %>% dpc$demog$findDemographics(),
-    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator, filterExpr=is.na(pillar_2_testingkit)) %>% 
       filter(codeType == "CTRY" & subgroup!="Y") %>% 
       tsp$aggregateAge() %>% 
       tsp$aggregateGender() %>% tsp$aggregateSubgroup() %>%
@@ -85,12 +85,14 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   #     paste0("Various SPI-M data feeds: ", paste0(unique(admissionsCTRY$source), collapse = ", ")),
   #     "Hospital_inc_new & Hospital_inc_new_acuteone data set excluded for Wales. Hospital_inc_new and hospital_inc fields combined by summation, result and other sources combined by average, excluding missing values")
   
-  admissionsCTRY = tmp4Nations %>% 
-    filter(statistic == "hospital admission") %>% 
-    dpc$demog$findDemographics()
-  finalAdmissionsCTRY = admissionsCTRY
+  admissionsCTRY = bind_rows(
+    tmp4Nations %>% filter(statistic == "hospital admission"),
+    dpc$spim$getSPIMextract() %>% filter(name == "Wales" & type == "incidence" & statistic =="hospital admission" & source=="spim_hosp_inc_new_authorisation_date")
+  ) %>% dpc$demog$findDemographics()
+  
+  finalAdmissionsCTRY = admissionsCTRY %>% filter(name != "Wales" | source != "phe api")
   rationale(codeType = "CTRY","hospital admission",
-            "PHE api",
+            "PHE api for everythig except Wales, spim_hosp_inc_new_authorisation_date field for Wales",
             "None")
   
   ### ICU Admissions - CTRY ----
@@ -170,7 +172,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   
   ### Cases - NHSER ----
   casesNHSER = 
-    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator, filterExpr=is.na(pillar_2_testingkit)) %>% 
     filter(codeType == "NHSER") %>% 
     filter(code != "E99999999") %>%
     tsp$aggregateAge() %>% 

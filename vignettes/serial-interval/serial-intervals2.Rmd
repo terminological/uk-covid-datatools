@@ -1,24 +1,24 @@
 ---
-title: "Impact of uncertainty in serial interval, generation interval, incubation period and delayed observations in estimating the reproduction number for COVID 19"
-# output:
-#   pdf_document :
-#     fig_caption: yes
-# knit: (function(inputFile, encoding,...) {
-#   rmarkdown::render(
-#     inputFile,
-#     encoding = encoding,
-#     output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.pdf'))
-#   })    
+title: "Meta-analysis of the SARS-CoV-2 serial interval and the impact of parameter uncertainty on the COVID-19 reproduction number"
 output:
-  word_document :
+  pdf_document :
     fig_caption: yes
-    fig_width: 7
 knit: (function(inputFile, encoding,...) {
   rmarkdown::render(
     inputFile,
     encoding = encoding,
-    output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.docx'))
+    output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.pdf'))
   })
+# output:
+#   word_document :
+#     fig_caption: yes
+#     fig_width: 7
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(
+#     inputFile,
+#     encoding = encoding,
+#     output_dir = "~/Dropbox/covid19/serial-interval/", output_file=paste0('serial-intervals-',Sys.Date(),'.docx'))
+#   })
 header-includes:
  \usepackage{float}
  \floatplacement{figure}{H}
@@ -26,7 +26,7 @@ fig_width: 7
 fig_height: 5
 out.width: "100%"
 bibliography: serial-interval.bib
-csl: current-rt.csl
+csl: sage-vancouver.csl
 vignette: >
   %\VignetteIndexEntry{COVID-19 Serial Intervals}
   %\VignetteEngine{knitr::rmarkdown}
@@ -83,141 +83,13 @@ reload = function() {
   mwp <<- dpc$metawardProcessor()
 }
 
+distLabel = function(fit) {
+  fit$printDistributionSummary() %>% select(dist,param,mean) %>% pivot_wider(names_from = param, values_from = mean) %>% ungroup() %>% summarise(label = paste0(sprintf("%s: %1.1f (\u00B1%1.1f) days",dist,mean,sd),collapse = "\n"))
+}
+
 options("usethis.quiet"=TRUE)
 
 reload()
-```
-
-Robert Challen ^1,2^; Ellen Brooks-Pollock^3^; Leon Danon ^4,5^; Krasimira Tsaneva-Atanasova^1,3^
-
-1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
-2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
-3) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK.
-4) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
-5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
-
-Report date: `r Sys.Date()`
-
-# Abstract
-
-***Determining the reproduction number for an outbreak typically depends on estimating the serial interval, which is commonly interpreted as the time between the onset of symptoms in sequentially infected individuals within a chain of transmission. Other key quantities include the incubation period, the generation interval (the time between sequential infections) and time delays between infection and the observations associated with monitoring an outbreak such as confirmed cases, hospital admissions and deaths. Estimates of the these quantities are often based on small data sets from early contact tracing and are subject to  considerable uncertainty. In this paper we estimate these key quantities for COVID-19 for the UK, including a meta-analysis of early estimates of serial interval. We then quantify the impact that the uncertainty surrounding the serial interval has on the subsequent estimation of the reproduction number. Furthermore, with our estimates of the times delay from infection to case identification, hospital admission, and deaths, we infer unobserved infection incidence from a UK data set and discuss challenges and the practical implications of using these distributions in the estimation of values of the reproduction number from the observation of confirmed cases, admissions and deaths.***
-
-Keywords : COVID-19; SARS-CoV-2; reproduction number; regional variation;
-
-Competing interests: Support for RC and KTA’s research is provided by the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of the NHS Global Digital Exemplar programme (GDE); no financial relationships with any organisations that might have an interest in the submitted work in the previous three years, no other relationships or activities that could appear to have influenced the submitted work.
-
-Funding: RCh and KTA gratefully acknowledges the financial support of the EPSRC via grant EP/N014391/1 and NHS England, Global Digital Exemplar programme. LD and KTA gratefully acknowledges the financial support of The Alan Turing Institute under the EPSRC grant EP/N510129/1. 
-
-Authors contributions: All authors discussed the concept of the article and RC wrote the initial draft. KTA, EB-P and LD commented and made revisions. All authors read and approved the final manuscript. RC is the guarantor. The views presented here are those of the authors and should not be attributed to TSFT or the GDE.
-
-# Introduction
-
-During the first wave of the COVID-19 outbreak in the UK the University of Exeter has been supporting the work of the Scientific Pandemic Influenza group for Modelling (SPI-M) [@ScientificPandemicInfluenza] by providing national and regional estimates of the time varying reproduction number ($R_t$) of SARS-CoV-2 [@NumberGrowthRate]. The methodology for this is described in detail elsewhere but uses the Cori method [@coriEstimateTimeVarying] as implemented in the R EpiEstim library [@coriNewFrameworkSoftware2013a;@rcoreteamLanguageEnvironmentStatistical2017;@thompsonImprovedInferenceTimevarying2019].
-
-`r ref$fig("infection-timeline")` represents the key events in sequentially infected individuals (infector and infectee) in a chain of transmission. As described by Svensson et al. [@svenssonNoteGenerationTimes2007] the generation interval is defined as the time between the infection of an infector and infectee, and in practice is not easy to observe, as an infection goes through some latent period, during which it is undetectable[@haoReconstructionFullTransmission2020], and a pre-symptomatic phase during which an individual may be infectious, and possibly detectable through screening, before the disease manifests with clinical symptoms. The latent period and pre-symptomatic phase are together usually referred to as the incubation period ($T_{incubation}$). From the onset of symptoms, the diagnosis will be confirmed by some canonical test after some time delay ($T_{onset \rightarrow test}$), later the patient may require admission to hospital ($T_{onset \rightarrow admission}$), or may die ($T_{onset \rightarrow death}$). These subsequent events clearly may not happen in that order, and even diagnosis may occur after death. The time between these key events (onset of symptoms, test confirmation of case, hospital admission, and death) for two sequentially infected people in a chain of transmission are described as serial intervals [@svenssonNoteGenerationTimes2007], although in general usage, and in the rest of this paper, the term "serial interval" is taken to mean the interval between onset of symptoms ($SI_{onset}$). In `r ref$fig("infection-timeline")` and the rest of this paper we use the terms "case interval" ($SI_{case}$), "admission interval" ($SI_{admission}$), and "death interval" ($SI_{death}$) to describe the other intervals. The generation interval is by definition a non-negative quantity, but all the other measures may be negative if the variation of the delay from the event of infection from person to person exceeds the period between infections. This is more likely for death interval than for serial interval, and for diseases with long presymptomatic periods, for example HIV [@beckerMethodNonparametricBackprojection1991].
-
-![](InfectionTimeline.pdf) 
-
-`r cap$fig("infection-timeline","A timeline of events associated with a single infector-infectee pair in a transmission chain")`
-
-The Cori method is predicated on a time series of infections, and on a measure of the probability that a secondary infection occurred on a specific day after the primary case, given a secondary infection occurred, which is described as the "infectivity profile" [@coriEstimateTimeVarying]. Neither of these are quantities that are easy to observe experimentally, although in theory prospective serial sampling with viral culture of exposed individuals could be used to define the infectivity profile. The infectivity profile is closely related to the probability distribution of the generation interval, but this is also difficult to directly observe. In both the original [@coriNewFrameworkSoftware2013a] and revised [@thompsonImprovedInferenceTimevarying2019] implementations of the Cori method, the authors acknowledge the pragmatic use of the serial interval distribution, as proxy measure for the infectivity profile, and incidence of symptom onset or case identification as a proxy for the incidence of infection, with the caveat that these introduce a time lag into the estimates of $R_t$. (N.b. In the software implementation of the Cori method the infectivity profile is consistently referred to as the serial interval.) It has been noted by various authors that use of the serial interval as a proxy for infectivity profiles can introduce a bias into estimates of $R_t$ [@brittonEstimationEmergingEpidemics2019; @gosticPracticalConsiderationsMeasuring2020a]. 
-
-In the COVID-19 outbreak a limited number estimates of the serial interval are available from studies of travelers from infected areas, and early contact tracing studies (detailed in `r ref$tab("lit-review")`). The infectivity profile is a non negative quantity by definition. However as described above the serial interval can be negative if the person-to-person variation of incubation period is significant for a particular infection. Use of a negative serial interval as a proxy for infectivity profile is not possible with the Cori method, but this has been noted as a feature in at least one estimate of the serial interval of SARS-CoV-2 to date [@xuHouseholdTransmissionsSARSCoV22020]. In this event we can either pragmatically truncate the serial interval distribution at zero or more formally try and estimate the generation interval distribution, which, like the infectivity profile, is by definition non-negative.
-
-Due to the scale of the outbreak, information on symptom onset is not available for the majority of cases, and the data available for estimating $R_t$ are a time series of confirmed cases (test results confirming diagnosis), hospital admissions, and deaths, rather than infection or onset. As depicted in `r ref$fig("infection-timeline")` these events occur after infection, but delayed by a variable amount of time. The observed time series of cases is a result of the unobserved time series of infections convolved by the probability distribution of the time delay from infection to case identification.
-
-Since the Cori method is predicated on infections best practice would be to infer the unobserved incidence of infection from the observations we have [@gosticPracticalConsiderationsMeasuring2020a] using back propagation or de-convolution [@beckerMethodNonparametricBackprojection1991]. A simple-but-incorrect alternative that has been suggested [@gosticPracticalConsiderationsMeasuring2020a] is to simply correct the time delay between infection and cases by shifting our observed cases in time. To do either of these things we need estimates of the time delays between infection and symptom onset (incubation period), infection and case identification (test), infection and admission, and between infection and death, and their probability distributions. 
-
-The purpose of this paper is determine the best estimates for the parameters we need to calculate $R_t$ for the UK using the Cori method. We also wish to understand the degree and nature of bias introduced by informal approaches using truncated serial interval distributions as approximations for infectivity profile [@brittonEstimationEmergingEpidemics2019], and case numbers as proxy for infection incidence, compared to the more formal methods of using generation intervals and inferred infection numbers [@gosticPracticalConsiderationsMeasuring2020a]. To do this we investigate estimates for the serial interval, the incubation period, and then time between symptom onset and case identification, admission or death, in the UK. From these we infer the generation interval, and time between infection and case identification, admission and death. With all these estimates available we then compare the effects of the pragmatic and more formal approaches to estimating $R_t$.
-
-# Methods
-
-## Serial interval estimation
-
-We derived three estimates for the serial interval using different methods. Firstly we use data collected under the "First Few Hundred" (FF100) case protocol by Public Health England[@publichealthenglandFirstFewHundred; @boddingtonCOVID19GreatBritain2020] which provides a limited number of linked cases of proven transmission, mostly within households, and interval censored symptom onset dates. To this data we fitted a normal, gamma and negative binomial distributions using R library fitdistrplus [@rcoreteamLanguageEnvironmentStatistical2017; @delignette-mullerFitdistrplusPackageFitting2015a], using maximum likelihood estimation. When fitting gamma and negative binomial distributions we truncated the data at zero, to prevent negative values, and for the gamma distributions we required that the shape parameter had a lower bound of 1, which enforces that the distribution density is zero at time zero. 
-
-Secondly we conducted a literature review for studies that describe serial interval estimates using PubMed and the search terms "(SARS-CoV-2 or COVID-19) and 'Serial interval'" and reviewed the abstracts relevant original research papers. These were compared to papers reported on the MIDAS Online Portal for COVID-19 Modeling Research [@MIDASOnlinePortal], and with existing meta-analyses [@zhangMetaanalysisSeveralEpidemic2020]. 
-
-From these papers, serial interval mean and standard deviation estimates were extracted, along with information about assumed statistical distributions, and the sample size of the study. A random effects meta-analysis was conducted [@beathMetaplusPackageAnalysis2016a] on the subset of papers that reported confidence intervals, and which assumed gamma distributions for their estimates of serial interval. This excluded a number of larger studies, and we had concerns over potential violations of the assumptions underpinning the meta-analysis, most notable the assumption of normal distribution of effect size [@jacksonWhenShouldMetaanalysis2018; @tierneyPracticalMethodsIncorporating2007; @veronikiMethodsEstimateBetweenstudy2016], so we also undertook a re-sampling exercise, as described below.
-
-For studies that reported a probability distribution for the serial interval, we randomly selected one hundred probability distributions consistent with those reported in each paper, assuming a normally distributed mean (central limit), and a chi-squared distributed standard deviation with degrees of freedom determined by the sample size of the study. From this family of probability distributions we created random samples based on the original sample size [@adamsResamplingTestsMetaAnalysis1997; @chuangHybridResamplingMethods2000]. For empirical data reported in the studies we obtained the data where available and used 100 random bootstrap sub-samples with replacement, to a relative size determined by the original sample size of the study. The empirical and distribution based samples were combined into 100 groups of samples, with each group containing representation of each source article with numbers proportional to the size of the original study. A normal, negative binomial and gamma probability distributions were then fitted to these 100 groups using the same methodology as above, giving us both parametric probability distribution estimates and 100 empirical probability distributions estimates of the combination of all the source studies (from here on referred to as the "re-sampled serial interval estimate").
-
-## Incubation period estimation
-
-The incubation period has been previously estimated by Lauer et al. and Sanche et al. [@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] for China in the early phase of the epidemic, but as the FF100 data also contains interval censored exposure data coupled to symptom onset, we investigated whether a UK specific estimate was valuable. The Open COVID-19 Data Working Group [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] provides an large international data set which includes some travel history and symptom onset data. As the incubation period is a key quantity in the analysis we felt it beneficial to repeat earlier estimates [@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] of the incubation period with this larger data set. In both cases we fitted gamma, weibull, log normal, and negative binomial probability distributions to the intervals between putative exposure and symptom onset, accounting for censoring where present, to estimate the incubation period distribution. 
-
-## Generation interval estimatation
-
-With serial interval ($SI_{onset}$) distribution, incubation period distribution, the defining constraint that the generation interval is a non negative quantity, and the assumption that the generation interval is gamma distributed, we were able to make some inference about the shape of that gamma distribution. Using our the best estimate of the incubation period distribution from the Open COVID-19 Data Working Group data set, we combined random samples from a parameterised probability distribution for generation interval with two samples from the incubation period to satisfy the following relationship, thus simulating the serial interval:
-
-$$
-\begin{aligned}
-SI_{onset,A\rightarrow B} &= SI_{infection,A\rightarrow B} + T_{incubation,B} - T_{incubation,A}\\
-E[SI_{onset}] &= E[SI_{infection} + T_{incubation} - T_{incubation}]
-\end{aligned}
-$$
-
-The mean and standard deviation of the simulated serial interval distribution was then compared to the empirical re-sampled serial interval distributions we estimated in an earlier stage. The parameters for the generation interval distribution were then optimized by a recursive linear search on the standard deviation, with the constraints that the mean of the simulated and empirical distributions must be the same [@brittonEstimationEmergingEpidemics2019], and the standard deviation must be smaller than the mean (ensuring the gamma function scale parameter is larger than one and hence the density is zero at time zero). The minimization function we employed was the absolute difference in inter-quartile ranges of simulated and observed distributions. This process was repeated for 100 different simulated samples which were compared to the 100 different empirical re-sampled serial interval estimates from the previous stage of our analysis to get confidence limits on our estimates of the generation interval distribution.
-
-## Impact of using the serial interval on estimation of $R_t$
-
-With various estimates of serial interval and generation interval we wished to understand the qualitative impact this variation might have on our estimates of $R_t$. To investigate this we used the R library EpiEstim [@thompsonImprovedInferenceTimevarying2019a; @coriEstimateTimeVarying; @coriNewFrameworkSoftware2013a] to calculate estimates of $R_t$ for 4 time points representative of the ascending phase, the peak, the early descending phase and the late descending phase, of the first wave of the COVID-19 infections in England. This was performed using data retrieved from the Public Health England API [@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa]. For this analysis we assume the infectivity profile can be represented using a parameterised gamma distribution, and estimate $R_t$ for a wide range of combinations of mean and standard deviation, using a fixed calculation window of 7 days, at each of our four time points. The resulting relationship between $R_t$, mean infectivity profile, and standard deviation of infectivity profile were compared visually.
-
-## Time delays from infection to case identification, admission, and death
-
-Estimation of the time delay from onset of symptoms to the observations of positive test result, hospital admission, and death was performed ($T_{onset \rightarrow test}$, $T_{onset \rightarrow admission}$, and $T_{onset \rightarrow death}$) using the CHESS data set [@CoronavirusCOVID19Using]. The CHESS data set is hospital based, and was initially limited to intensive care admissions, but a subset of hospitals have reported all admissions, and this is what we focused on. Within the CHESS data set there are a set of patients who have symptom onset dates recorded, dates that a specimen was taken that subsequently was tested positive, hospital admission date, and date of death, if the patient died. The time delays from symptom onset to the different observations ($T_{onset \rightarrow test}$,$T_{onset \rightarrow admission}$ and $T_{onset \rightarrow death}$) were calculated and fitted to probability distributions using the R library fitdistrplus [@delignette-mullerFitdistrplusPackageFitting2015a] as described above.
-
-Estimating the time delay from infection to observation was obtained by combining our estimate of the incubation period distribution from the Open COVID-19 Data Working Group data set [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] with onset to observation delays from the CHESS data set [@CoronavirusCOVID19Using] using the following relationship.
-
-$$
-\begin{aligned}
-T_{infection \rightarrow observation} &= T_{infection \to onset} + T_{onset \rightarrow observation} \\
-&= T_{incubation} + T_{onset \rightarrow observation}
-\end{aligned}
-$$
-We combined the incubation period and onset to observation distributions using a random sampling approach, assuming independence of the two variables. These random samples were then estimated as parameterised statistical distributions in the same manner as above, with the constraint that all the time delays from infection to observation are non-negative quantities, and their probability is zero at time zero.
-
-## Impact of deconvolution
-
-In the final piece of our analysis we sought to qualitatively compare estimates of $R_t$ based on data for England from the Public Health England API [@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa], in each of the following two scenarios.
-
-Firstly we based $R_t$ estimates on observational data (cases, admissions, deaths) as a proxy for infection events, and used truncated serial interval distribution as a proxy for infectivity profile. A simple-but-incorrect adjustment to the dates of these $R_t$ estimates was made to align the estimate to date of infection rather than date of observation.
-
-Secondly, using the time delay distributions from the previous stage, we used de-convolution to infer a set of time series of infections from the same observational data and used our estimate of the generation interval as a proxy for the infectivity profile. This second approach is that recommended by Gostic et al. [@gosticPracticalConsiderationsMeasuring2020a]. To do this we applied a non parametric back projection algorithm from the surveillance R package [@meyerSpatioTemporalAnalysisEpidemic2017], based on work by Becker et al. [@beckerMethodNonparametricBackprojection1991] and Yip et al. [@yipReconstructionInfectionCurve2008], to infer three putative infection time series from observed cases, admissions or deaths. The inferred time series were then used to estimate $R_t$ through EpiEstim using the parametric gamma distributed estimate of the generation interval from above. In applying the de-convolution we discovered it requires a full time series beginning with zero cases for sensible results and this required we impute the early part of the hospital admission time series, which we did by assuming an early constant exponential growth phase.
-
-The resulting $R_t$ time series were compared qualitatively.
-
-# Results
-
-## Serial interval estimation
-
-Our PubMed search retrieved 62 search hits of which 12 were original research articles containing estimates of serial intervals [@biEpidemiologyTransmissionCOVID192020a; @ceredaEarlyPhaseCOVID192020a; @duSerialIntervalCOVID192020; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleEvidenceTransmissionCOVID192020; @xiaTransmissionCoronaVirus2020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimevaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhaoPreliminaryEstimationBasic2020a]. The mean and standard deviation of parameterised distributions were extracted and are presented in `r ref$tab("lit-review")`. The estimates of the mean range from 3.95 days to 7.5 days. The majority of studies provided their results as gamma distributions defined by mean and standard deviation. Some studies, particularly Xu et al. [@xuHouseholdTransmissionsSARSCoV22020] noted that the serial interval was not infrequently negative.
-
-`r cap$tab("lit-review","Sources of serial interval estimates from a literature search")`
-
-```{r table1}
-
-# serialIntervals2 = serialIntervals %>% bind_rows(tibble(
-#   mean_si_estimate = calcGammaMean("est")[["mean"]],
-#   mean_si_estimate_low_ci = calcGammaMean("CIlow")[["mean"]],
-#   mean_si_estimate_high_ci = calcGammaMean("CIhigh")[["mean"]],
-#   std_si_estimate = calcGammaMean("est")[["sd"]],
-#   std_si_estimate_low_ci = calcGammaMean("CIlow")[["sd"]],
-#   std_si_estimate_high_ci = calcGammaMean("CIhigh")[["sd"]],
-#   sample_size = 50L,
-#   population = "UK",
-#   assumed_distribution = "gamma",
-#   estimate_type = "serial interval",
-#   source = "Current analysis",
-#   note = "none"
-# ))
-
-defaultSI = SerialIntervalProvider$default(dpc)
-
-SerialIntervalProvider$printSerialIntervalSources() %>%
-  group_by(`Reference`) %>% 
-  standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
-
 ```
 
 ```{r}
@@ -247,21 +119,15 @@ metaParams = dpc$getSaved("SERIAL-INTERVAL-META", orElse = function() {
 })
 
 si2 = SerialIntervalProvider$metaAnalysis(dpc, metaDf = metaParams)
+metaSIresult = si2$getSummary() %>% summarise(label = sprintf("mean %1.1f (95%% CrI %1.1f\U2013%1.1f) and SD %1.1f (95%% CrI %1.1f\U2013%1.1f) days",meanOfMean,minOfMean,maxOfMean,meanOfSd,minOfSd,maxOfSd))
 
 ```
-
-The random effects meta-analysis on the subset of studies which reported gamma distributions, resulted in an overall estimate of the serial interval that follows a `r si2$printSerialInterval()` (for more details see `r ref$sfig("meta-analysis")`). 
-
-In `r ref$fig("si-estimates")` panel A we present the distribution of the 50 linked cases in the FF100 data set for which onset dates are available for both infector and infectee. For the gamma and negative binomial distribution fit the data is truncated at zero, and hence shows a poorer fit against the whole distribution (full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-ff100")`). Supporting the observations of Xu et al. [@xuHouseholdTransmissionsSARSCoV22020], the FF100 data shows evidence of negative serial intervals. The mean of the serial interval from FF100 data was 3.54 days when parameterised with a gamma distribution and data truncated to exclude negative serial intervals, and 2.09 days when a normal distribution used, with no truncation. This is on the lower end of the values reported in the literature.
 
 ```{r}
 ## FF100: ----  
 
 si3 = SerialIntervalProvider$fromFF100(dpc)
-label = si3$dfit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(dist," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
-panel1 = si3$dfit$plot(xlim=c(-7,10))+guides(fill="none",colour="none")+
-     standardPrintOutput::cornerAnnotation(label)+
-     xlab("days")
+
 
 ```
 
@@ -335,32 +201,180 @@ resamples = dpc$getSaved("SERIAL-INTERVAL-RESAMPLE", orElse = function() {
 })
 
 si1 = SerialIntervalProvider$resampledSerialInterval(dpc, resamples=resamples)
-
-label2 = si1$dfit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
-panel2 = si1$dfit$plot(xlim = c(-7,21))+guides(fill="none",colour="none")+
-     standardPrintOutput::cornerAnnotation(label2)+
-     xlab("days")
+resampleSIresult = si1$getSummary() %>% summarise(label = sprintf("mean %1.1f (95%% CrI %1.1f\U2013%1.1f) and SD %1.1f (95%% CrI %1.1f\U2013%1.1f) days",meanOfMean,minOfMean,maxOfMean,meanOfSd,minOfSd,maxOfSd))
 
 ```
 
-```{r}
-# fig1 %>% saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig1_UKSerialInterval")
-# fig2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig2_ResampledSerialInterval")
+Robert Challen^1,2^; Ellen Brooks-Pollock^3^; Krasimira Tsaneva-Atanasova^1,3^; Leon Danon^4,5^
 
-fig1 = panel1+panel2+ patchwork::plot_annotation(tag_levels = "A")+plot_layout(ncol=2)
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK.
+4) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
+
+
+# Abstract
+
+***The serial interval of an infectious disease, commonly interpreted as the time between onset of symptoms in sequentially infected individuals within a chain of transmission, is a key epidemiological quantity involved in estimating the reproduction number. The serial interval is closely related to other key quantities, including the incubation period, the generation interval (the time between sequential infections) and time delays between infection and the observations associated with monitoring an outbreak such as confirmed cases, hospital admissions and deaths. Estimates of these quantities are often based on small data sets from early contact tracing and are subject to considerable uncertainty, which is especially true for early COVID-19 data. In this paper we estimate these key quantities in the context of COVID-19 for the UK, including a meta-analysis of early estimates of the serial interval. We estimate distributions for the serial interval with a `r resampleSIresult` (empirical distribution), the generation interval  with a mean 4.8 (95% CrI 4.3--5.41) and SD 1.7 (95% CrI 1.0--2.6) days (fitted gamma distribution), and the incubation period with a mean 5.5 (95% CrI 5.1--5.8) and SD 4.9 (95% CrI 4.5--5.3) days (fitted log normal distribution). We quantify the impact of the uncertainty surrounding the serial interval, generation interval, incubation period and time delays, on the subsequent estimation of the reproduction number, when pragmatic and more formal approaches are taken. These estimates place empirical bounds on the estimates of most relevant model parameters and are expected to contribute to modelling COVID-19 transmission.***
+
+Keywords : COVID-19; SARS-CoV-2; reproduction number; regional variation;
+
+Competing interests: Support for RC and KTA’s research is provided by the EPSRC via grant EP/N014391/1, RC is also funded by TSFT as part of the NHS Global Digital Exemplar programme (GDE); no financial relationships with any organisations that might have an interest in the submitted work in the previous three years, no other relationships or activities that could appear to have influenced the submitted work.
+
+Funding: RC and KTA gratefully acknowledges the financial support of the EPSRC via grant EP/N014391/1 and NHS England, Global Digital Exemplar programme. LD and KTA gratefully acknowledges the financial support of The Alan Turing Institute under the EPSRC grant EP/N510129/1. LD and EBP are supported by Medical Research Council (MRC) (MC/PC/19067). EBP was partly supported by the NIHR Health Protection Research Unit in Behavioural Science and Evaluation at University of Bristol, in partnership with Public Health England (PHE).
+
+Authors contributions: All authors discussed the concept of the article and RC wrote the initial draft. KTA, EB-P and LD commented and made revisions. All authors read and approved the final manuscript. RC is the guarantor. The views presented here are those of the authors and should not be attributed to TSFT or the GDE.
+
+# Introduction
+
+Since the end of 2019, the novel strain of coronavirus, SARS-Cov-2 has caused a global pandemic of disease. The speed with which the virus spreads is dependent on biological determinants that enable viral replication within individuals and onward transmission to others. The minimal set of parameters required for understanding the dynamics of any novel infectious disease pathogen include the potential for transmission, the duration of infectiousness (often captured in models as a recovery rate) and the generational interval: the time between two subsequent cases in a chain of infection. 
+
+Although much more is understood about these basic parameters than at the beginning of the pandemic, substantial uncertainty remains over the future trajectory of the disease which depends partly on the interventions that are implemented. 
+
+The best possible evidence on each parameter determining the dynamics of the epidemic is crucial for choosing the most appropriate interventions.Estimating the generation interval is particularly challenging due to the fundamentally hidden nature of transmission events. In `r ref$fig("infection-timeline")` we summarise the timeline of key events for two adjacent infected individuals (infector and infectee) in a chain of transmission. 
+
+As described by Svensson et al.[@svenssonNoteGenerationTimes2007] the generation interval is defined as the time between the infection of an infector and infectee, and in practice is not easy to observe, as an infection goes through some latent period, during which it is undetectable[@haoReconstructionFullTransmission2020], and a pre-symptomatic phase during which an individual may be infectious, and possibly detectable through screening, before the disease manifests with clinical symptoms. The latent period and pre-symptomatic phase are together usually referred to as the incubation period ($T_{incubation}$). From the onset of symptoms, the diagnosis will be confirmed by some canonical test after some time delay ($T_{onset \rightarrow test}$), later the patient may require admission to hospital ($T_{onset \rightarrow admission}$), or may die ($T_{onset \rightarrow death}$). These subsequent events clearly may not happen in that order, and even diagnosis may occur after death. The time between these key events (onset of symptoms, test confirmation of case, hospital admission, and death) for two sequentially infected people in a chain of transmission are described as serial intervals[@svenssonNoteGenerationTimes2007], although in general usage, and in the rest of this paper, the term "serial interval" is taken to mean the interval between onset of symptoms ($SI_{onset}$). In `r ref$fig("infection-timeline")` and the rest of this paper we use the terms "case interval" ($SI_{case}$), "admission interval" ($SI_{admission}$), and "death interval" ($SI_{death}$) to describe the other intervals. The generation interval is by definition a non-negative quantity, but all the other measures may be negative if the variation of the delay from the event of infection from person to person exceeds the period between infections. This is more likely for death interval than for serial interval, and for diseases with long pre-symptomatic periods, for example HIV[@beckerMethodNonparametricBackprojection1991].
+
+![](figure1.pdf) 
+
+`r cap$fig("infection-timeline","A timeline of events associated with a single infector-infectee pair in a transmission chain")`
+
+The reproduction number ($R_t$) is a key measure of the state of the epidemic, and estimates of $R_t$ can become a determinant of public health policy. The "renewal equation" method for estimating $R_t$, depends on a time series of infections, and on the infectivity profile - a measure of the probability that a secondary infection occurred on a specific day after the primary case, given a secondary infection occurred[@coriEstimateTimeVarying; @thompsonImprovedInferenceTimevarying2019]. A Bayesian framework is then used to update a prior probabilistic estimate of $R_t$ on any given day with both information gained from the time series of infections in the epidemic to date and the infectivity profile to produce a posterior estimate of $R_t$. In both the original[@coriNewFrameworkSoftware2013a] and revised[@thompsonImprovedInferenceTimevarying2019] implementations of this method, the authors acknowledge the pragmatic use of the serial interval distribution, as a proxy measure for the infectivity profile, and the incidence of symptom onset or case identification as a proxy for the incidence of infection, with the caveat that these introduce a time lag into the estimates of $R_t$. It has been noted by various authors that use of the serial interval as a proxy for infectivity profiles is a pragmatic choice[@coriNewFrameworkSoftware2013a; @thompsonImprovedInferenceTimevarying2019] but can introduce a bias into estimates of $R_t$[@brittonEstimationEmergingEpidemics2019; @gosticPracticalConsiderationsMeasuring2020a]. 
+
+In the COVID-19 outbreak a limited number estimates of the serial interval are available from studies of travelers from infected areas, and early contact tracing studies (detailed in `r ref$tab("lit-review")`). The infectivity profile is comprised of non negative values by definition. The serial interval, on the other hand, can be measured as negative for several reasons. For example,  if the incubation period of the infector is at the short end of the distribution and that of the infectee is at the tail, a negative serial interval would be observed. Negative values have been noted as a feature in at least one estimate of the serial interval of SARS-CoV-2 to date[@xuHouseholdTransmissionsSARSCoV22020], but cannot be sensibly used in estimates of $R_t$.
+
+Direct measurement of the serial interval distribution is further complicated by the fact that symptom onset is often not observed due to the scale of the outbreak and that the majority of infection is asymptomatic[@daviesAgedependentEffectsTransmission2020; @mizumotoEstimatingAsymptomaticProportion2020]. The data available during an epidemic are a time series of counts of observations, such as confirmed cases (test results confirming diagnosis), hospital admissions, and deaths. As depicted in `r ref$fig("infection-timeline")` these events occur after infection, following a period of time. Therefore the observed time series of observed cases is a result of the unobserved time series of infections governed by the serial interval, convolved by the distribution of the time delay from infection to case identification.
+
+Since transmission model-based inference is predicated on infections best practice would be to use the generation interval and infer the unobserved incidence of infection from the observations we have using back propagation or de-convolution[@gosticPracticalConsiderationsMeasuring2020a; @beckerMethodNonparametricBackprojection1991]. A pragmatic alternative[@gosticPracticalConsiderationsMeasuring2020a] is to simply calculate $R_t$ using a serial interval and un-adjusted case numbers with a simple correction for the time delay between infection and cases by shifting our observed cases in time. To do either of these things we need estimates of the time delays between infection and symptom onset (incubation period), infection and case identification (test), infection and admission, and between infection and death, and their distributions. 
+
+The purpose of this paper is determine the best estimates for the parameters we need to calculate $R_t$ for the UK using either formal or pragmatic approaches. We also wish to understand the degree and nature of bias introduced by using the pragmatic approach using truncated serial interval distributions as approximations for infectivity profile[@brittonEstimationEmergingEpidemics2019], and case numbers as proxy for infection incidence, compared to the more formal methods of using generation intervals and inferred infection numbers[@gosticPracticalConsiderationsMeasuring2020a]. To do this we investigate estimates for the serial interval, the incubation period, and then time between symptom onset and case identification, admission or death, in the UK. From these we infer the generation interval, and time between infection and case identification, admission and death. With all these parameters available we then compare the impact of using pragmatic and more formal approaches on estimation of $R_t$.
+
+# Methods
+
+## Serial interval estimation
+
+Firstly we conducted a literature review for studies that describe serial interval estimates using PubMed and the search terms "(SARS-CoV-2 or COVID-19) and 'Serial interval'" and reviewed the abstracts of relevant original research papers. These were compared to papers reported on the MIDAS Online Portal for COVID-19 Modeling Research[@MIDASOnlinePortal], and with existing meta-analyses[@zhangMetaanalysisSeveralEpidemic2020]. 
+From these papers, serial interval mean and standard deviation estimates were extracted, along with information about assumed statistical distributions, and the sample size of the study. A random effects meta-analysis was conducted[@beathMetaplusPackageAnalysis2016a] on the subset of papers that reported confidence intervals, and which assumed gamma distributions for their estimates of serial interval. This excluded a number of larger studies, and we had concerns over potential violations of the assumptions underpinning the meta-analysis, most notable the assumption of normal distribution of effect size[@jacksonWhenShouldMetaanalysis2018; @tierneyPracticalMethodsIncorporating2007; @veronikiMethodsEstimateBetweenstudy2016], so we also undertook a re-sampling exercise, as described below.
+
+For studies that reported a probability distribution for the serial interval, we randomly selected one hundred probability distributions consistent with those reported in each paper, assuming a normally distributed mean (central limit), and a chi-squared distributed standard deviation with degrees of freedom determined by the sample size of the study. From this family of probability distributions we created random samples based on the original sample size[@adamsResamplingTestsMetaAnalysis1997; @chuangHybridResamplingMethods2000]. For empirical data reported in the studies we obtained the data where available and used 100 random bootstrap sub-samples with replacement, to a relative size determined by the original sample size of the study. The empirical and distribution based samples were combined into 100 groups of samples, with each group containing representation of each source article with numbers proportional to the size of the original study. A normal, negative binomial and gamma probability distributions were then fitted to these 100 groups using maximum likelihood estimation, implemented in R[@rcoreteamLanguageEnvironmentStatistical2017; @delignette-mullerFitdistrplusPackageFitting2015a], giving us both parametric probability distribution estimates and 100 empirical probability distributions estimates of the combination of all the source studies (from here on referred to as the "re-sampled serial interval estimate").
+
+Second we use data collected under the "First Few Hundred" (FF100) case protocol by Public Health England[@publichealthenglandFirstFewHundred; @boddingtonCOVID19GreatBritain2020] which provides a limited number of linked cases of proven transmission, mostly within households, and interval censored symptom onset dates. To this data we fitted normal, gamma and negative binomial distributions using the same methodology as above. When fitting gamma and negative binomial distributions we truncated the data at zero, to prevent negative values, and for the gamma distributions we required that the shape parameter had a lower bound of 1, which enforces that the distribution density is zero at time zero. 
+
+## Incubation period estimation
+
+The incubation period has been previously estimated by Lauer et al. and Sanche et al.[@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] for China in the early phase of the epidemic. The FF100 data contains interval censored exposure data coupled to symptom onset; so we derived a UK specific estimate to assess if it was consistent. Furthermore, the Open COVID-19 Data Working Group[@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] provides an large international data set which includes some travel history and symptom onset data. As the incubation period is a key quantity in the analysis we reassessed earlier estimates[@lauerIncubationPeriodCoronavirus2020; @sancheHighContagiousnessRapid] of the incubation period with this larger data set. For both datasets we fitted gamma, weibull, log normal, and negative binomial probability distributions to the intervals between putative exposure and symptom onset, accounting for censoring where present, to estimate the incubation period distribution. 
+
+## Generation interval estimation
+
+The generation interval is the fundamental variable for modelling transmission. Under the assumption that it follows a gamma distribution we can infer its parameters using the serial interval ($SI_{onset}$) distribution, the incubation period distribution, and the constraint that the generation interval is a non negative quantity. Using the best estimate of the incubation period distribution, we combined random samples from a parameterised probability distribution for the generation interval with two samples from the incubation period to satisfy the following relationship, thus simulating the serial interval:
+
+$$
+\begin{aligned}
+SI_{onset,A\rightarrow B} &= SI_{infection,A\rightarrow B} + T_{incubation,B} - T_{incubation,A}\\
+E[SI_{onset}] &= E[SI_{infection} + T_{incubation} - T_{incubation}]
+\end{aligned}
+$$
+
+The mean and standard deviation of the simulated serial interval distribution were then compared to the empirical re-sampled serial interval distributions we estimated in an earlier stage. The parameters for the generation interval distribution were then optimized by a recursive linear search on the standard deviation, with the constraints that the mean of the simulated and empirical distributions must be the same[@brittonEstimationEmergingEpidemics2019], and the standard deviation must be smaller than the mean (ensuring the gamma function scale parameter is larger than one and hence the density is zero at time zero). The minimization function we employed was the absolute difference in inter-quartile ranges of simulated and observed distributions. This process was repeated for 100 different simulated samples that were compared to the 100 different empirical re-sampled serial interval estimates from the previous stage of our analysis to get confidence intervals on our estimates of the generation interval distribution.
+
+## Impact of using the serial interval on estimation of $R_t$
+
+With various estimates of serial interval and generation interval we wished to understand the qualitative impact this variation might have on our estimates of $R_t$. To investigate this we used the forward equation approach implemented in the R library EpiEstim[@thompsonImprovedInferenceTimevarying2019a; @coriEstimateTimeVarying; @coriNewFrameworkSoftware2013a]. We estimate values of $R_t$ for 4 time points in the first wave of the COVID-19 pandemic in England representative of the ascending phase, the peak, the early descending phase and the late descending phase. We used data retrieved from the Public Health England API[@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa]. For this analysis we assume the infectivity profile can be represented using a parameterised gamma distribution, and estimate $R_t$ for a wide range of combinations of mean and standard deviation, using a fixed calculation window of 7 days, at each of our four time points. The resulting relationship between $R_t$, mean infectivity profile, and standard deviation of infectivity profile were compared visually.
+
+## Time delays from infection to case identification, admission, and death
+
+Estimation of the time interval between the onset of symptoms and the observations of positive test result, hospital admission, and death was performed ($T_{onset \rightarrow test}$, $T_{onset \rightarrow admission}$, and $T_{onset \rightarrow death}$) using the CHESS data set[@CoronavirusCOVID19Using]. The CHESS data set is hospital based, and was initially limited to intensive care admissions, but a subset of hospitals have reported all admissions, and this is what we focused on. Within the CHESS data set there are a set of patients who have symptom onset dates recorded, dates that a specimen was taken that subsequently was tested positive, hospital admission date, and date of death, if the patient died. The time delays from symptom onset to the different observations were calculated and fitted to probability distributions using the R library fitdistrplus[@delignette-mullerFitdistrplusPackageFitting2015a] as described above.
+
+The time delay from infection to observation was obtained by combining our estimate of the incubation period distribution from the Open COVID-19 Data Working Group data set[@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020] with onset to observation delays from the CHESS data set[@CoronavirusCOVID19Using] using the following relationship.
+
+$$
+\begin{aligned}
+T_{infection \rightarrow observation} &= T_{infection \to onset} + T_{onset \rightarrow observation} \\
+&= T_{incubation} + T_{onset \rightarrow observation}
+\end{aligned}
+$$
+We combined the incubation period and onset to observation distributions using a random sampling approach, assuming independence of the two variables. These random samples were then estimated as parameterised statistical distributions in the same manner as above, with the constraint that all the time delays from infection to observation are non-negative quantities, and their probability is zero at time zero.
+
+## Impact of deconvolution
+
+In the final piece of our analysis we sought to qualitatively compare estimates of $R_t$ based on data for England from the Public Health England API[@CoronavirusCOVID19UK; @CoronavirusCOVID19UKa], in each of the following two scenarios.
+
+Firstly we based $R_t$ estimates on observational data (cases, admissions, deaths) as a proxy for infection events, and used truncated serial interval distribution as a proxy for infectivity profile. A simple-but-incorrect adjustment to the dates of these $R_t$ estimates was made to align the estimate to date of infection rather than date of observation.
+
+Secondly, using the time delay distributions from the previous stage, we used de-convolution to infer a set of time series of infections from the same observational data and used our estimate of the generation interval as a proxy for the infectivity profile. This second approach has been recommended by Gostic et al[@gosticPracticalConsiderationsMeasuring2020a]. To do this we applied a non parametric back projection algorithm from the surveillance R package[@meyerSpatioTemporalAnalysisEpidemic2017], based on work by Becker et al.[@beckerMethodNonparametricBackprojection1991] and Yip et al.[@yipReconstructionInfectionCurve2008], to infer three putative infection time series from observed cases, admissions or deaths. The inferred time series were then used to estimate $R_t$ through EpiEstim using the parametric gamma distributed estimate of the generation interval from above. In applying the de-convolution we discovered it requires a full time series beginning with zero cases for sensible results and this required we impute the early part of the hospital admission time series, which we did by assuming an early constant exponential growth phase.
+
+The resulting $R_t$ time series were compared qualitatively.
+
+# Results
+
+## Serial interval estimation
+
+Our PubMed search retrieved 62 search hits of which 12 were original research articles containing estimates of serial intervals[@biEpidemiologyTransmissionCOVID192020a; @ceredaEarlyPhaseCOVID192020a; @duSerialIntervalCOVID192020; @liEarlyTransmissionDynamics2020; @nishiuraSerialIntervalNovel2020; @tindaleEvidenceTransmissionCOVID192020; @xiaTransmissionCoronaVirus2020; @xuHouseholdTransmissionsSARSCoV22020; @youEstimationTimevaryingReproduction2020; @zhangEvolvingEpidemiologyTransmission2020; @zhaoPreliminaryEstimationBasic2020a]. The mean and standard deviation of parameterised distributions were extracted and are presented in `r ref$tab("lit-review")`. The estimates of the mean range from 3.95 days to 7.5 days. The majority of studies provided their results as gamma distributions defined by mean and standard deviation. Some studies, particularly Xu et al.[@xuHouseholdTransmissionsSARSCoV22020] noted that the serial interval was not infrequently negative.
+
+`r cap$tab("lit-review","Sources of serial interval estimates from a literature search")`
+
+```{r table1}
+
+# serialIntervals2 = serialIntervals %>% bind_rows(tibble(
+#   mean_si_estimate = calcGammaMean("est")[["mean"]],
+#   mean_si_estimate_low_ci = calcGammaMean("CIlow")[["mean"]],
+#   mean_si_estimate_high_ci = calcGammaMean("CIhigh")[["mean"]],
+#   std_si_estimate = calcGammaMean("est")[["sd"]],
+#   std_si_estimate_low_ci = calcGammaMean("CIlow")[["sd"]],
+#   std_si_estimate_high_ci = calcGammaMean("CIhigh")[["sd"]],
+#   sample_size = 50L,
+#   population = "UK",
+#   assumed_distribution = "gamma",
+#   estimate_type = "serial interval",
+#   source = "Current analysis",
+#   note = "none"
+# ))
+
+defaultSI = SerialIntervalProvider$default(dpc)
+
+SerialIntervalProvider$printSerialIntervalSources() %>%
+  group_by(`Reference`) %>% 
+  standardPrintOutput::saveTable("~/Dropbox/covid19/serial-interval/Table1_serialIntervals", defaultFontSize = 8, colWidths=c(4.5,2,1.5,1.5,1,1,1))
+
+```
+
+
+
+The random effects meta-analysis on the subset of studies which reported gamma distributions, resulted in an overall estimate of the serial interval that follows a `r si2$printSerialInterval()` (for more details see `r ref$sfig("meta-analysis")`). 
+
+
+In `r ref$fig("si-estimates")`, panel A we present the results of the re-sampled serial interval estimate. The histogram shows the empirical distribution of the combination of all the studies, reinforcing the finding of a substantial proportion of the serial interval being negative. For the gamma and negative binomial distribution fit the data is truncated at zero, and the full data used for the normal distribution, resulting with mean values of 5.59 (gamma), 5.53 (negative binomial) or 4.88 (normal) days. Full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-resample")`.
+
+In `r ref$fig("si-estimates")` panel B we present the distribution of the 50 linked cases in the FF100 data set for which onset dates are available for both infector and infectee. As with the resampled data the parameterised versions of this are based on truncated data for negative binomial and gamma distributions, and hence shows a poorer fit against the whole distribution (full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-ff100")`). Supporting the observations of Xu et al.[@xuHouseholdTransmissionsSARSCoV22020], the FF100 data shows evidence of negative serial intervals. The mean of the serial interval from FF100 data was 3.54 days when parameterised with a gamma distribution and data truncated to exclude negative serial intervals, and 2.09 days when a normal distribution used, with no truncation. This is on the lower end of the values reported in the literature.
+
+
+```{r}
+
+label = distLabel(si3$dfit)
+panel1 = si3$dfit$plot(xlim=c(-7,10))+#guides(fill="none",colour="none")+
+     standardPrintOutput::cornerAnnotation(label,pos="NW")+standardPrintOutput::narrower()+
+     xlab("days")
+
+label2 = label = distLabel(si1$dfit)
+panel2 = si1$dfit$plot(xlim = c(-7,21))+#guides(fill="none",colour="none")+
+     standardPrintOutput::cornerAnnotation(label2)+standardPrintOutput::narrower()+
+     xlab("days")
+
+
+fig1 = (panel2|panel1)/patchwork::guide_area() + patchwork::plot_annotation(tag_levels = "A")+plot_layout(heights = c(1,0.1),guides="collect")
 fig1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig1_SerialIntervalEstimates")
 
 ```
 
-`r cap$fig("si-estimates","Panel A Days between infected infectee disease onset bassed on FF100 data and panel B Estimates of serial interval from a resampling of published estimates from the literature. The histogram in panel B shows the density of all our sets of samples combined.")`
+`r cap$fig("si-estimates","Panel A - Days between infected infectee disease onset based on a resampling of published estimates from the literature and Panel B - Estimates of serial interval from FF100 data. The histogram in panel A shows the combined density of all sets of samples within the original research.")`
+ 
 
-In `r ref$fig("si-estimates")`, panel B we present the results of the re-sampled serial interval estimate. The histogram shows the empirical distribution of the combination of all the studies, reinforcing the finding of a substantial proportion of the serial interval being negative. As with the FF100 the parameterised versions of this are based on truncated data for negative binomial and gamma distributions, and for the full data for the normal distribution, with mean values of 5.59 (gamma), 5.53 (negative binomial) or 4.88 (normal) days. Full detail of the parameterisation of this is available in `r ref$stab("dfit-serial-interval-resample")`. 
-
-However as noted in the methods, the re-sampling process allow us to estimate the serial interval as an empirical distribution. Within EpiEstim, our chosen framework for estimating $R_t$ however the use of negative serial intervals are not supported as a proxy for the infectivity profile. Pragmatically we therefore decided to truncate the empirical distribution at zero. Our adopted estimate therefore has a mode of 4.8 days, in line with the normal distribution parameterisation but is a `r si1$printSerialInterval()`, in line with the gamma distribution parameterisation.
+As noted in the methods, the re-sampling process allows us to estimate the serial interval as an empirical distribution. Within EpiEstim, our chosen framework for estimating $R_t$ however the use of negative serial intervals are not supported as a proxy for the infectivity profile. Pragmatically we therefore decided to truncate the empirical distribution at zero for use in EpiEstim. Our adopted estimate therefore has a mode of 4.8 days, in line with the normal distribution parameterisation but is a `r si1$printSerialInterval()`, which is more in line with the gamma distribution parameterisation.
 
 ## Incubation period estimation
 
-`r ref$fig("incub-period")` and `r ref$tab("incub-period-gof")` show the results of estimating a parametric probability distribution to data from FF100 and data from the the Open COVID-19 Data Working Group. Histograms of the data are not shown as it is interval censored, which is not straightforward to represent graphically. There are only a small number of records from the FF100 data which suggest the mean of the incubation period is between 1.8 and 2 days. The data from the Open COVID-19 Data Working Group suggests the incubation period is longer with a mean around 5.5 days depending on the distribution chosen, and this agrees better with other estimates in the literature [@lauerIncubationPeriodCoronavirus2020; @zhangMetaanalysisSeveralEpidemic2020;@sancheHighContagiousnessRapid]. The best fit to the Open COVID-19 data is obtained with a log normal distribution as seen in `r ref$tab("incub-period-gof")` (Full details of the fitting parameters are in `r ref$stab("incub-period-detail")`). This incubation period is by definition the infection to onset period ($T_{infection \rightarrow onset}$).
+`r ref$fig("incub-period")` and `r ref$tab("incub-period-gof")` show the results of estimating a parametric probability distribution to data from FF100 and data from the Open COVID-19 Data Working Group. Histograms of the data are not shown as it is interval censored, which is not straightforward to represent graphically. There are only a small number of records from the FF100 data which suggest the mean of the incubation period is between 1.8 and 2 days. The data from the Open COVID-19 Data Working Group suggests the incubation period is longer with a mean around 5.5 days depending on the distribution chosen, and this agrees better with other estimates in the literature[@lauerIncubationPeriodCoronavirus2020; @zhangMetaanalysisSeveralEpidemic2020;@sancheHighContagiousnessRapid]. The best fit to the Open COVID-19 data is obtained with a log normal distribution as seen in `r ref$tab("incub-period-gof")` (Full details of the fitting parameters are in `r ref$stab("incub-period-detail")`). 
 
 ```{r fig5}
 
@@ -394,11 +408,7 @@ bopFit$models$gamma$lower$shape = 1
 bopFit$models$gamma$start$shape = 1.1
 bopFit$fromCensoredData(latestdata2,lowerValueExpr = left, upperValueExpr = right,truncate = TRUE,bootstraps = 200)
 
-# lauerFit$printDistributionDetail()
-label3 = bopFit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(Distribution," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
-fig5b = bopFit$plot(xlim = c(0,15))+
-     standardPrintOutput::cornerAnnotation(label3)+
-     xlab("days")+ylab("density")+standardPrintOutput::narrowAndTall()
+
 
 # and from FF100
 
@@ -419,19 +429,29 @@ incubFF100Fit$models$gamma$lower$shape = 1
 incubFF100Fit$models$gamma$start$shape = 1.1
 incubFF100Fit$fromCensoredData(censIncub,lowerValueExpr = left,upperValueExpr = right,truncate = TRUE, bootstraps = 200)
 #incubFF100Fit$plot(xlim=c(0,7))
+```
 
-label4 = incubFF100Fit$printDistributionSummary() %>% ungroup() %>% summarise(label = paste0(dist," ",param,": ",`Mean (95% CI)`,collapse = "\n"))
+```{r}
+
+# lauerFit$printDistributionDetail()
+label3 = distLabel(bopFit)
+fig5b = bopFit$plot(xlim = c(0,15))+
+     standardPrintOutput::cornerAnnotation(label3)+
+     xlab("days")+ylab("density")+standardPrintOutput::narrower()
+
+label4 = distLabel(incubFF100Fit)
 fig5a = incubFF100Fit$plot(xlim = c(0,15))+
      standardPrintOutput::cornerAnnotation(label4)+
-     xlab("days")+ylab("density")+standardPrintOutput::narrowAndTall()
+     xlab("days")+ylab("density")+standardPrintOutput::narrower()+
+    coord_cartesian(ylim=c(0,0.75))
 #fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/Fig6_ff100Incubation")
 
-fig5 = (fig5a|fig5b)/patchwork::guide_area()+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides = "collect", heights=c(6,1))
+fig5 = (fig5a|fig5b)/patchwork::guide_area()+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides = "collect", heights=c(10,1))
 
 fig5 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig5_IncubationPeriodsBeOutbreakPreparedAndFF100")
 ```
 
-`r cap$fig("incub-period","Incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data")`
+`r cap$fig("incub-period","Incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data. Histogram data is not shown as the interval censored data cannot be plotted in this form")`
 
 
 `r cap$tab("incub-period-gof","Goodness of fit statistics for incubation period distributions reconstructed from Open COVID-19 Data Working Group and from FF100 data")`
@@ -546,10 +566,11 @@ si4 = SerialIntervalProvider$generationInterval(dpc,bootstrapsDf = genIntTmp)
 
 ```
 
-The generation interval is inferred from the incubation period and empirical serial interval distribution prior to truncation. Our best estimate for this is a `r si4$printSerialInterval()`, and shown in `r ref$fig("generation-interval")`. The mean of 4.8 days is identical to that of the serial interval distribution from panel B, `r ref$fig("si-estimates")` as a result of the constraints imposed during fitting. The standard deviation of our generation interval estimate is 1.72. This is within the confidence limits of estimates from the literature from both China (0.74 - 2.97) and Singapore (0.91 - 3.93) [@ganyaniEstimatingGenerationInterval2020a].
+The generation interval is then inferred from the incubation period and empirical serial interval distribution prior to truncation. Our best estimate for this is a `r si4$printSerialInterval()`, and shown in `r ref$fig("generation-interval")`. The mean of 4.8 days is identical to that of the empirical serial interval distribution prior to truncation in panel B, `r ref$fig("si-estimates")` as a result of the constraints imposed during fitting. The standard deviation of our generation interval estimate is 1.72. This is within the confidence limits of estimates from the literature from both China (0.74 - 2.97) and Singapore (0.91 - 3.93)[@ganyaniEstimatingGenerationInterval2020a].
 
 ```{r}
 label5 = si4$dfit$printDistributionDetail() %>% ungroup() %>% summarise(label = paste0(param,": ",`Mean ± SD (95% CI)`,collapse = "\n"))
+# label5 = distLabel(si4$dfit)
 fig6 = si4$dfit$plot(c(0,15))+xlab("Generation interval (days)")+ylab("density")+guides(fill="none",colour="none")+standardPrintOutput::cornerAnnotation(label5)
 
 fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-interval/Fig6_GenerationInterval")
@@ -563,7 +584,7 @@ fig6 %>% standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/serial-inte
 
 ## Impact of using the serial interval on estimation of $R_t$
 
-With our 3 estimates of the serial interval and 1 generation interval and observed COVID-19 case counts, we investigate the impact on the estimates of $R_t$, of using these estimates as a proxy for the infectivity profile. This uses data at 4 time points on an epidemic curve from the first wave of the COIV-19 outbreak in England, shown in `r ref$fig("epi-curve")`, which are 19th March, 12th April, 12th May and 23rd June, corresponding to the ascending, peak, early descending and late descending phases respectively.
+With our 3 estimates of the serial interval and 1 generation interval and observed COVID-19 case counts, we investigate the impact on the estimates of $R_t$, of using these estimates as a proxy for the infectivity profile. This uses data at 4 time points on an epidemic curve from the first wave of the COVID-19 outbreak in England, shown in `r ref$fig("epi-curve")`, which are 19th March, 12th April, 12th May and 23rd June, corresponding to the ascending, peak, early descending and late descending phases respectively.
 
 ```{r fig3}
 siDates = tibble(
@@ -584,7 +605,7 @@ ukts = ukts %>%
   tsp$imputeAndWeeklyAverage() #%>%
   #tsp$logIncidenceStats(smoothingWindow = 14, growthRateWindow = 14)
 
-fig3 = ukts %>% tsp$plotIncidenceQuantiles(colour = statistic, events = siDates) +scale_color_brewer(palette="Dark2")  #+ geom_vline(data = tibble(date=ends), aes(xintercept=date), colour="black")
+fig3 = ukts %>% tsp$plotIncidenceQuantiles(colour = statistic, events = siDates, labelSize=9) +scale_color_brewer(palette="Dark2")  #+ geom_vline(data = tibble(date=ends), aes(xintercept=date), colour="black")
 
 fig3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig3_EpidemicCurve")
 
@@ -668,53 +689,66 @@ summaryImpact = paste0(tmp2$desc,collapse = "; ")
 
 ```
 
-At each of these 4 time points `r ref$fig("si-impact")` shows the estimated $R_t$ under the range of different assumptions about the mean and standard deviation of the infectivity profile, modeled as a gamma distribution. In panels A, C and D the effect of increasing the mean of the infectivity profile is to push the resulting estimate of $R_t$ away from the critical value of 1 at which the epidemic is growing. In panel B, at the peak, the mean of the infectivity profile has a less clear cut effect. The impact of changes to standard deviation is likewise varied. In panels A, C & D during ascending and descending phases there is relatively little impact of changing the standard deviation of the infectivity profile on the estimates of $R_t$, and any small changes that do occur depend on the shape of the preceding epidemic curve. At the peak however, in panel B, the wider the standard deviation the more historical information influences the estimation of $R_t$ and this acts to delay the estimated transition from positive to negative growth. The overall result of this is that estimates of the infectivity profile with a high standard deviation will predict $R_t$ crossing 1 later than estimates based on an infectivity profile with a low standard deviation, but the point of crossing 1 is relatively insensitive to the value of the mean of the infectivity profile.
+At each of these 4 time points `r ref$fig("si-impact")` shows the estimated $R_t$ under the range of different assumptions about the mean and standard deviation of the infectivity profile, modeled as a gamma distribution. In the top left, bottom left and bottom right panels the effect of increasing the mean of the infectivity profile is to push the resulting estimate of $R_t$ away from the critical value of 1 at which the epidemic is growing. In the top right panel, at the peak, the mean of the infectivity profile has a less clear cut effect. The impact of changes to standard deviation is likewise varied. In the top left, bottom left and bottom right panels during ascending and descending phases there is relatively little impact of changing the standard deviation of the infectivity profile on the estimates of $R_t$, and any small changes that do occur depend on the shape of the preceding epidemic curve. At the peak however, in the top right panel, the wider the standard deviation the more historical information influences the estimation of $R_t$ and this acts to delay the estimated transition from positive to negative growth. The overall result of this is that estimates of the infectivity profile with a high standard deviation will predict $R_t$ crossing 1 later than estimates based on an infectivity profile with a low standard deviation, but the point of crossing 1 is relatively insensitive to the value of the mean of the infectivity profile.
 
 When we consider using the various estimates of the serial interval or generation interval, as a proxy for the infectivity profile, on the resulting estimates of $R_t$ we can see from the coloured crosses on `r ref$fig("si-impact")` representing the different estimates of serial or generation interval, that in the situations of dynamic change such as the ascending phase the variability may have quite a large impact on subsequent estimates of $R_t$ but at other times the impact is much smaller [`r summaryImpact`].
 
 ```{r fig4}
 
 plotSiVariability = function(d, xlim = meanlim, ylim = sdlim) { #, contours) {
-  data = siImpact %>% filter(label == d & siMean >= xlim[1] & siMean <= xlim[2] & siSd >= ylim[1] & siSd <= ylim[2])
+  data = siImpact %>% filter(label == d & siMean >= xlim[1] & siMean <= xlim[2] & siSd >= ylim[1] & siSd <= ylim[2]) %>% mutate(facetLabel = paste0(d," - ",siDates %>% filter(Label==d) %>% pull(`Start date`)))
   contours = round(quantile(data$medianR,seq(0.1,0.9,0.1)),digits = 2)
   # seq(
   #   ceiling(min(data$medianR)*10)/10,
   #   floor(max(data$medianR)*10)/10,
   #   length.out = 11
   # )
-  ggplot(data, aes(x=siMean, y=siSd, z=medianR, fill=1/medianR))+geom_tile()+
-    metR::geom_contour2(colour="black", breaks=contours)+
-    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.2, size=standardPrintOutput::labelInPoints(10))+
-    scale_fill_gradient2(high="cyan",mid="white",low="orange", midpoint=1, limits=c(1/4,1/0.6), guide="none", oob=scales::squish)+
+  ggplot(data, aes(x=siMean, y=siSd, z=medianR, fill=1/medianR))+ #geom_tile()+
+    metR::geom_contour2(colour="black", breaks=contours,alpha=0.8)+
+    # scale_fill_gradient2(high="cyan",mid="white",low="orange", midpoint=1, limits=c(1/4,1/0.6), guide="none", oob=scales::squish)+
     
-    geom_linerange(data=serialIntervals, aes(
-      xmin=mean_si_estimate_low_ci,xmax=mean_si_estimate_high_ci,
-      y=std_si_estimate),inherit.aes = FALSE,colour="grey50")+
-    geom_linerange(data=serialIntervals,aes(
-      x=mean_si_estimate,ymin=std_si_estimate_low_ci,ymax=std_si_estimate_high_ci),inherit.aes = FALSE,colour="grey50")+
-    geom_point(data=serialIntervals,aes(x=mean_si_estimate,y=std_si_estimate, size=sample_size),inherit.aes = FALSE,colour="black")+
+    # geom_linerange(data=serialIntervals, aes(
+    #   xmin=mean_si_estimate_low_ci,xmax=mean_si_estimate_high_ci,
+    #   y=std_si_estimate),inherit.aes = FALSE,colour="blue", alpha=0.8)+
+    # geom_linerange(data=serialIntervals,aes(
+    #   x=mean_si_estimate,ymin=std_si_estimate_low_ci,ymax=std_si_estimate_high_ci),inherit.aes = FALSE,colour="blue", alpha=0.8)+
+    geom_point(data=serialIntervals,aes(x=mean_si_estimate,y=std_si_estimate, size=sample_size),inherit.aes = FALSE,colour="blue",show.legend = FALSE)+
     
     geom_linerange(data=siFits,aes(
       xmin=minOfMean, xmax=maxOfMean,
-      y=meanOfSd,colour=name),inherit.aes = FALSE, size=1)+
+      y=meanOfSd,colour=name),inherit.aes = FALSE, size=1, alpha=0.8)+
     geom_linerange(data=siFits,aes(
       x=meanOfMean,
-      ymin=minOfSd, ymax=maxOfSd,colour=name),inherit.aes = FALSE, size=1)+
-    geom_point(data=siFits,aes(x=meanOfMean,y=meanOfSd,colour=name),inherit.aes = FALSE, size=1)+
+      ymin=minOfSd, ymax=maxOfSd,colour=name),inherit.aes = FALSE, size=1, alpha=0.8)+
+    geom_point(data=siFits,aes(x=meanOfMean,y=meanOfSd,colour=name),inherit.aes = FALSE, size=2)+
+    
+    
+    metR::geom_text_contour(colour="black", breaks=contours,stroke=0.3,alpha=0.8, size=standardPrintOutput::labelInPoints(12))+
     
     coord_cartesian(xlim,ylim)+
     scale_size(range=c(0.1,2),name = "Samples")+
     scale_color_brewer(palette = "Dark2")+
-    labs(subtitle = d,x="SI Mean",y="SI Std Dev")
+    labs(x="SI Mean",y="SI Std Dev")+
+    facet_wrap(vars(facetLabel))+
+    theme(plot.margin = unit(c(2,2,2,2),"pt"))+standardPrintOutput::narrower()#+
+    # theme(
+    #     plot.subtitle = element_text(margin = margin(.05, 0, .05, 0, "cm"), size=8),
+    #     plot.subtitle.background = element_rect(fill = "#F8F8F8")
+    # )
 }
 
 plts = sapply(siDates$Label, FUN = plotSiVariability, simplify = FALSE)
 library(grid)
-(patchwork::wrap_plots(plts, ncol=2, guides = "collect") + patchwork::plot_annotation(tag_levels = "A")) %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig4_EstimatesOfRtForSIAssumptions")
+p1 = plts[[1]]+hideX()
+p2 = plts[[2]]+hideX()+hideY()
+p3 = plts[[3]]
+p4 = plts[[4]]+hideY()
+
+(((p1|p2)/(p3|p4)/patchwork::guide_area()) +patchwork::plot_layout(guides = "collect",height=c(5,5,1)))  %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig4_EstimatesOfRtForSIAssumptions")
 
 ```
 
-`r cap$fig("si-impact","Time varying reproduction number given various assumptions on the serial interval mean and standard deviation. The black points and grey error bars show the various estimates of serial interval from the literature, whereas the coloured error bars show the mean and standard deviation of the 3 serial interval and 1 generation interval estimates presented in this paper. Contours show the $R_t$ estimate. The four panels represent the 4 different time points investigated")`
+`r cap$fig("si-impact","Time varying reproduction number given various assumptions on the serial interval mean and standard deviation. The blue points show the central estimate of serial intervals from the literature, whereas the coloured error bars show the mean and standard deviation of the 3 serial interval (green, violet, magenta) and 1 generation interval (orange) estimates presented in this paper. Contours show the $R_t$ estimate for that combination of mean and standard deviation serial interval. The four panels represent the 4 different time points investigated.")`
 
 ## Time delays from infection to case identification, admission, and death
 
@@ -764,11 +798,11 @@ onsetPlot = onsetFit$plot(xlim = c(-2,20))+xlab("onset to observation (days)")+s
 
 In `r ref$fig("chess-delay")` we show probability distributions fitted to data from the CHESS data set which define times from symptom onset (Panel A) to case identification ($T_{onset \rightarrow case}$), admission ($T_{onset \rightarrow admission}$), or death ($T_{onset \rightarrow death}$). Symptom onset to test (case identification) can be a negative quantity if a swab is taken during disease screening and the patient is pre-symptomatic. In this data the time point that defines the time of test is the date when the specimen is taken, which will subsequently be tested positive for SARS-CoV-2, so does not include sample processing delays. However in this hospital based data source of admitted patients the onset data was collected retrospectively. We also note peaks at 1 day, 1 week, 2 weeks, and so on which suggests approximation on data entry, and there may well be biases in the data collection. 
 
-It is more obvious from the clinical course of COVID-19 that admission should occur after disease onset. In the data, a large number of cases are reported to have symptom onset on day of admission. This is potentially a reporting artifact as in the absence of certain knowledge about onset, it is possible the day of admission is may have been captured instead, and we again see the peaks at 1 week, 2 weeks, and so on, suggesting approximations in data entry. 
+It is more obvious from the clinical course of COVID-19 that admission should occur after disease onset. In the data, a large number of cases are reported to have symptom onset on day of admission. This is potentially a reporting artifact as in the absence of certain knowledge about onset, it is possible that the day of admission may have been captured instead, and we again see the peaks at 1 week, 2 weeks, and so on, suggesting approximations in data entry. 
 
 The time between onset of symptoms and death can also be assumed as a positive quantity given this is based on an in hospital cohort. This distribution shows a large tail, and some patients in that tail were noted to be admitted many months before the appearance of COVID-19. These patients likely represent hospital acquired cases in chronically unwell patients. The extreme outlying values (with delay from admission to death greater than 100 days, or with an admission before 1st Jan 2020) were removed as they prevented sensible estimation of the rest of the distribution.
 
-By combining the incubation period distribution in panel B in `r ref$fig("incub-period")` with the time delay distributions in panel A of `r ref$fig("chess-delay")`, we can obtain probability distributions from infection to observation, and these are shown in panel B for the 3 observations of test (case identification), admission and death. These distributions provide us with a means of estimating a time series of infection from observed case counts, admissions and deaths. As above full details of their parameterisations is available in `r ref$stab("chess-delay-params")`. The mean time from infection to the various time points described in the time line in `r ref$fig("infection-timeline")` are presented in `r ref$tab("rt-offset")`. The infection to onset is the incubation period, with a mean of 5.5 days. On average approximately 8 days pass from infection to diagnosis, a subsequent 1 days until admission, and a further 7-8 days until death, however it also shows considerable variation in these delays, exemplified by the 95% quantiles for the time from infection to death estimated as ranging from 3.6 days to nearly 50 days.
+By combining the incubation period distribution in panel B in `r ref$fig("incub-period")` with the time delay distributions in panel A of `r ref$fig("chess-delay")`, we can obtain probability distributions from infection to observation, and these are shown in panel B for the 3 observations of test (case identification), admission and death. These distributions provide us with a means of estimating a time series of infection from observed case counts, admissions and deaths. As above full details of their parameterisations is available in `r ref$stab("chess-delay-params")`. The mean time from infection to the various time points described in the timeline in `r ref$fig("infection-timeline")` are presented in `r ref$tab("rt-offset")`. The infection to onset is the incubation period, with a mean of 5.5 days. On average approximately 8 days pass from infection to diagnosis, a subsequent 1 days until admission, and a further 7-8 days until death, however it also shows considerable variation in these delays, exemplified by the 95% quantiles for the time from infection to death estimated as ranging from 3.6 days to nearly 50 days.
 
 ```{r}
 
@@ -804,7 +838,7 @@ chessPlot %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/Fig6_ChessTi
 
 ```
 
-`r cap$fig("chess-delay","Panel A: Time delay distributions from symptom onset to test (diagnosis or case identification), admission or death, estimated from CHESS data set, plus in Panel B estimated delays from infection to observation, and can be negative in certain . based on incubation period and observation delay. These  can be used for deconvolution.")`
+`r cap$fig("chess-delay","Panel A: Time delay distributions from symptom onset to test (diagnosis or case identification), admission or death, estimated from CHESS data set, plus in Panel B estimated delays from infection to observation, and can be negative in certain cases. based on incubation period and observation delay. These  can be used for deconvolution.")`
 
 `r cap$tab("rt-offset","Estimated time delays between infection and various observations over the course of an infection, based on the combination of incubation period and symptom onset to observation delay")`
 
@@ -843,7 +877,7 @@ ukCovidObservationDelays %>% arrange(mean) %>% select(c(-mean,-sd,-lower,-upper)
 
 ```
 
-## Impact of deconvolution
+## Estimation of $R_t$
 
 
 ```{r}
@@ -931,7 +965,7 @@ avRtError = ukts3 %>% ungroup() %>% select(date,statistic,deconv=`Median(R)`) %>
 incidence = ukts6 %>% tsp$plotIncidenceQuantiles(colour=subgroup,dates = c("2020-03-01","2020-07-01")) + facet_wrap(vars(statistic))+
   scale_color_brewer(palette = "Dark2")
 
-rtComp = ukts5 %>% tsp$plotRt(colour = subgroup,dates = c("2020-03-01","2020-07-01"), rtlim=c(0.75,1.75))+facet_wrap(vars(statistic))+
+rtComp = ukts5 %>% tsp$plotRt(colour = subgroup,dates = c("2020-03-01","2020-07-01"), rtlim=c(0.5,1.75))+facet_wrap(vars(statistic))+
   scale_color_brewer(palette = "Dark2")
   #scale_linetype_manual(values = c("21","solid"))+
   #standardPrintOutput::narrower()
@@ -944,33 +978,28 @@ deconvComparison %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/
 
 `r cap$fig("deconv-compare","Panel A: The epidemic incidence curves in England for different observations (orange - formal) and inferred estimates of infection rates (green - pragmatic) based on a deconvolution of the time delay distributions. Panel B, the resulting $R_t$ values calculated either using infection rate estimates and generation interval (formal subgroup) or unadjusted incidence of observation, and serial interval (pragmatic). The $R_t$ estimated direct from observed incidence curves (pragmatic) have their dates adjusted by the mean delay estimate")`
 
-With the estimates of delay from infection to observation we are able to use a non parametric back propagation as described in the methods to estimate a time series of infections as recommended by Gostic et al. [@gosticPracticalConsiderationsMeasuring2020a] when using EpiEstim. The results of the back propagation is show in `r ref$fig("deconv-compare")`, panel A which shows resulting point and smoothed infection curves associated with observation curves from England. The back projection results in a sharper and narrower epidemic curve than the observation it is derived from, and but shows additional structure which is not obvious from the underlying observations. Estimates of $R_t$ are shown in panel B based on de-convolved time series plus generation interval, versus raw observation counts, re-sampled serial interval estimates, with time adjustment on the resulting $R_t$ estimates to align $R_t$ estimate date to putative date of infection. We have not calculated confidence intervals for the estimates of $R_t$. The estimates of $R_t$ differ from their mean (using symmetric mean absolute percentage error, sMAPE) by between 6% to 9% [`r avRtError`].
+With the estimates of delay from infection to observation we are able to use a non parametric back propagation as described in the methods to estimate a time series of infections as recommended by Gostic et al.[@gosticPracticalConsiderationsMeasuring2020a] when using EpiEstim. The results of the back propagation is shown in `r ref$fig("deconv-compare")`, panel A which depicts resulting point and smoothed infection curves associated with observation curves from England. The back projection results in a sharper and narrower epidemic curve than the observation it is derived from, and indicates additional structures (such as more pronounced fluctuations) which are not obvious from the underlying observations. Estimates of $R_t$ are shown in panel B based on de-convolved time series plus generation interval, versus raw observation counts, re-sampled serial interval estimates, with time adjustment on the resulting $R_t$ estimates to align $R_t$ estimate date to putative date of infection. We have not calculated confidence intervals for the estimates of $R_t$. The estimates of $R_t$ differ from their mean (using symmetric mean absolute percentage error, sMAPE) by between 6% to 9% [`r avRtError`].
 
 # Discussion
 
-This paper summarizes a piece of analysis that describes and underpins the assumptions we make when estimating $R_t$ using the Cori method and EpiEstim library in the UK. Central to this is the choice of infectivity profile, and the use of serial interval or generation interval as a proxy for this quantity. 
+Our estimate of the serial interval from the FF100 UK data was found to be short, compared to international estimates. The FF100 data was collected in the early stage of the epidemic and is based mainly on household contacts of international travelers which may impart bias. As the participants in the study were put into self-isolation upon discovery observations the contact period tend to be shortened, leading to shorter serial interval estimates, and because of this we do not believe the estimate from the FF100 study to be specific to the UK but rather that the data set is not broadly representative of the UK population. 
 
-In general estimates of serial interval and other quantities based on data from early in the epidemic must account for right truncation of the available data or else risk producing underestimates. At later stages of the epidemic as more data is available these issues are less significant as the majority of relevant events have been observed.
+In contrast, our literature search allowed us to estimate the serial interval from a much larger pooled sample drawn from multiple studies. A meta-analysis and a re-sampling study produced comparable results (meta-analysis: `r metaSIresult` and re-sampling: `r resampleSIresult`), but our re-sampling study more clearly showed the potential for the serial interval to be negative, due to the relatively long and variable incubation period of SARS-CoV-2. The negative values of the serial interval are theoretically problematic for their use as a proxy for the infectivity profile of SARS-CoV-2 in transmission modelling, which requires the infectee is infected after the infector. Pragmatically, as a way around this, we may truncate the re-sampled serial interval at zero, and use this as the infectivity profile, but as seen here this truncation increases the mean of the resulting serial interval distribution from 4.8 to 5.6 days.
 
-Our estimate of the serial interval as from the FF100 UK data was found to be on the low side, compared to international estimates. The FF100 data is a comparatively small data set and was collected in the early stage of the epidemic. It is based largely on household contacts of international travelers and we believe this has significant biases. As the participants in the FF100 study were put into self-isolation upon discovery there is a tendency to bias the observations towards shorter contact periods and hence shorter serial intervals. As such we do not think the short serial interval estimate from the FF100 study is specific to the UK but rather that the data set is not as broadly representative of the whole UK population. 
+An alternative to this is to use the generation interval as a proxy for the infectivity profile, but there are limited estimates of this quantity available in the literature[@ganyaniEstimatingGenerationInterval2020a]. Derivation of the generation interval from the serial interval is possible using knowledge of the incubation period. We again looked at the FF100 data for estimates of incubation period and again found that the UK data suggests a value which is shorter that international estimates, for the same reasons as mentioned above[@backerIncubationPeriod20192020; @duEstimatingDistributionCOVID192020; @lauerIncubationPeriodCoronavirus2020; @lintonIncubationPeriodOther2020; @xiaTransmissionCoronaVirus2020]. We cross referenced this with a second estimate derived from the Open COVID-19 Data Working Group data set[@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020], which is based on a large international data set of people who tested positive for SAR-CoV-2 after travelling from areas with outbreaks. The resulting estimates of the mean incubation period of 5.5 days (log normally distributed) is much closer to previous estimates, and we expect to be less influenced by right censoring. Again we regard the short incubation period calculated from the FF100 data set to be a feature of the data set rather than a UK specific finding. In fact the estimate based on the Open COVID-19 Data may in itself be an under-estimate as the majority of travel histories only include the return date of the visit in question and not the start date.
 
-Our literature search allowed us to estimate the serial interval with a random effects meta-analysis and a re-sampling study. Both produced comparable results, but our re-sampling study more clearly showed the potential for the serial interval between symptom onsets of infector and infectee to be negative, due to relatively long and variable incubation period of SARS-CoV-2. The negative values of the serial interval are theoretically problematic for their use as a proxy for the infectivity profile of SARS-CoV-2 as required by the Cori method [@gosticPracticalConsiderationsMeasuring2020a; @svenssonNoteGenerationTimes2007], which reasonably assumes infectee must be infected after the infector. Pragmatically, as a way around this, we may truncate the re-sampled serial interval at zero, and use this as the infectivity profile, but this truncation increases the mean of the resulting serial interval distribution from 4.8 to 5.8 days.
+With incubation period and serial interval estimates, we derived an estimate for generation interval, assuming a gamma distribution. This was comparable to previous estimates in that although it is based on a different serial interval, and hence has a different mean, the standard deviation of our estimate is in accordance with that estimated by Ganyani et al.[@ganyaniEstimatingGenerationInterval2020a] Although the confidence intervals for the mean and standard deviation of the generation interval are comparable, the variation in the shape and rate parameters of the underlying gamma distribution are quite large. Care should be taken when generating bootstrap samples from the generation interval when it is specified as an uncertain gamma distribution parameterised with mean and standard deviation, as it is possible that some combinations of parameters produce unrealistic distributions, particularly when the standard deviation is small and the mean is large, which could in theory result in posterior estimates for $R_t$ being largely determined by the reciprocal of just a small number of observations.
 
-An alternative to this is to use the generation interval as a proxy for the infectivity profile, but there are limited estimates of this quantity available in the literature [@ganyaniEstimatingGenerationInterval2020a]. Derivation of the generation interval from the serial interval is possible using knowledge of the incubation period. We again looked at the FF100 data for estimates of incubation period and again found that the UK data suggests a value which is far shorter that international estimates, for the same reasons as mentioned above [@backerIncubationPeriod20192020; @duEstimatingDistributionCOVID192020; @lauerIncubationPeriodCoronavirus2020; @lintonIncubationPeriodOther2020; @xiaTransmissionCoronaVirus2020]. We cross referenced this with a second estimate derived from the Open COVID-19 Data Working Group data set [@kraemer2020epidemiological;@xuOpenAccessEpidemiological2020], which is based on a large international data set of people who tested positive for SAR-CoV-2 after travelling from areas with outbreaks. The resulting estimates of the mean incubation period of 5.42 days (log normally distributed) is much closer to previous estimates, and we expect to be less influences by right censoring. Again we regard the short incubation period calculated from the FF100 data set to be a feature of the data set rather than a UK specific finding. In fact the estimate based on the Open COVID-19 Data may in itself be an under estimate as the majority of travel histories only include the return date of the visit in question and not the start date.
+Using estimates of the serial interval distribution and generation interval distribution as a proxy for infectivity profile, we investigated the resulting variation in the estimation of $R_t$ using incident cases in England and the forward equation approach. We found the bias between the smallest and largest of our estimates to be as high as 20-25% of the central estimate of $R_t$ when $R_t$ was high, but somewhat smaller when $R_t$ values were 1 or lower. Distributions with lower values of the mean tended to result in estimates of $R_t$ that were closer to one. This suggests that biases introduced by the use of different serial interval distributions should not influence the answer to the key question, "is $R_t$ greater or less than 1?" which defines whether the epidemic is expanding or contracting in size. It is also to be expected that the nature of change of $R_t$ over time is not affected by this bias, so an increasing value of $R_t$ will be increasing regardless of the infectivity profile that is used to estimate it.
 
-With an incubation period estimate and serial interval estimate, we derived an estimate for generation interval, assuming a gamma distribution. This was comparable to previous estimates in that although it is based on a different serial interval, and hence has a different mean, the standard deviation of our estimate is in accordance with that estimated by Ganyani et al. [@ganyaniEstimatingGenerationInterval2020a]. Although the confidence intervals for the mean and standard deviation of the generation interval are comparable, as the standard deviation is quite short, the variation in the shape and rate parameters of the underlying gamma distribution are quite large. It is possible that the gamma distribution is not the best choice for the generation interval, and this is an area that warrants further attention. Care should be taken when generating bootstrap samples from the generation interval when it is specified as an uncertain gamma distribution parameterised with mean and standard deviation, as the potential exists for unrealistic combinations of mean and standard deviation to producing inappropriately shaped gamma distributions, particularly when the standard deviation is small and the mean is long, which could in theory result in posterior estimates for $R_t$ being largely determined by the reciprocal of just a small number of observations.
+Estimating $R_t$ is based on knowledge of the incidence of infections. This is not a quantity that is readily observed in the SARS-CoV-2 epidemic, and pragmatically use of observations including symptom onset, case identification, admission and death are expected to be used as proxy measures for infection[@coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019a]. However, as pointed out elsewhere[@gosticPracticalConsiderationsMeasuring2020a] the variable time between infection and such observations causes the signal to be both delayed and blurred. By combining our estimates of incubation period with data from hospital admissions in the CHESS data set we were able to make estimates of the distribution of the delay from infection to observation for the UK. There are several caveats to this part of our analysis that must be kept in mind. The CHESS data set relies on a retrospective report of onset of symptoms, and this field is not recorded for all patients. We select only those patients who have reported an onset date and it may be the case that these patients represent a subgroup of patients whose symptom onset is significantly different from the average patient. The data collection around these dates was noted above to show patterns suggestive of rounding or approximation and this could also introduce some bias. The delay distributions are also unlikely to remain fixed during the outbreak, as we would hope to see the time from infection to case identification shorten during the epidemic, and the time from infection to death lengthen as treatment improves, and as the cohort of susceptible individuals changes. Our confidence in these distributions is therefore somewhat low, although we note acceptable agreement between our estimates produced using a mixture of international and UK data, and previously published estimates from different countries, most notably China[@jungRealTimeEstimation2020; @lintonIncubationPeriodOther2020; @sancheNovelCoronavirus2019nCoV2020; @verityEstimatesSeverityCoronavirus2020a] which cite an onset to admission of 2.7-5.9 days[@lintonIncubationPeriodOther2020;@tindaleEvidenceTransmissionCOVID192020;@sancheHighContagiousnessRapida] and onset to death delay of 16.1-17.8 days[@lintonIncubationPeriodOther2020; @sancheHighContagiousnessRapida]. Given our estimate of the incubation period is log normally distributed, it is unsurprising that the combination of incubation period and delay from onset to observation is also best described by log normal distributions (`r ref$fig("chess-delay")`, panel B), and with these we can apply non parametric back propagation to infer a time series of putative infections from the delayed observations we have available. 
 
-Using estimates of the serial interval distribution and generation interval distribution as a proxy for infectivity profile, we investigated the resulting variation in the estimation of $R_t$ using incident cases in England and the Cori method through EpiEstim. We found the bias between the smallest and largest of our estimates was seen to be as high as 20-25% of the central estimate of $R_t$ when $R_t$ was high, but somewhat smaller when $R_t$ values were 1 or lower. Distributions with lower values of the mean tended to result in estimates of $R_t$ that were closer to one. This suggests that biases introduced by the use of different serial interval distributions should not influence the answer to the key question, "is $R_t$ greater or less than 1?" which defines whether the epidemic is expanding or contracting in size. It is also to be expected that the nature of change of $R_t$ over time is not affected by this bias, so an increasing value of $R_t$ will be increasing regardless of the infectivity profile that is used to estimate it.
+In `r ref$fig("deconv-compare")` we bring all the different parts of the analysis together and compare the two approaches of formal estimation of $R_t$ using the generation interval and back propagation of case, admission or death counts to putative infection, versus an pragmatic estimation using the truncated re-sampled serial interval, and direct use of observation numbers, combined with the simple-but-incorrect adjustment to the resulting $R_t$ time series, shifting the date backwards by the mean of the delay distribution[@gosticPracticalConsiderationsMeasuring2020a]. 
 
-The underlying framework of the Cori method for estimating $R_t$ is based on knowledge of the incidence of infections. This is not a quantity that is readily observed in the SARS-CoV-2 epidemic, and pragmatically use of observations including symptom onset, case identification, admission and death are expected to be used as proxy measures for infection [@coriNewFrameworkSoftware2013; @thompsonImprovedInferenceTimevarying2019a]. However, as pointed out elsewhere [@gosticPracticalConsiderationsMeasuring2020a] the variable time between infection and such observations causes the signal to be both delayed and blurred. By combining our estimates of incubation period with data from hospital admissions in the CHESS data set we were able to make estimates of the distribution of the delay from infection to observation for the UK. There are several caveats to this part of our analysis that must be made. The CHESS data set relies on a retrospective report of onset of symptoms, and this field is not recorded for all patients. We select only those patients who have reported an onset date and it may be the case that these patients represent a subgroup of patients whose symptom onset is significantly different from the average patient. The data collection around these dates was noted above to show patterns suggestive of rounding or approximation and this could also introduce some bias. The delay distributions are also unlikely to remain fixed during the outbreak, as we would hope to see the time from infection to case identification shorten during the epidemic, and the time from infection to death lengthen as treatment improves, and as the cohort of susceptible individuals changes. Our confidence in these distributions is therefore somewhat low, although we note acceptable agreement between our estimates produced using a mixture of international and UK data, and previously published estimates from different countries, most notably China [@jungRealTimeEstimation2020; @lintonIncubationPeriodOther2020; @sancheNovelCoronavirus2019nCoV2020; @verityEstimatesSeverityCoronavirus2020a] which cite an onset to admission of 2.7-5.9 days [@lintonIncubationPeriodOther2020;@tindaleEvidenceTransmissionCOVID192020;@sancheHighContagiousnessRapida] and onset to death delay of 16.1-17.8 days [@lintonIncubationPeriodOther2020; @sancheHighContagiousnessRapida]. Given our estimate of the incubation period is log normally distributed, it is unsurprising that the combination of incubation period and delay from onset to observation is also best described by log normal distributions (`r ref$fig("chess-delay")`, panel B), and with these we can apply non parametric back propagation to infer a time series of putative infections from the delayed observations we have available. 
+<!-- In our pragmatic approach we make the assumption that case counts, admissions and deaths can be used as a direct proxy measure for infection events. The Cori method uses a Bayesian framework to update a prior probabilistic estimate of $R_t$, on any given day, with information gained from the time series of infections in the epidemic to date, and the infectivity profile, to produce a posterior estimate of $R_t$. With the assumption that prior and posterior estimates of $R_t$ are gamma distributed, the Cori method derives a closed form solution for the posterior distribution, which can be rapidly calculated. If equivalent information is contained within a time series of observation such as cases, admissions, or deaths we propose that there is no fundamental reason the Cori method cannot be extended to these data sets. However, if the time delay between infection and observation is changing over time then we may expect to see compression of the early part of the time series, and relaxation in later parts, and a resulting estimate of $R_t$ that is further away from 1 than estimates that would have been obtained from the true infection incidence had it been available.  -->
 
-In `r ref$fig("deconv-compare")` we bring all the different parts of the analysis together and compare the two approaches of formal estimation of $R_t$ using the generation interval and back propagation of case, admission or death counts to putative infection, versus an pragmatic estimation using the truncated re-sampled serial interval, and direct use of observation numbers, combined with the simple-but-incorrect adjustment to the resulting $R_t$ time series, shifting the date backwards by the mean of the delay distribution [@gosticPracticalConsiderationsMeasuring2020a]. 
-
-In our pragmatic approach we make the assumption that case counts, admissions and deaths can be used as a direct proxy measure for infection events. The Cori method uses a Bayesian framework to update a prior probabilistic estimate of $R_t$, on any given day, with information gained from the time series of infections in the epidemic to date, and the infectivity profile, to produce a posterior estimate of $R_t$. With the assumption that prior and posterior estimates of $R_t$ are gamma distributed, the Cori method derives a closed form solution for the posterior distribution, which can be rapidly calculated. If equivalent information is contained within a time series of observation such as cases, admissions, or deaths we propose that there is no fundamental reason the Cori method cannot be extended to these data sets. However, if the time delay between infection and observation is changing over time then we may expect to see compression of the early part of the time series, and relaxation in later parts, and a resulting estimate of $R_t$ that is further away from 1 than estimates that would have been obtained from the true infection incidence had it been available. 
-
-There is an open question about what proxy measure for the infectivity profile is most appropriate if using delayed observations in this way. One appealing possibility is the use of case interval ($SI_case$), admission interval ($SI_admission$), or death intervals ($SI_death$), rather than serial interval ($SI_onset$). These distributions (which are estimated in `r ref$sfig("observation-interval")`) are more normally distributed than serial interval or generation interval and have a very definite negative component, which cannot be integrated into the Cori method as-is, and pragmatic truncation of the distribution at zero would introduce an untenable increase in the mean of the distribution. We have adopted the empirical re-sampled serial interval distribution (truncated at zero) for infectivity profile in absence of a clear alternative, as this is a quantity that can be directly observed from the data, and has known limitations and uncertainty, and we note the potential for bias in our estimates of $R_t$ that this introduces.
-
-In comparing formal versus pragmatic methods, given the number of moving parts in this comparison it is surprising to see the level of agreement between the $R_t$ estimates from the two methods (`r ref$fig("deconv-compare")` panel B) in the early phase of the epidemic, and also to see that there is some similar structure of the $R_t$ time series in the later parts. This is particularly the case for estimates based on cases and admissions, but less so for deaths where the de-convolution time series shows additional features that are not obvious from the data. We have no gold standard in comparing the $R_t$ estimates for England, so we are limited in what we can conclude, but we do observe that $R_t$ estimates based on our attempt at de-convolution have more variability than ones from un-adjusted observations, and de-convolved estimates have additional features not present in the un-adjusted estimates. The de-convolved estimates of infection are also noted to run to the end of the time series, which is somewhat surprising as estimates of infection rates at the end of the time series should depend on data which has not yet been observed. This is a feature of the back propagation algorithm which needs to be used with caution as the resulting estimates of $R_t$ basd on de-convolution for the latter part of the time series appear inconsistent with each other.
+<!-- There is an open question about what proxy measure for the infectivity profile is most appropriate if using delayed observations in this way. One appealing possibility is the use of case interval ($SI_case$), admission interval ($SI_admission$), or death intervals ($SI_death$), rather than serial interval ($SI_onset$). These distributions (which are estimated in `r ref$sfig("observation-interval")`) are more normally distributed than serial interval or generation interval and have a very definite negative component, which cannot be integrated into the Cori method as-is, and pragmatic truncation of the distribution at zero would introduce an untenable increase in the mean of the distribution. We have adopted the empirical re-sampled serial interval distribution (truncated at zero) for infectivity profile in absence of a clear alternative, as this is a quantity that can be directly observed from the data, and has known limitations and uncertainty, and we note the potential for bias in our estimates of $R_t$ that this introduces. -->
+In comparing formal versus pragmatic methods, given the number of moving parts in this comparison it is encouraging to see the level of agreement between the $R_t$ estimates from the two methods (`r ref$fig("deconv-compare")` panel B) in the early phase of the epidemic, and also to see that there is some similar structure of the $R_t$ time series in the later parts. This is particularly the case for estimates based on cases and admissions, but less so for deaths where the de-convolution time series shows additional features that are not obvious from the data. We have no gold standard in comparing the $R_t$ estimates for England, so we are limited in what we can conclude, but we do observe that $R_t$ estimates based on our attempt at de-convolution have more variability than ones from un-adjusted observations, and de-convolved estimates have additional features not present in the un-adjusted estimates. The de-convolved estimates of infection are also noted to run to the end of the time series, which is somewhat surprising as estimates of infection rates at the end of the time series should depend on data which has not yet been observed. This is a feature of the back propagation algorithm which needs to be used with caution as the resulting estimates of $R_t$ based on de-convolution for the latter part of the time series appear inconsistent with each other.
 
 # Limitations
 
@@ -978,23 +1007,34 @@ We did not fully quantify uncertainty in our analysis and estimation of $R_t$. T
 
 Our estimates are based on the best available information at the present stage of the epidemic.  However the serial interval is not a fixed quantity and may be affected by behavioral changes such as case isolation, or social distancing. The assumption it is constant is questionable although we have very little hard evidence about how it may vary over time. Similarly time distributions from infection to case identification, admission and death are expected to be highly variable over the course of an outbreak. This has implications for their use in de-convolution, as changing time distributions will have a significant effect on the shape of inferred infection incidence curves, and the complexity of the de-convolution.
 
-There are implicit selection biases in all the data sources we use. A large proportion of SARS-CoV-2 cases are asymptomatic [@baiPresumedAsymptomaticCarrier2020; @huClinicalCharacteristics242020; @mizumotoEstimatingAsymptomaticProportion2020]. It is highly likely that these people participate in transmission chains, and they may do so with a very different infectivity profile to those that are symptomatic, however we have no information about these people in the data sets, and hence all the estimates presented here could be quite wrong, when asymptomatic cases are taken into consideration.
+There are implicit selection biases in all the data sources we use. A large proportion of SARS-CoV-2 cases are asymptomatic[@baiPresumedAsymptomaticCarrier2020; @huClinicalCharacteristics242020; @mizumotoEstimatingAsymptomaticProportion2020]. It is highly likely that these people participate in transmission chains, and they may do so with a very different infectivity profile to those that are symptomatic, however we have no information about these people in the data sets, and hence all the estimates presented here could be quite different, when asymptomatic cases are taken into consideration.
 
 Our approach in estimating key parameters has been to combine different data sets, which come from different international sources, and which have potentially different biases. In combining data sets we assume that time delays are independent of one another, and can be combined randomly, as we have no other evidence to the contrary. This assumption is questionable, as physiologically we can imagine that patients with a long incubation period, for example, may well have a longer period from symptom onset to admission, for example. This could have unpredictable effects on our estimates of time delays but the most likely is that our estimated variance is too small as a result.
 
-In assessing the impact of differences in infectivity profile choices and different sources of observed incidence or inferred infections, we use a real life example of the outbreak in the UK. Whilst this is qualitatively interesting, and grounds the discussion in reality, as there is no gold standard to compare to, we are limited in our ability to conclude anything about the relative benefits of different approaches. Also as the outbreak was relatively stable in the UK over the period we considered, there are limited significant features to compare. An opportunity for further work exists in analysing a simulation with known epidemiological parameters that vary over time and assessing the performance of different methods.
+<!-- In assessing the impact of differences in infectivity profile choices and different sources of observed incidence or inferred infections, we use a real life example of the outbreak in the UK. Whilst this is qualitatively interesting, and grounds the discussion in reality, as there is no gold standard to compare to, we are limited in our ability to conclude anything about the relative benefits of different approaches. Also as the outbreak was relatively stable in the UK over the period we considered, there are limited significant features to compare. An opportunity for further work exists in analysing a simulation with known epidemiological parameters that vary over time and assessing the performance of different methods. -->
 
 # Conclusions
 
-Estimation of $R_t$ using the Cori method relies on a key set of parameters, namely serial interval, generation interval, and time delays from infection to onset, case identification, admission and death. In this work we present estimates for the statistical distributions of these key parameters in the UK, along with their uncertainty, which we use when estimating $R_t$. Whilst these estimates are by no means perfect we propose they represent the best available estimates for the UK, given the current state of knowledge.
+We argue that our estimates for the statistical distributions of these key parameters or serial interval, incubation period, generation interval, for the UK, along with their uncertainty represent the best available estimates for the UK, given the current state of knowledge.
 
-As there is a wide range of candidate values for these quantities, we have assessed the bias that the variation in choice of parameters introduces to $R_t$ estimation, when using the Cori method. Whilst these introduce significant variation in the worst case scenario, we find that even large differences in infectivity profile can have only small impacts on estimates of $R_t$ when $R_t$ is close to 1. Larger values for the mean of the infectivity profile appear to result in $R_t$ estimates that are further away from 1. This is a relatively reassuring finding in that the answer to the key question "is the epidemic under control?" is insensitive to the mean of the infectivity profile. The standard deviation of the infectivity profile, tends to result in estimates of $R_t$ that are influenced by more historical information as so lag those with narrow standard distributions.
+As there is a wide range of candidate values for these quantities, we have assessed the bias that the variation in choice of parameters introduces to $R_t$ estimation, when using the forward equation method. Whilst these introduce significant variation in the worst case scenario, we find that even large differences in infectivity profile can have only small impacts on estimates of $R_t$ when $R_t$ is close to 1. Larger values for the mean of the infectivity profile appear to result in $R_t$ estimates that are further away from 1. This is a relatively reassuring finding in that the answer to the key question "is the epidemic under control?" is insensitive to the mean of the infectivity profile.
 
-We find that using more formal methods for estimating $R_t$ by back propagation inference of infection rate and use of the generation interval, compared to the more pragmatic direct use of case counts as a proxy for infection produces somewhat different results, with the formal methods producing a $R_t$ estimate with more variability than the pragmatic approach. Both methods agree well in predicting when the epidemic crossed the $R_t$ threshold of 1, but we note considerable uncertainty exists in the quantities needed to perform the back propagation, and we are not at the present time able to ensure that all this uncertainty could be faithfully quantified in our resulting $R_t$ estimates. We did not set out to assess whether one method is better than another, and this would be a natural extension to this work, however we note that new methods for combining back propagation with estimation of $R_t$ are under active development [@abbottEpiNow2EstimateRealtime2020; @abbottEstimatingTimevaryingReproduction2020] and which may render any further investigation obsolete.
+Using more formal methods for estimating $R_t$ by back propagation inference of infection rate and estimates of the generation interval, produces $R_t$ estimates that are more variable when compared to the more pragmatic direct use of case counts as a proxy for infection. Both methods agree on when the epidemic crossed the $R_t$ threshold of 1. However there is considerable uncertainty in the quantities needed to perform the back propagation, and we are not able to ensure that all this uncertainty could be faithfully quantified in our resulting $R_t$ estimates. We did not set out to assess whether one method is better than another, and this would be a natural extension to this work, however we note that new methods for combining back propagation with estimation of $R_t$ are under active development[@abbottEpiNow2EstimateRealtime2020; @abbottEstimatingTimevaryingReproduction2020] and may very well address such further questions.
 
 # References
 
 <div id="refs"></div>
+
+\newpage
+# Impact of uncertainty in serial interval, generation interval, incubation period and delayed observations in estimating the reproduction number for COVID 19
+
+Robert Challen ^1,2^; Ellen Brooks-Pollock^3^; Leon Danon ^4,5^; Krasimira Tsaneva-Atanasova^1,3^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK.
+4) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK. 
 
 # Supplementary material
 
