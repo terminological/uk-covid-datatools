@@ -284,6 +284,9 @@ p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colo
 p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/NHSER_DeathsByRegionAndAge")
 ```
 
+
+
+
 <!-- ## Acute outcome 111 calls -->
 
 <!-- ```{r} -->

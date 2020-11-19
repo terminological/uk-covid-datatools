@@ -1052,13 +1052,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dates = as.Date(dates)
       if (length(dates) == 1) dates = c(dates,max(data$date))
     }
-    rects = events %>% filter(!is.na(`End date`))
+    rects = events %>% filter(!is.na(`End date`) & `End date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`) # %>% mutate(labelDate = as.Date(`Start date`+floor((`End date`-`Start date`)/2),"1970-01-01"))
     p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
-    lines = events %>% filter(is.na(`End date`))
+    lines = events %>% filter(is.na(`End date`) & `Start date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`)
     p = p + geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE) 
+    labels = bind_rows(rects,lines)
     p = p +
       ggrepel::geom_text_repel(
-        aes(x=`Start date`, y=Inf, label=`Label`),data=events, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+        aes(x=labelDate, y=Inf, label=`Label`),data=labels, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
         size=(labelSize/ggplot2:::.pt/(96/72)))+
       scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")
     if (!identical(ylim,NULL)) {
