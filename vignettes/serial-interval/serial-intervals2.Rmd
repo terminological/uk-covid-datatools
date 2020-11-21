@@ -367,7 +367,7 @@ fig1 = (panel2|panel1)/patchwork::guide_area() + patchwork::plot_annotation(tag_
 fig1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/serial-interval/Fig2_SerialIntervalEstimates")
 
 
-si1$getBasicConfig(quick = FALSE)$si_sample %>% write.table("~/Git/uk-covid-datatools/vignettes/serial-interval/resampled-truncated-empirical-si-sample.csv")
+si1$getBasicConfig(quick = FALSE)$si_sample %>% write.table("~/Git/uk-covid-datatools/vignettes/serial-interval/resampled-truncated-empirical-si-sample.txt")
 ```
 
 `r cap$fig("si-estimates","Panel A - Days between infected infectee disease onset based on a resampling of published estimates from the literature and Panel B - Estimates of serial interval from FF100 data. The histogram in panel A shows the combined density of all sets of samples within the original research.")`
@@ -567,7 +567,7 @@ genIntTmp = dpc$getHashCached(object = expt,operation = "GENERATION-INTERVAL-OPT
 
 si4 = SerialIntervalProvider$generationInterval(dpc,bootstrapsDf = genIntTmp)
 tmp = si4$getCustomConfigs(quick=FALSE)[[1]][[1]]$si_sample
-tmp %>% write.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.csv")
+tmp %>% write.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.txt")
 ```
 
 The generation interval is then inferred from the incubation period and empirical serial interval distribution prior to truncation. Our best estimate for this is a `r si4$printSerialInterval()`, as shown in `r ref$fig("generation-interval")`. The mean of 4.8 days is identical to that of the empirical serial interval distribution prior to truncation in panel B, `r ref$fig("si-estimates")` as a result of the constraints imposed during fitting. The standard deviation of our generation interval estimate is 1.72. This is within the confidence limits of estimates from the literature from both China (0.74 - 2.97) and Singapore (0.91 - 3.93)[@ganyaniEstimatingGenerationInterval2020a].
