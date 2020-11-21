@@ -8,7 +8,7 @@ The truncated empirical serial interval distribution for covid-19 based on a met
 in the following file: "resampled-truncated-empirical-si-sample.txt" which has 100 samples of the probability on days 0-13 of transmission.
 
 ```R
-si_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/resampled-truncated-empirical-si-sample.txt")
+si_sample_data = read.table("https://raw.githubusercontent.com/terminological/uk-covid-datatools/master/vignettes/serial-interval/resampled-truncated-empirical-si-sample.txt")
 
 estimate_R(
   incid, # an incidence time series
@@ -28,7 +28,7 @@ Secondly a matrix containing the discrete probabilities associated with those ga
 provided in "generation-interval-fitted-si-sample.txt"
 
 ```R
-gen_int_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.txt")
+gen_int_sample_data = read.table("https://raw.githubusercontent.com/terminological/uk-covid-datatools/master/vignettes/serial-interval/generation-interval-fitted-si-sample.txt")
 
 estimate_R(
   incid, # an incidence time series
