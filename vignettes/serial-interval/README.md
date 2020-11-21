@@ -5,10 +5,10 @@ Code and supporting material for our [MedRxiv paper](https://doi.org/10.1101/202
 ## Serial interval estimates
 
 The truncated empirical serial interval distribution for covid-19 based on a meta-analysis of various sources is stored as a matrix
-in the following file: "resampled-truncated-empirical-si-sample.csv" which has 100 samples of the probability on days 0-13 of transmission.
+in the following file: "resampled-truncated-empirical-si-sample.txt" which has 100 samples of the probability on days 0-13 of transmission.
 
 ```R
-si_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/resampled-truncated-empirical-si-sample.csv")
+si_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/resampled-truncated-empirical-si-sample.txt")
 
 estimate_R(
   incid, # an incidence time series
@@ -25,10 +25,10 @@ a full parameterisation of the gamma distributions for the generation interval p
 Using this should be relatively self explanatory, although it is not a supported input for EpiEstim. 
 
 Secondly a matrix containing the discrete probabilities associated with those gamma distributions in a format suitable for use in epiestim is
-provided in "generation-interval-fitted-si-sample.csv"
+provided in "generation-interval-fitted-si-sample.txt"
 
 ```R
-gen_int_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.csv")
+gen_int_sample_data = read.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.txt")
 
 estimate_R(
   incid, # an incidence time series
