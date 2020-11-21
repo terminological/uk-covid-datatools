@@ -134,7 +134,7 @@ FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inher
           discreteProbability=1-sum(discreteProbability)
         )
       )
-      browser()
+      # browser()
       out = tmp %>% group_by(!!!self$dfit$grps) %>% group_modify(function(d,g,...) {
         tmp2 = d %>% arrange(value) %>% pull(discreteProbability) %>% matrix(ncol = max(tmp$bootstrapNumber), byrow=TRUE)
         tmp3 = list(
