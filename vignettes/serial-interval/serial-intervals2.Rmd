@@ -566,8 +566,15 @@ genIntTmp = dpc$getHashCached(object = expt,operation = "GENERATION-INTERVAL-OPT
 })
 
 si4 = SerialIntervalProvider$generationInterval(dpc,bootstrapsDf = genIntTmp)
+
+# export gen int sample probability distributions
 tmp = si4$getCustomConfigs(quick=FALSE)[[1]][[1]]$si_sample
 tmp %>% write.table("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-si-sample.txt")
+
+# export distribution parameters
+si4$dfit$bootstraps %>% pivot_wider(names_from = "param",values_from = "value") %>% 
+  mutate(mean = shape/rate, sd = sqrt(shape/(rate^2))) %>% write_csv("~/Git/uk-covid-datatools/vignettes/serial-interval/generation-interval-fitted-parameters.csv")
+
 ```
 
 The generation interval is then inferred from the incubation period and empirical serial interval distribution prior to truncation. Our best estimate for this is a `r si4$printSerialInterval()`, as shown in `r ref$fig("generation-interval")`. The mean of 4.8 days is identical to that of the empirical serial interval distribution prior to truncation in panel B, `r ref$fig("si-estimates")` as a result of the constraints imposed during fitting. The standard deviation of our generation interval estimate is 1.72. This is within the confidence limits of estimates from the literature from both China (0.74 - 2.97) and Singapore (0.91 - 3.93)[@ganyaniEstimatingGenerationInterval2020a].
@@ -1141,9 +1148,12 @@ fig7 %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/FigS1_Observation
 
 
 
+## `r cap$sfig("parameter-distributions","The distribution of the parameters of ")`
 
-
-
+```{r}
+# export distribution parameters
+parameterDistributions = si4$dfit$bootstraps %>% pivot_wider(names_from = "param",values_from = "value")
+```
 
 
 

@@ -53,7 +53,7 @@ proc = function(ct, st) {
   (currentRt$rationale %>% filter(codeType==ct & statistic == st))$processing
 }
 
-events = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("Lockdown","VE day","Anti-racism demos","Hotels and bars reopen","Start autumn term"))
+events = dpc$datasets$getSignificantDates() %>% filter(Significance==1)
 events %>% select(`Start date`,Classification,Label) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Table1_events")
 
 ```
@@ -64,7 +64,7 @@ events %>% select(`Start date`,Classification,Label) %>% standardPrintOutput::sa
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(triageCTRY, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+  p = tsp$plotIncidenceQuantiles(triageCTRY, denominatorExpr = population/1000000, events = events, colour=subgroup, dates="2020-07-01")+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig1_triageCTRY")
@@ -77,7 +77,7 @@ Sources: `r datasrc("CTRY","triage")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(finalTriageCTRY, denominatorExpr = population/1000000, events = events)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
+  p=tsp$plotIncidenceQuantiles(finalTriageCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig2_finalTriageCTRY")
 })
 ```
@@ -88,7 +88,7 @@ Processing: `r proc("CTRY","triage")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(casesCTRY, denominatorExpr = population/1000000, events = events, colour = source)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
+  p=tsp$plotIncidenceQuantiles(casesCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour = source)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig3a_casesCTRY")
 })
 ```
@@ -99,7 +99,7 @@ Sources: `r datasrc("CTRY","case")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(finalCasesCTRY, denominatorExpr = population/1000000, events = events)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
+  p=tsp$plotIncidenceQuantiles(finalCasesCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150,500))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig3b_finalCasesCTRY")
 })
 ```
@@ -110,7 +110,7 @@ Processing: `r proc("CTRY","case")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceRollmean(admissionsCTRY, denominatorExpr = population/1000000, colour=source, events = events) +
+  p=tsp$plotIncidenceRollmean(admissionsCTRY, denominatorExpr = population/1000000, colour=source, events = events, dates="2020-07-01") +
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20,50))+
     ylab("per 1M per day")
@@ -124,7 +124,7 @@ Sources: `r datasrc("CTRY","hospital admission")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(finalAdmissionsCTRY, denominatorExpr = population/1000000, events = events) +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
+  p=tsp$plotIncidenceQuantiles(finalAdmissionsCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01") +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig5_finalAdmissionsCTRY")
 })
 ```
@@ -141,7 +141,7 @@ Processing: `r proc("CTRY","hospital admission")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceRollmean(deathsCTRY, denominatorExpr = population/1000000, events = events, colour=source) +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
+  p=tsp$plotIncidenceRollmean(deathsCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=source) +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig6_deathsCTRY")
 })
 ```
@@ -152,7 +152,7 @@ Sources: `r datasrc("CTRY","death")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalDeathsCTRY, denominatorExpr = population/1000000, events = events) +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
+  p = tsp$plotIncidenceQuantiles(finalDeathsCTRY, denominatorExpr = population/1000000, events = events, dates="2020-07-01") +facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig7_finalDeathsCTRY")
 })
 ```
@@ -170,7 +170,7 @@ Processing: `r proc("CTRY","death")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(casesUK, denominatorExpr = population/1000000, events = events, colour = source)+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
+  p = tsp$plotIncidenceQuantiles(casesUK, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour = source)+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig8_casesUK")
 })
 ```
@@ -181,7 +181,7 @@ Sources: `r datasrc("UK","case")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalAdmissionsUK, denominatorExpr = population/1000000, events = events)+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20,50))+ylab("per 1M per day")
+  p = tsp$plotIncidenceQuantiles(finalAdmissionsUK, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20,50))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig9_admissionsUK")
 })
 ```
@@ -192,7 +192,7 @@ Processing: `r proc("UK","case")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(deathsUK, denominatorExpr = population/1000000, events = events, colour = source)+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
+  p = tsp$plotIncidenceQuantiles(deathsUK, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour = source)+scale_y_continuous(trans="log1p", breaks = c(0,2,5,10,20))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig10_deathsUK")
 })
 ```
@@ -213,7 +213,7 @@ Processing: `r proc("UK","death")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceRollmean(triageNHSER, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+  p = tsp$plotIncidenceRollmean(triageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=subgroup)+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig11_triageNHSER")
@@ -226,7 +226,7 @@ Sources: `r datasrc("NHSER","triage")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalTriageNHSER, denominatorExpr = population/1000000, events = events)+
+  p = tsp$plotIncidenceQuantiles(finalTriageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+
     ylab("per 1M per day")
@@ -240,7 +240,7 @@ Processing: `r proc("NHSER","triage")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceRollmean(casesNHSER, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+  p = tsp$plotIncidenceRollmean(casesNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=subgroup)+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+
     ylab("per 1M per day")
@@ -262,7 +262,7 @@ Sources: `r datasrc("NHSER","case")`
 
 ```{r}
 with(currentRt$source, {
-  p=tsp$plotIncidenceQuantiles(finalCasesNHSER, denominatorExpr = population/1000000, events = events)+
+  p=tsp$plotIncidenceQuantiles(finalCasesNHSER, denominatorExpr = population/1000000, dates="2020-07-01", events = events)+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+
     ylab("per 1M per day")
@@ -276,10 +276,10 @@ Processing: `r proc("NHSER","case")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceRollmean(admissionsNHSER, denominatorExpr = population/1000000, colour=source, events = events)+
+  p = tsp$plotIncidenceRollmean(admissionsNHSER, denominatorExpr = population/1000000, colour=source, events = events, dates="2020-07-01")+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+
-    ylab("per 100K per day")
+    ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig15_admissionsNHSER")
 
 #tsp$plotGrowthRate(admissions %>% tsp$aggregateAge(), events = events)+facet_grid(cols=vars(source), rows=vars(name))
@@ -295,10 +295,10 @@ Sources: `r datasrc("NHSER","hospital admission")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalAdmissionsNHSER, denominatorExpr = population/1000000, events = events)+
+  p = tsp$plotIncidenceQuantiles(finalAdmissionsNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p",breaks=c(0,5,15,50,150))+
-    ylab("per 100K per day")
+    ylab("per 1M per day")
   
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig16_finalAdmissionsNHSER")
 
@@ -311,7 +311,7 @@ Processing: `r proc("NHSER","hospital admission")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalIcuAdmissionsNHSER, denominatorExpr = population/1000000, events = events)+
+  p = tsp$plotIncidenceQuantiles(finalIcuAdmissionsNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,2,5,10))+
     ylab("per 100K per day")
@@ -328,7 +328,7 @@ Processing: `r proc("NHSER","icu admission")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(deathsNHSER, denominatorExpr = population/1000000, events = events, colour=subgroup)+
+  p = tsp$plotIncidenceQuantiles(deathsNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=subgroup)+
     facet_wrap(vars(name))+
     scale_y_continuous(trans="log1p", breaks = c(0,1,3,10,30))+
     ylab("per 1M per day")
@@ -343,7 +343,7 @@ Sources: `r datasrc("NHSER","death")`
 
 ```{r}
 with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalDeathsNHSER, denominatorExpr = population/1000000, events = events)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
+  p = tsp$plotIncidenceQuantiles(finalDeathsNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig19_finalDeathsNHSER")
 })
 ```
@@ -353,7 +353,7 @@ Processing: `r proc("NHSER","death")`
 ## Combined data set
 
 ```{r}
-p = tsp$plotIncidenceQuantiles(currentRt$rt, denominatorExpr = population/1000000, events = events, colour=statistic, ylim=c(0,150))+
+p = tsp$plotIncidenceQuantiles(currentRt$rt, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=statistic, ylim=c(0,1500))+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")+
   scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
@@ -405,13 +405,12 @@ p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/dat
 ## Combined data set - 14 day $R_t$
 
 ```{r}
-events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day"))
 
 p2 = tsp$plotRt(
     currentRt$rt14 %>% filter(statistic != "icu admission"), 
-    events = events2,dates = "2020-05-01", 
+    events = events,dates = "2020-07-01", 
     colour=statistic, 
-    rtlim = c(0.5,2), ribbons=TRUE)+
+    rtlim = c(0.75,1.75), ribbons=TRUE)+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
@@ -427,14 +426,31 @@ currentRt$rt14 %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>%
   ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab22_Rt14_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
 ```
 
+## Combined data set - 7 day $R_t$
+
+```{r}
+
+p2 = tsp$plotRt(
+    currentRt$rt7 %>% filter(statistic != "icu admission"), 
+    events = events,dates = "2020-10-01", 
+    colour=statistic, 
+    rtlim = c(0.75,1.25), ribbons=TRUE)+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p2 %>% 
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_Rt7_AllGeogsAllModels")
+
+```
+
+
 ## Combined data set - 14 day growth rates
 
 ```{r}
 p3 = tsp$plotWindowedGrowthRate(
     currentRt$rt14 %>% filter(statistic != "icu admission"), 
     colour=statistic, 
-    events = events2,
-    dates = "2020-05-01",
+    events = events,
+    dates = "2020-07-01",
     ribbons = TRUE, 
     rlim = c(-0.125,0.125))+
   facet_wrap(vars(name),ncol=4)+

@@ -32,12 +32,12 @@ export14dayRt = currentRt$rt14 %>%
   filter(date > "2020-07-01") %>%
   filter(source %in% c("4NationsCases","Admissions","Deaths")) %>% 
   filter(
-    source != "Deaths" | name %in% c("United Kingdom","England")
+    source != "Deaths" | name %in% c("England")
   ) %>%
-  filter(
-    !(source == "Admissions" & name %in% c("Wales"))
+  #filter(
+    #!(source == "Admissions" & name %in% c("Wales"))
     #!(name %in% c("Wales"))
-  ) %>%
+  #) %>%
   mutate(
     modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", source == "Admissions" ~ "Cases", TRUE ~ NA_character_)
   ) %>% ungroup()
@@ -46,12 +46,12 @@ export14dayGrowth = currentRt$rt14 %>%
   filter(date > "2020-07-01") %>%
   filter(source %in% c("4NationsCases","Admissions","Deaths")) %>% 
   filter(
-    source != "Deaths" | name %in% c("United Kingdom","England")
+    source != "Deaths" | name %in% c("England")
   ) %>%
-  filter(
-    !(source == "Admissions" & name %in% c("Wales"))
+  #filter(
+    #!(source == "Admissions" & name %in% c("Wales"))
     #!(name %in% c("Wales"))
-  ) %>% 
+  #) %>% 
   mutate(
     modelType = case_when(source == "4NationsCases" ~ "Cases", source == "Deaths" ~ "Deaths", source == "Triage" ~ "Emergency", source == "Admissions" ~ "Cases", TRUE ~ NA_character_)
   ) %>% ungroup()

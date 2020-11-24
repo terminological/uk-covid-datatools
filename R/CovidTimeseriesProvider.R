@@ -236,7 +236,7 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
       if(any(duplicated(d$date))) errs = c(errs,"Duplicate dates")
       if(length(d$date) < max(d$date)-min(d$date)) errs = c(errs,"Missing dates")
       if(any(is.na(d$tmp_value))) errs = c(errs,"NAs in values")
-      if(any(g$type == "incidence" & d$tmp_value<0)) errs = c(errs,"Negative values in incidence figures")
+      if(any(g$type == "incidence" & (!is.na(d$tmp_value) & d$tmp_value<0))) errs = c(errs,"Negative values in incidence figures")
       
       if (identical(errs,NULL)) errs = NA_character_ 
       else errs = paste0(errs,collapse="; ")

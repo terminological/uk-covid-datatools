@@ -118,7 +118,7 @@ events2 = dpc$datasets$getSignificantDates(nocache=TRUE) %>%
   filter(Label %in% c("Start autumn term","Start univerity term","Testing capacity limited","England 2nd lockdown","School half term"))
 
 events3 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
-  filter(Label %in% c("Start autumn term","North West England tier 3","England 2nd lockdown"))
+  filter(Label %in% c("Start autumn term","North West England tier 3","School half term","England 2nd lockdown"))
 
 
 ```
@@ -157,7 +157,8 @@ p1 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAnd
 * Rapid increase from low level in primary, and less so secondary, school age groups started before the beginning of term. 
 * Size of this outbreak is again likely to be an underestimate due to testing capacity issues.
 * Deaths in older age groups reached nadir around late August, after which cases have been growing. 
-* Exponential growth in older age groups seen to slow prior to second national lockdown but still positive.
+* Exponential growth in older age groups seen to slow during half term.
+* Following second lockdown curves begin to flatten in all age groups except those in school which return to growth after half term break.
 
 ```{r}
 p2 = combined %>% filter(codeType=="CTRY") %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events2, colour=statistic, rlim = c(-0.1,0.2)) + facet_wrap(vars(ageCat))
@@ -171,7 +172,8 @@ p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAnd
 * True peak of growth rate in younger age groups is unknown as potentially affected by testing capacity issues. 
 * Growth has become negative in university age groups, although this is could be affected by access to and compliance with testing programmes.
 * Growth rate in cases in older age groups has been positive since late August, and this finding is reinforced by death statistics. If the relationship between cases and deaths stayed constant this suggests the ascertainment bias due to saturation of test availability has not affected this group, possibly as older age groups will have been prioritised for testing.
-* Growth rates in older age groups are reducing but remain well above zero.
+* Growth rates in older age groups are reducing over half term but remain well above zero.
+* Pick up in growth rates post half term in school age groups.
 
 ## Regional
 
@@ -190,11 +192,12 @@ tmp %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events3, group
 `r cap$fig("growthNHSER","Exponential growth rates of cases in various age groups in the different NHS regions in England. Red is the North West, Blue is the South West. Other regions not highlighted. Growth rates are shifted in time to align to estimated date of infection.")`
 
 * Growth shows different dynamics in different regions and national picture in `r ref$fig("growthCTRY")` is a superposition of the different regions.
-* For example the bi-phasic peak in secondary school ages seen in `r ref$fig("growthCTRY")` is driven by 2 regional peaks initially in North West, and latterly in the South West.
+* For example the bi-phasic peak in primary school ages seen in `r ref$fig("growthCTRY")` is driven by 2 regional peaks initially in North West, and latterly in the South West.
 * Growth in school ages initially very much higher in North West compared to South West until late September, when South West begun to grow faster.
 * Growth rate in North West now seen to be approaching zero in all age groups.
 * Growth rate has slowed since early to mid October in all regions.
 * In the most vulnerable age groups growth currently highest in the South West. 
+* increases in growth rate in school children after lockdown seen across all regions but particularly in the South West.
 
 ```{r}
 
@@ -233,10 +236,15 @@ p3 %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/by-age/Cas
 `r cap$fig("growthLAD",paste0("Exponential growth rates of symptomatic cases by local authority district in functional age categories as of ",maxDate,". For clarity several age groups have been combined. School age comprises 6-17 year olds, University is from 18-22. Other family is 0-6 and 23-59, Retirement is 60 and over"))`
 
 * Day to day variation, and very localized variation in growth rates makes trends identified in `r ref$fig("growthNHSER")` difficult to see. Only general conclusions can be made from a single day. 
-* School age growth generally decreasing but with evidence of isolated outbreaks.
-* University age decreasing almost everywhere, but this is most obviously seen in university towns. This has the potential to mask growth in other age groups in those regions.
-* Young children and working age adults are still largely increasing across the country, but qualitatively appear to be levelling off in areas which have seen most significant tier 3 restrictions.
-* Older age groups appears similar to broader family age patterns but with possibly more evidence of evolving outbreaks in specific locations.
+* Prior to second lockdown
+  * School age growth overall decreasing but with evidence of isolated outbreaks.
+  * University age decreasing almost everywhere, but this is most obviously seen in university towns. This has the potential to mask growth in other age groups in those regions.
+  * Young children and working age adults are still largely increasing across the country, but qualitatively appear to be levelling off in areas which have seen most significant tier 3 restrictions.
+  * Older age groups appears similar to broader family age patterns but with possibly more evidence of evolving outbreaks in specific locations.
+* After lockdown:
+  * pattern of isolated outbreaks in school age and family age persists with growth strongest in South East.
+  * Reductions in university age fairly homogeneous. 
+  * lockdown seems effective at reducing transmission to the vulnerable older age gropus.
 
 # Limitations
 

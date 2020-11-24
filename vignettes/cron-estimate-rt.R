@@ -90,7 +90,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
     dpc$spim$getSPIMextract() %>% filter(name == "Wales" & type == "incidence" & statistic =="hospital admission" & source=="spim_hosp_inc_new_authorisation_date")
   ) %>% dpc$demog$findDemographics()
   
-  finalAdmissionsCTRY = admissionsCTRY %>% filter(name != "Wales" | source != "phe api")
+  finalAdmissionsCTRY = admissionsCTRY %>% filter(name != "Wales" | source != "phe api") %>% mutate(source="mixed api and spim")
   rationale(codeType = "CTRY","hospital admission",
             "PHE api for everythig except Wales, spim_hosp_inc_new_authorisation_date field for Wales",
             "None")
@@ -264,35 +264,35 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
 
 #### Current Rt for LHB, HB, LTLA ----
 
-currentRtQuick = tsp$getDaily(id = "CURRENT-RT-QUICK", orElse=function() {
-  set.seed(100)
-  with(currentDataset, {
-    # browser()
-    finalRtAssumed = finalDataset %>%
-      tsp$estimateRtWithAssumptions(quick = TRUE) %>%
-      tsp$logIncidenceStats() %>%
-      tsp$adjustRtDates() %>%
-      tsp$estimateVolatilty(valueVar = `Mean(R)`)
-    
-    return(list(
-      rtAssumedQuick = finalRtAssumed
-    ))
-  })
-})
+# currentRtQuick = tsp$getDaily(id = "CURRENT-RT-QUICK", orElse=function() {
+#   set.seed(100)
+#   with(currentDataset, {
+#     # browser()
+#     finalRtAssumed = finalDataset %>%
+#       tsp$estimateRtWithAssumptions(quick = TRUE) %>%
+#       tsp$logIncidenceStats() %>%
+#       tsp$adjustRtDates() %>%
+#       tsp$estimateVolatilty(valueVar = `Mean(R)`)
+#     
+#     return(list(
+#       rtAssumedQuick = finalRtAssumed
+#     ))
+#   })
+# })
 
-currentRt = c(
-  currentDataset,
-  currentRtQuick
-)
+# currentRt = c(
+#   currentDataset,
+#   currentRtQuick
+# )
 
 currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
   set.seed(100)
   with(currentDataset, {
-    finalRtDataset = finalDataset %>%
-      tsp$estimateRt() %>%
-      tsp$logIncidenceStats() %>%
-      tsp$adjustRtDates() %>%
-      tsp$estimateVolatilty(valueVar = `Mean(R)`)
+    # finalRtDataset = finalDataset %>%
+    #   tsp$estimateRt() %>%
+    #   tsp$logIncidenceStats() %>%
+    #   tsp$adjustRtDates() %>%
+    #   tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
     final14DayRtDataset = finalDataset %>%
       tsp$estimateRt(window = 14) %>%
@@ -300,12 +300,18 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
       tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
-    final28DayRtDataset = finalDataset %>%
-      tsp$estimateRt(window = 28) %>%
-      tsp$logIncidenceStats(growthRateWindow = 28) %>%
+    unsmoothed7DayRtDataset = finalDataset %>%
+      tsp$logIncidenceStats(growthRateWindow = 7) %>% 
+      tsp$estimateRt(window = 7,valueVar = value) %>%
       tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
+    # final28DayRtDataset = finalDataset %>%
+    #   tsp$estimateRt(window = 28) %>%
+    #   tsp$logIncidenceStats(growthRateWindow = 28) %>%
+    #   tsp$adjustRtDates() %>%
+    #   tsp$estimateVolatilty(valueVar = `Mean(R)`)
+    # 
     # finalRtCorrected = finalDataset %>%
     #   tsp$estimateRtWithAssumptions(quick = FALSE) %>%
     #   tsp$logIncidenceStats() %>%
@@ -314,9 +320,10 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
     #   tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
     return(list(
-      rt = finalRtDataset,
+      # rt = finalRtDataset,
       rt14 = final14DayRtDataset,
-      rt28 = final28DayRtDataset#,
+      rt7 = unsmoothed7DayRtDataset#,
+      # rt28 = final28DayRtDataset#,
       #rtAssumed = finalRtCorrected
     ))
   })
@@ -324,6 +331,46 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
 
 currentRt = c(
   currentDataset,
-  currentRtQuick,
+  #currentRtQuick,
   currentRtSlow
 )
+
+# devtools::install("~/Git/jepidemic/r-library/", upgrade = "never")
+# 
+# currentRtJEpidemic = tsp$getDaily(id = "CURRENT-RT-JEPIDEMIC", orElse=function() {
+#   set.seed(100)
+#   with(currentDataset, {
+# 
+#     unsmoothed7DayRtDataset = finalDataset %>%
+#       tsp$logIncidenceStats(growthRateWindow = 7)
+# 
+#     J = jepidemic::JavaApi$new()
+#     estim = J$CoriEstimator$new(r0Mean = 5,r0SD = 5,maxWindow = 21)
+#     lapply(1:100,function(x) estim$withInfectivityProfile(infectivityProfile = dpc$serial$getBasicConfig(quick = FALSE)$si_sample[,x]))
+#     estim$withAdaptivePrior(factor = 1.25)
+#     estim$selectAdaptiveWindow(incidenceSum = 100,minWindow = 4)
+#     estim$collectMixtureQuantiles()
+#     estim$inMiddleOfTimeseries()
+# 
+#     unsmoothed7DayRtDataset = unsmoothed7DayRtDataset %>% covidStandardGrouping()
+# 
+#     jepidem = estim$estimateRt(incidence = unsmoothed7DayRtDataset,dateColName = "date", incidenceColName = "Est.value")
+# 
+# 
+# 
+#     browser()
+#     unsmoothed7DayRtDataset = unsmoothed7DayRtDataset %>%
+#       tsp$estimateRt(window = 7,valueVar = value) %>%
+#       tsp$adjustRtDates() %>%
+#       tsp$estimateVolatilty(valueVar = `Mean(R)`)
+# 
+#     return(list(
+#       # rt = finalRtDataset,
+#       rt14 = final14DayRtDataset,
+#       rt7 = unsmoothed7DayRtDataset#,
+#       # rt28 = final28DayRtDataset#,
+#       #rtAssumed = finalRtCorrected
+#     ))
+#   })
+# })
+
