@@ -1148,13 +1148,27 @@ fig7 %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/FigS1_Observation
 
 
 
-## `r cap$sfig("parameter-distributions","The distribution of the parameters of ")`
+## `r cap$sfig("parameter-distributions","The distribution of the parameters of the fitted generation interval estimates")`
 
 ```{r}
 # export distribution parameters
-parameterDistributions = si4$dfit$bootstraps %>% pivot_wider(names_from = "param",values_from = "value")
+parameterDistributions = si4$dfit$bootstraps %>% pivot_wider(names_from = "param",values_from = "value") %>% 
+  mutate(mean = shape/rate, sd = sqrt(shape/(rate^2)))
+
+
+
+p1 = ggplot(parameterDistributions,aes(x=mean,y=sd,colour=shape*rate))+geom_point(show.legend = FALSE)+scale_color_distiller(palette = "YlGnBu",trans="sqrt")
+p1a = ggExtra::ggMarginal(p1,type="density",fill="grey90")
+
+p2 = ggplot(parameterDistributions,aes(x=shape,y=rate,colour=shape*rate))+geom_point(show.legend = FALSE)+scale_color_distiller(palette="YlGnBu",trans="sqrt")
+p2a = ggExtra::ggMarginal(p2,type="density",fill="grey90")
+
+p3 = patchwork::wrap_elements(p1a)+patchwork::wrap_elements(p2a)+patchwork::plot_layout(ncol=2)
+p3 %>% saveHalfPageFigure("~/Dropbox/covid19/serial-interval/FigS3_GenerationIntervalParameterDistributions")
+
 ```
 
+Generation interval distribution parameterisation is useful for Bayesian approaches. We investigated the properties of the distributions and found the mean and standard deviation or shape and rate parameters of our estimates of the generation interval are not uniformly distributed through parameter space. 
 
 
 <!-- # OLD -->
