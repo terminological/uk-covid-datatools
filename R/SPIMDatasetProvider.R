@@ -3,13 +3,20 @@
 SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseriesProvider, public = list(
   
   
-    directory=NULL,
+    # directory=NULL,
+    # 
+    # initialize = function(providerController, path, ...) {
+    #   self$directory = path.expand(path)
+    #   super$initialize(providerController, ...)
+    # },
     
-    initialize = function(providerController, path, ...) {
-      self$directory = path.expand(path)
+  fileProvider=NULL,
+    
+    initialize = function(providerController, fileProvider, ...) {
+      self$fileProvider = fileProvider
       super$initialize(providerController, ...)
     },
-    
+  
     ### filters ----
     
     filter=list(
@@ -30,7 +37,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       negPillar1 = "Negatives pillar1",
       negPillar2 = "Negatives pillar2",
       oneOneOneLineList = "111telephony_CLEANSED",
-      fourNationsCases = "Casedata_AllNations"
+      fourNationsCases = "Casedata_AllNations",
+      sgene = "SGTF_linelist"
     ),
     
     #### Get raw file paths ----
@@ -44,29 +52,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     getPaths = function(...) {
       path = self$directory
       return(self$getDaily("DATAFILES", ..., orElse = function (...) {
-        tmp = list.files(path=path,recursive = TRUE)
-        return(tmp)
-        
-        
-        # paths=list(
-        #   chess=fn("CHESS COVID19"), #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
-        #   lineList=fn("Anonymised .*Line List"),
-        #   rcgp=fn("RCGP"),
-        #   deathsLineList=fn("COVID19 Deaths"),
-        #   ff100=fn("FF100"),
-        #   chessSummary=fn("CHESS Aggregate Report"),
-        #   oneOneOne = fn("SPIM-111-999"),
-        #   onsWeekly = fn("SPIM_ONS"),
-        #   aeSitrep = fn("AESitrep"),
-        #   trust = fn("SPIM_trust"),
-        #   seroprevalence = fn("seroprev"),
-        #   negPillar1 = fn("Negatives pillar1"),
-        #   negPillar2 = fn("Negatives pillar2"),
-        #   fullList = tmp
-        #   # sitrep="~/S3/encrypted/8Apr/Covid sitrep report incl CIC 20200408 FINAL.xlsx"
-        # )
-        # if(any(is.na(paths))) stop("Missing files")
-        # return(paths)
+        tmp = self$fileProvider$listAllFiles()
+        return(tmp %>% filter(!isDir) %>% pull(path))
       }))
     },
     
@@ -98,12 +85,95 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     #### Get raw SPIM files ----
     
+  #' @description Load 111 data
+  #' 
+  
+  #' @return a covidTimeseriesFormat dataframe
+  
+  getOneOneOne = function(...) {
+    path = self$getLatest(self$filter$oneOneOne)
+    self$getDaily("SPIM-111", ..., orElse = function (...) covidTimeseriesFormat({
+      
+      oneoneone <- readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text")
+      
+      # make zeros explicit
+      
+      # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-Outcome")]) {
+      #   outcome = as.symbol(outcome)
+      #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
+      # }
+      # 
+      # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("999-Outcome")]) {
+      #   outcome = as.symbol(outcome)
+      #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`999-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
+      # }
+      # 
+      # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-ONLINE") & colnames(oneoneone) != "111-ONLINE-Total Result"]) {
+      #   outcome = as.symbol(outcome)
+      #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-ONLINE-Total Result`) & is.na(!!outcome),0,!!outcome))
+      # }
+      
+      ts111 = oneoneone %>% 
+        dplyr::mutate(Geography = ifelse(Geography=="England: Unknown", "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
+        self$codes$findCodesByName(nameVar = Geography,codeTypes = c("CTRY","NHSER","PSEUDO")) %>%
+        dplyr::select(-ReportLevel) %>% 
+        dplyr::rename(name=Geography) %>%
+        dplyr::mutate(date = as.Date(paste0(Year,"-",Month,"-",Day),"%Y-%m-%d")) %>% 
+        dplyr::select(-DateVal,-Day,-Month,-Year) %>% 
+        tidyr::pivot_longer(cols = c(-date,-code,-name,-codeType), names_to = "category", values_to = "value") %>% 
+        dplyr::mutate(
+          value = suppressWarnings(as.numeric(value)),
+          source = case_when(
+            category %like% "111-ONLINE%" ~ "online",
+            category %like% "111-Outcome%" ~ "111",
+            category %like% "999-Outcome%" ~ "999",
+            category %like% "All-111-Number_of_calls_where_person_triaged" ~ "111",
+            TRUE ~ "other 111" # as.character(NA)
+          ),
+          subgroup = case_when(
+            category %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
+            category %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
+            category %like% "%Clinical Assessment%" ~ "clinical review",
+            category %like% "%Emergency Ambulance%" ~ "emergency ambulance",
+            (category %like% "%Self Care%" | category %like% "%isolate%") ~ "self care",
+            TRUE ~ "other" #as.character(NA)
+          ),
+          statistic = case_when(
+            category %like% "111-ONLINE%" ~ "triage",
+            category %like% "111-Outcome%" ~ "triage",
+            category %like% "999-Outcome%" ~ "triage",
+            TRUE ~ "information seeking"
+          ),
+          gender = NA_character_,
+          ageCat = NA_character_,
+          type = case_when(
+            category %like% "All-111-Number_of_calls_where_person_triaged" ~ "background",
+            TRUE ~ "incidence"
+          )
+        ) %>%
+        dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
+      #browser()
+      ts111 = ts111 %>% 
+        dplyr::filter(!is.na(value)) %>%
+        dplyr::rename(note = category) %>%
+        dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
+        dplyr::summarise(
+          value = sum(value), 
+          note = paste0(note, collapse = "; "))
+      
+      return(ts111 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
+    }))
+  },
+  
+  
     
     getOneOneOneLineList = function(dateFrom=Sys.Date()-28, ...) {
       self$getDaily(id = "SPIM-111-LINE-LIST",params=list(dateFrom),...,orElse= function(...) {
         paths = self$getNewerThan(search = self$filter$oneOneOneLineList, date = dateFrom)
-        tmp = lapply(paths, function(x) readr::read_csv(x, col_types = readr::cols(.default = readr::col_character())))
-        tmp2 = bind_rows(tmp)
+        readCsvAsText = function(conn) {readr::read_csv(conn, col_types = readr::cols(.default = readr::col_character()))}
+        
+        tmp = self$fileProvider$processFiles(func = readCsvAsText, paths)
+        tmp2 = tidyr::unnest(tmp) %>% select(-path)
         tmp3 = tmp2 %>% mutate(
             date = as.Date(DateVal),
             name = case_when(
@@ -141,8 +211,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     getDeathsLineList = function(...) {
       path = self$getLatest(self$filter$deathsLineList)
       self$getDaily("DEATHS-LINE-LIST", ..., orElse = function (...) {
-        tmp = readxl::read_excel(path.expand(path), 
-                                 col_types = "text")
+        
+        tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text")
         datecols = c(colnames(tmp) %>% stringr::str_subset("date"),"dod")
         
         for(datecol in datecols) {
@@ -159,20 +229,118 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     #' @description Load line list
     #' 
-    
     #' @return raw line list data set
-    
+    getSGeneLineList = function(...) {
+      path = self$getLatest(self$filter$sgene)
+      self$getDaily("SGENE-LINE-LIST", ..., orElse = function (...) {
+        tmp = readr::read_csv(self$fileProvider$getFile(path))
+        
+        return(tmp %>% dplyr::ungroup())
+      })
+    },
+  
+    interpretSGene = function(sGeneLineList, S_CT = 40, ORF1ab_CT = 30, N_CT = 30) {
+      sGeneLineList %>% mutate(
+        ORF1ab_L=ifelse(P2CH1CQ==0,40,P2CH1CQ),
+        N_L=ifelse(P2CH2CQ==0,40,P2CH2CQ),
+        S_L=ifelse(P2CH3CQ==0,40,P2CH3CQ),
+        ORF1ab_R=ifelse(P2CH1CQ==0,NA,P2CH1CQ),
+        N_R=ifelse(P2CH2CQ==0,NA,P2CH2CQ),
+        S_R=ifelse(P2CH3CQ==0,NA,P2CH3CQ)
+      ) %>% mutate(
+        ORF1ab_CT_threshold = ORF1ab_CT,
+        N_CT_threshold = N_CT,
+        S_CT_threshold = S_CT,
+        S_pos = S_L < S_CT,
+        N_pos = N_L < N_CT,
+        ORF1ab_pos = ORF1ab_L < ORF1ab_CT,
+        sGene = case_when(
+          S_pos & N_pos & ORF1ab_pos ~ "Positive",
+          !S_pos & N_pos & ORF1ab_pos ~ "Negative",
+          TRUE ~ "Equivocal"
+        )
+      ) %>% mutate(
+        result = paste0(ifelse(S_pos,"S+","S-"),ifelse(N_pos,"N+","N-"),ifelse(ORF1ab_pos,"ORF+","ORF-"))
+      )
+    },
+  
+    getSDropoutFreqency = function(codeTypes = c("NHSER"),  ageBreaks = NULL, S_CT = 40, ORF1ab_CT = 30, N_CT = 30, equivocal.rm=TRUE, window=7, ll=NULL, ...) {
+      self$getDaily("SGENE-DROPOUT",params=list(ORF1ab_CT, N_CT, codeTypes,ageBreaks,equivocal.rm,window,ll), ..., orElse = function (...) {
+        
+        if (identical(ll,NULL)) ll = self$getLineList() %>% ungroup()
+        groupByVars = ll %>% groups()
+        
+        
+        tmp2 = self$getSGeneLineList() %>% 
+          left_join(ll, by="FINALID", suffix=c("",".ll")) # %>%
+          # group_by(FINALID) %>% arrange(desc(specimen_date)) %>% filter(row_number()==1)
+        tmp3 = tmp2 %>% ungroup() %>% mutate(
+          ageCat = age %>% self$cutByAge(ageBreaks)
+        ) %>% self$interpretSGene(S_CT,ORF1ab_CT,N_CT)
+        
+        fn = function(tmpDf, codeCol = "NHSER_code", nameCol = "NHSER_name", codeType="NHSER") {
+          codeCol = ensym(codeCol)
+          nameCol = ensym(nameCol)
+          grps = tmpDf %>% groups()
+          joins = unlist(sapply(grps,as_label))
+          
+          tmpDf = tmpDf %>% 
+            rename(code = !!codeCol,name = !!nameCol,date=specimen_date) %>%
+            group_by(!!!grps,code,name,ageCat,date,sGene) %>% 
+            summarise(count = n()) %>% ungroup()
+          tmpDf2 = tmpDf %>% select(code,name) %>% distinct() %>% filter(!is.na(code)) %>% 
+          left_join(
+            tmpDf %>% select(!!!grps) %>% distinct(), by=character()
+          ) %>% left_join(
+            tibble(date = as.Date(min(tmpDf$date):max(tmpDf$date),"1970-01-01")), by=character()
+          ) %>% left_join(
+            tmpDf %>% select(ageCat) %>% distinct(), by=character()
+          ) %>% left_join(
+            tibble(sGene=c("Positive","Negative","Equivocal")), by=character()
+          ) %>% left_join(tmpDf, by=c(joins,"code","name","ageCat","sGene","date")) %>% mutate(count = ifelse(is.na(count),0,count))
+          
+          if (equivocal.rm) tmpDf2 = tmpDf2 %>% filter(sGene != "Equivocal")
+          tmpDf2 = tmpDf2 %>% group_by(!!!grps,code,name,ageCat,sGene) %>% arrange(date) %>%
+            mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+            filter(!is.na(Roll.count))
+          tmpDf2 = tmpDf2 %>% 
+            group_by(!!!grps,code,name,ageCat,date) %>%
+            mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+            rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
+            mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
+            select(-x,-n,-method) %>% 
+            mutate(codeType = codeType)
+          return(tmpDf2)
+        }
+        
+        
+        tmp3 = tmp3 %>% ungroup() %>% group_by(!!!groupByVars)
+        out = NULL
+        if ("NHSER" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = NHSER_code, nameCol=NHSER_name, codeType = "NHSER"))
+        if ("PHEC" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = PHEC_code, nameCol=PHEC_name, codeType = "PHEC"))
+        if ("UA" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = UTLA_code, nameCol=UTLA_name, codeType = "UA"))
+        if ("LAD" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = LTLA_code, nameCol=LTLA_name, codeType = "LAD"))
+        if ("CTRY" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% mutate(code = "E92000001",name="England") %>% fn(codeCol = code, nameCol=name, codeType = "CTRY"))
+        
+        return(out)
+        
+      })
+      
+    },
+  
+    #' @description Load line list
+    #' 
+    #' @return raw line list data set
     getLineList = function(...) {
       path = self$getLatest(self$filter$lineList)
       self$getDaily("LINE-LIST", ..., orElse = function (...) {
         if (stringr::str_detect(path,"csv")) {
-          tmp = readr::read_csv(path, col_types = readr::cols(.default = readr::col_character()))
+          tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
           tmp = tmp %>% 
             dplyr::mutate(
               Onsetdate = maybeDMYorMDY(Onsetdate),
               specimen_date = maybeDMYorMDY(specimen_date),
-              lab_report_date = maybeDMYorMDY(lab_report_date),
-              age = suppressWarnings(as.numeric(age)),
+              lab_report_date = maybeDMYorMDY(lab_report_date)
             ) 
           if(any(is.na(tmp$specimen_date))) browser()
         } else {
@@ -182,12 +350,21 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dplyr::mutate(
               Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
               specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
-              lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30")),
-              age = suppressWarnings(as.numeric(age)),
+              lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30"))
             )
         }
         
-        return(tmp %>% dplyr::ungroup())
+        return(tmp %>% mutate(
+          pillar_2_testingkit = tolower(pillar_2_testingkit),
+          age = suppressWarnings(as.numeric(age)),
+          FINALID = as.numeric(FINALID),
+          ethnicity_final = case_when(
+            ethnicity_final %in% c("African (Black or Black British)","Any other Black background","Caribbean (Black or Black British)") ~ "Afro-carribbean",
+            ethnicity_final %in% c("Any other Asian background","Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)") ~ "Asian",
+            ethnicity_final %in% c("Any other White background","British (White)","Irish (White)") ~ "White",
+            ethnicity_final %in% c("Any other Mixed background","Any other ethnic group","White and Black Caribbean (Mixed)","White and Black African (Mixed)","Chinese (other ethnic group)") ~ "Other",
+            TRUE ~ "Unknown")
+          ) %>% dplyr::ungroup())
       })
       
       # TODO: https://github.com/sarahhbellum/NobBS
@@ -198,8 +375,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       path2 = self$getLatest(self$filter$negPillar2)
       return(self$getDaily("NEGATIVES-FILTERED", params=list(codeTypes), ..., orElse = function(...) {
         tmp = self$getDaily("NEGATIVES", ..., orElse = function(...) {
-          neg1 = readr::read_csv(path1)
-          neg2 = readr::read_csv(path2)
+          neg1 = readr::read_csv(self$fileProvider$getFile(path1))
+          neg2 = readr::read_csv(self$fileProvider$getFile(path2))
           neg = bind_rows(neg1 %>% mutate(subgroup="Pillar 1"),neg2 %>% mutate(subgroup="Pillar 2"))
           neg = neg %>% mutate(ageCat = case_when(
             agegroup == "0 to 4" ~ "<5",
@@ -305,12 +482,15 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       self$getDaily("SEROPREV", ..., orElse = function (...) {
         # ID	Barcode	surv	age	age_m	Sex	Region	Location	sample_region	SampleDate	isoweek_sample	EuroImm_outcome	EuroImm_Units	RBD_outcome	RBD_Units
         
-        for (sheet in readxl::excel_sheets(path.expand(path))) {
-          a1 = readxl::read_excel(path.expand(path), sheet = sheet, range = "A1",col_names = FALSE)
+        #xlsCon = self$fileProvider$getFile(path)
+        
+        
+        for (sheet in readxl::excel_sheets(self$fileProvider$getFile(path))) {
+          a1 = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, range = "A1",col_names = FALSE)
           if (a1[[1]]=="Barcode") break
         }
         
-        data = readxl::read_excel(path.expand(path), sheet = sheet, col_types = "text") %>% dplyr::mutate(
+        data = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, col_types = "text") %>% dplyr::mutate(
           SampleDate = suppressWarnings(as.Date(as.numeric(SampleDate),"1899-12-30")),
         ) %>% dplyr::mutate(
           SampleDate = if_else(is.na(SampleDate) & surv == "NHSBT_Wales_wk17", as.Date("2020-04-20"), SampleDate),
@@ -346,7 +526,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     getFF100 = function() {
       path = self$getLatest(self$filter$ff100)
-      readr::read_csv(path,
+      readr::read_csv(self$fileProvider$getFile(path),
                       col_types = readr::cols(
                         FF100_ID = readr::col_integer(),
                         ContactOf_FF100_ID = readr::col_integer(),
@@ -420,7 +600,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw Bristol data set
     
     getBristolData = function(path) {#
-      data = readr::read_csv(path, 
+      data = readr::read_csv(self$fileProvider$getFile(path), 
                              col_types = readr::cols(
                                enrollment_date = readr::col_date(format = "%Y-%m-%d"),
                                admission_date = readr::col_date(format = "%Y-%m-%d"),
@@ -1278,7 +1458,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw CHESS data set
     getCHESS = function() {
       path = self$getLatest(self$filter$chess)
-      out = readr::read_csv(path.expand(path), col_types = readr::cols(.default = col_character()))
+      out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = col_character()))
       for (col in colnames(out)) {
         if (stringr::str_detect(col, "date")) {
           out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
@@ -1295,7 +1475,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @return raw CHESS data set
     getSARI = function() {
       path = self$getLatest(self$filter$sari)
-      out = readr::read_csv(path.expand(path), col_types = readr::cols(.default = col_character()))
+      out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = col_character()))
       for (col in colnames(out)) {
         if (stringr::str_detect(col, "date")) {
           out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
@@ -1314,7 +1494,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     getCHESSSummary = function() {
       path = self$getLatest(self$filter$chessSummary)
-      chessSummary = readr::read_csv(path, col_types = readr::cols(
+      chessSummary = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
         DateRange = readr::col_date("%d-%m-%Y"),
         DateOfAdmission = readr::col_date("%d-%m-%Y"),
         YearofAdmission = readr::col_integer(),
@@ -1334,51 +1514,73 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       return(chessSummary)
     },
     
-    getSARISummary = function() {
-      path1 = self$getLatest(self$filter$sariSummaryArchive)
-      path2 = self$getLatest(self$filter$sariSummaryCurrent)
-      fn = function (path) {
-        return(readr::read_csv(path, col_types = readr::cols(
-          DateRange = readr::col_date("%d-%m-%Y"),
-          DateOfAdmission = readr::col_date("%d-%m-%Y"),
-          YearofAdmission = readr::col_integer(),
-          TrustName = readr::col_character(),
-          Code = readr::col_character(),
-          .default = readr::col_integer()))
-        )}
-      sariSummary = bind_rows(fn(path1),fn(path2))
-      sariSummary = sariSummary %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code"))), names_to = "variable", values_to = "count")
-      sariSummary = sariSummary %>% dplyr::filter(Code != "Total") %>% mutate(count = ifelse(is.na(count),0,count))
-      tmp = sariSummary %>% dplyr::mutate(
-        toAge = str_replace(variable,"^.*_([^_]+)$","\\1"),
-        fromAge = str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1"),
-        variable = str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
-      )
-      tmp = tmp %>% dplyr::mutate(ageCat = case_when(
-          fromAge=="GreaterThanEqual" ~ paste0(toAge,"+"), 
-          fromAge=="LessThan" ~  paste0("<",toAge),
-          TRUE ~  paste0(fromAge,"-",toAge)
-          ))
-      tmp = tmp %>% dplyr::select(-fromAge,-toAge)
-      sariSummary = tmp %>% mutate(variable = stringr::str_to_lower(variable)) %>% mutate(
-        type = case_when(
-          stringr::str_detect(variable,"new") ~ "incidence",
-          stringr::str_detect(variable,"all") ~ "prevalence"
-        ),
-        statistic = case_when(
-          stringr::str_detect(variable,"covid19") & stringr::str_detect(variable,"icu") ~ "icu admission",
-          stringr::str_detect(variable,"labconfirmedcovid19") & stringr::str_detect(variable,"admitted") ~ "hospital admission",
-          stringr::str_detect(variable,"testedforcovid19") & stringr::str_detect(variable,"admitted") ~ "test",
-          stringr::str_detect(variable,"acuterespiratoryinfection") ~ "background",
-          TRUE ~ NA_character_
-        ),
-        subgroup = case_when(
-          stringr::str_detect(variable,"icu") ~ "icu",
-          TRUE ~ "hospital"
-        ),
-        note = variable
-      )
-      return(sariSummary)
+    getSARISummary = function(...) {
+      self$getDaily(id = "SARI-SUMMARY", ..., orElse = function (...) covidTimeseriesFormat({
+        path1 = self$getLatest(self$filter$sariSummaryArchive)
+        path2 = self$getLatest(self$filter$sariSummaryCurrent)
+        fn = function (path) {
+          return(readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
+            DateRange = readr::col_date("%d-%m-%Y"),
+            DateOfAdmission = readr::col_date("%d-%m-%Y"),
+            YearofAdmission = readr::col_integer(),
+            TrustName = readr::col_character(),
+            Code = readr::col_character(),
+            .default = readr::col_integer()))
+          )}
+        tmp1 = fn(path1)
+        tmp2 = fn(path2)
+        sariSummary = bind_rows(tmp1 %>% anti_join(tmp2,by=c("DateOfAdmission","TrustName","Code")),tmp2)
+        #sariSummary = sariSummary %>% group_by(DateOfAdmission,TrustName,Code) %>% arrange(desc(DateRange)) %>% filter(row_number() == 1) %>% ungroup()
+        #browser()
+        sariSummary = sariSummary %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code"))), names_to = "variable", values_to = "count")
+        sariSummary = sariSummary  %>% mutate(variable = stringr::str_to_lower(variable)) %>% group_by(DateOfAdmission,TrustName,Code,variable) %>% arrange(desc(count)) %>% filter(row_number() == 1) %>% ungroup()
+        sariSummary = sariSummary %>% dplyr::filter(Code != "Total") #%>% mutate(count = ifelse(is.na(count),0,count))
+        tmp = sariSummary %>% dplyr::mutate(
+          toAge = str_replace(variable,"^.*_([^_]+)$","\\1"),
+          fromAge = str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1") #,
+          #variable = str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
+        )
+        tmp = tmp %>% dplyr::mutate(ageCat = case_when(
+            fromAge %>% stringr::str_detect("mos") ~ "<1",
+            toAge %>% stringr::str_detect("mos") ~ "<1",
+            fromAge=="greaterthanequal" ~ paste0(toAge,"+"), 
+            fromAge=="lessthan" ~  paste0("<",toAge),
+            fromAge=="45" ~ "45-54",
+            toAge=="54" ~ "45-54", # 3 combinations in data 45-49, 45-54, 50-54 - merged into one category
+            TRUE ~  paste0(fromAge,"-",toAge)
+            ))
+        tmp = tmp %>% dplyr::select(-fromAge,-toAge)
+        sariSummary = tmp %>% mutate(
+          type = case_when(
+            stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "background",
+            stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "background",
+            stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "incidence",
+            stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "background",
+            stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "incidence",
+            stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "prevalence",
+            TRUE ~ NA_character_
+          ),
+          statistic = case_when(
+            stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "hospital admission",
+            stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "test",
+            stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "hospital admission",
+            stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "icu admission",
+            stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "icu admission",
+            stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "icu admission",
+            TRUE ~ NA_character_
+          ),
+          subgroup = case_when(
+            stringr::str_detect(variable,"icu") ~ "icu",
+            TRUE ~ "hospital"
+          ),
+          note = variable
+        )
+        sariSummary = sariSummary %>% select(date = DateOfAdmission, name = TrustName, code = Code, value=count, ageCat,type,statistic,subgroup, note) %>% mutate(codeType = "NHS trust",gender=NA,source = "sari summary")
+        sariSummary = sariSummary %>% group_by(date,code,name,codeType,ageCat,gender,source,subgroup,type,statistic) %>% summarise(note = paste0(note,collapse = "|"), value=sum(value,na.rm=TRUE), tmpCount = n())
+        if (any(sariSummary$tmpCount > 1 & (sariSummary$ageCat != "<1" & sariSummary$ageCat != "45-54"))) warning("duplicates present in sari output where none were expected")
+        sariSummary = sariSummary %>% self$fillAbsent() %>% self$fixDatesAndNames(4) # do;nt have any good info for reporting delay
+        return(sariSummary %>% select(-tmpCount))
+      }))
     },
     
     #### Get processed SPIM data ----
@@ -1422,11 +1624,15 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     #' @return a covidTimeseriesFormat dataframe
     
-    getLineListIncidence = function(ageBreaks = NULL, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), ...) {
+    getLineListIncidence = function(ll=NULL, ageBreaks = NULL, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), ...) {
       filterExpr = enexpr(filterExpr)
       subgroup = ensym(subgroup)
-      self$getDaily("LINE-LIST-INCIDENCE", params=list(ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes), ..., orElse = function (...) covidTimeseriesFormat({
-        tmp = self$getLineList(...) 
+      self$getDaily("LINE-LIST-INCIDENCE", params=list(ll, ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes), ..., orElse = function (...) covidTimeseriesFormat({
+        if(!identical(ll,NULL)) {
+          tmp = ll
+        } else {
+          tmp = self$getLineList(...) 
+        }
         if(!identical(filterExpr,NULL)) 
           tmp = tmp %>% filter(!!filterExpr)
         tmp = tmp %>% 
@@ -1492,7 +1698,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     #' @description Load deaths data from linelist - does not preserve ethnicity
     #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
     #' @return a covidTimeseriesFormat dataframe
-    getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", cutoff=60, subgroup="ons_pod", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), ...) {
+    getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", cutoff=28, subgroup="ons_pod", filterExpr=!(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)), codeTypes = c("CTRY","NHSER"), ...) {
       filterExpr = enexpr(filterExpr)
       subgroup = ensym(subgroup)
       self$getDaily(id = "DEATHS-LINE-LIST-INCIDENCE", params=list(ageBreaks, deathOrReport,cutoff,as_label(subgroup),as_label(filterExpr)), ..., orElse = function (...) covidTimeseriesFormat({
@@ -1500,7 +1706,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         if (!identical(filterExpr,NULL))
           tmp = tmp %>% filter(!!filterExpr)
         tmp = tmp %>% 
-          dplyr::filter(is.na(specimen_date) | as.integer(dod-specimen_date)<cutoff) %>%
+          dplyr::filter(is.na(specimen_date) | as.integer(dod-specimen_date)<=cutoff) %>%
           dplyr::mutate(
             ageCat = age %>% self$cutByAge(ageBreaks), 
             subgroup=ifelse(is.na(!!subgroup),"unknown",!!subgroup)
@@ -1509,7 +1715,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           tmp = tmp %>% dplyr::mutate(date = as.Date(dod))
         else
           tmp = tmp %>% dplyr::mutate(date = 
-            as.Date(pmin(NHSdeathreportdate, DBSdeathreportdate, HPTdeathreportdate, ONS_death_registration_date, na.rm = TRUE),"1970-01-01")
+            as.Date(pmin(report_date_earliest,NHSdeathreportdate, DBSdeathreportdate, HPTdeathreportdate, ONS_death_registration_date, na.rm = TRUE),"1970-01-01")
           ) %>% dplyr::filter(!is.na(date))
         
         selectByRegion = function(df, code, codeType, name) {
@@ -1559,7 +1765,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         if ("LSOA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(lsoa_code, "LSOA", lsoa_name))}
         
         out = out %>% dplyr::mutate(source="deaths line list",statistic = "death", type="incidence")
-        out = out %>% self$fixDatesAndNames(4)
+        out = out %>% self$fixDatesAndNames(7)
         out = out %>% self$fillAbsent(completeDates=TRUE)
         #out = out %>% self$complete()
         out = out %>% dplyr::ungroup()
@@ -1615,90 +1821,10 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       }))
     },
     
-    #' @description Load 111 data
-    #' 
-    
-    #' @return a covidTimeseriesFormat dataframe
-    
-    getOneOneOne = function(...) {
-      path = self$getLatest(self$filter$oneOneOne)
-      self$getDaily("SPIM-111", ..., orElse = function (...) covidTimeseriesFormat({
-        
-        oneoneone <- readxl::read_excel(path.expand(path), sheet = "Extracted Data", col_types = "text")
-        
-        # make zeros explicit
-        
-        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-Outcome")]) {
-        #   outcome = as.symbol(outcome)
-        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
-        # }
-        # 
-        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("999-Outcome")]) {
-        #   outcome = as.symbol(outcome)
-        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`999-COVID-TOTAL`) & is.na(!!outcome),0,!!outcome))
-        # }
-        # 
-        # for(outcome in colnames(oneoneone)[colnames(oneoneone) %>% stringr::str_starts("111-ONLINE") & colnames(oneoneone) != "111-ONLINE-Total Result"]) {
-        #   outcome = as.symbol(outcome)
-        #   oneoneone = oneoneone %>% mutate(!!outcome := ifelse(!is.na(`111-ONLINE-Total Result`) & is.na(!!outcome),0,!!outcome))
-        # }
-        
-        ts111 = oneoneone %>% 
-          dplyr::mutate(Geography = ifelse(Geography=="England: Unknown", "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
-          self$codes$findCodesByName(nameVar = Geography,codeTypes = c("CTRY","NHSER","PSEUDO")) %>%
-          dplyr::select(-ReportLevel) %>% 
-          dplyr::rename(name=Geography) %>%
-          dplyr::mutate(date = as.Date(paste0(Year,"-",Month,"-",Day),"%Y-%m-%d")) %>% 
-          dplyr::select(-DateVal,-Day,-Month,-Year) %>% 
-          tidyr::pivot_longer(cols = c(-date,-code,-name,-codeType), names_to = "category", values_to = "value") %>% 
-          dplyr::mutate(
-            value = suppressWarnings(as.numeric(value)),
-            source = case_when(
-              category %like% "111-ONLINE%" ~ "online",
-              category %like% "111-Outcome%" ~ "111",
-              category %like% "999-Outcome%" ~ "999",
-              category %like% "All-111-Number_of_calls_where_person_triaged" ~ "111",
-              TRUE ~ "other 111" # as.character(NA)
-            ),
-            subgroup = case_when(
-              category %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
-              category %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
-              category %like% "%Clinical Assessment%" ~ "clinical review",
-              category %like% "%Emergency Ambulance%" ~ "emergency ambulance",
-              (category %like% "%Self Care%" | category %like% "%isolate%") ~ "self care",
-              TRUE ~ "other" #as.character(NA)
-            ),
-            statistic = case_when(
-              category %like% "111-ONLINE%" ~ "triage",
-              category %like% "111-Outcome%" ~ "triage",
-              category %like% "999-Outcome%" ~ "triage",
-              TRUE ~ "information seeking"
-            ),
-            gender = NA_character_,
-            ageCat = NA_character_,
-            type = case_when(
-              category %like% "All-111-Number_of_calls_where_person_triaged" ~ "background",
-              TRUE ~ "incidence"
-            )
-          ) %>%
-          dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE))
-        #browser()
-        ts111 = ts111 %>% 
-          dplyr::filter(!is.na(value)) %>%
-          dplyr::rename(note = category) %>%
-          dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type,date) %>% 
-          dplyr::summarise(
-            value = sum(value), 
-            note = paste0(note, collapse = "; "))
-        
-        return(ts111 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
-      }))
-    },
-    
-    getFourNationsCases = function(...) {
+getFourNationsCases = function(...) {
       path = self$getLatest(self$filter$fourNationsCases)
       self$getDaily("SPIM-4-NATIONS", ..., orElse = function(...)  covidTimeseriesFormat({
-        tmp = readxl::read_excel(path, sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+        tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
         tmp2 = tmp %>% 
           tidyr::pivot_longer(
             cols=c(-DateVal,-Day,-Month,-Year,-Geography),
@@ -1748,7 +1874,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     getSPIMextract = function(...) {
       path = self$getLatest(self$filter$trust)
       self$getDaily("SPIM-TRUST", ..., orElse = function (...) covidTimeseriesFormat({
-        tmp = readxl::read_excel(path, sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+        tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
         tmp2 = tmp %>% 
           tidyr::pivot_longer(
             cols=c(-DateVal,-Day,-Month,-Year,-ReportLevel,-Geography,-TrustCode,-TrustName),

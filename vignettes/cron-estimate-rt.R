@@ -5,9 +5,11 @@ library(tidyverse)
 setwd("~/Git/uk-covid-datatools/vignettes/")
 
 devtools::load_all("~/Git/uk-covid-datatools/")
-dpc = DataProviderController$setup("~/Data/maps")
-dpc$loadSpimSources("~/S3/encrypted/")
-tsp = dpc$timeseriesProcessor()
+ukcovidtools::setup()
+# dpc = DataProviderController$setup("~/Data/maps")
+# s3 = fileProvider("~/Dropbox/coviddata.yaml","s3")
+# dpc$loadSpimSources(s3)
+# tsp = dpc$timeseriesProcessor()
 
 # triageNHSER = dpc$spim$getOneOneOne() %>% 
 #   filter(statistic == "triage" & codeType == "NHSER" & source %in% c("111","999")) %>% 
@@ -22,6 +24,9 @@ tsp = dpc$timeseriesProcessor()
 #    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
 
 
+# TODO: Investigate backcalculation with:
+# https://epiforecasts.io/EpiNow2/dev/reference/estimate_infections.html
+
 #### Current Rt for UK, CTRY, NHSER ----
 
 currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
@@ -34,6 +39,8 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
       processing = processing,
     ))
   }
+  
+  
   
   ### Triage calls - CTRY ----
   triageCTRY = dpc$spim$getOneOneOneIncidence(dateFrom = as.integer(Sys.Date()-26*7)) %>% filter(!ageCat %in% c("<1","1-4","5-14","15-24")) %>% 
@@ -56,7 +63,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   ### Cases - CTRY ----
   casesCTRY = bind_rows(
     tmp4Nations %>% filter(statistic == "case" & codeType == "CTRY") %>% dpc$demog$findDemographics(),
-    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator, filterExpr=is.na(pillar_2_testingkit)) %>% 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
       filter(codeType == "CTRY" & subgroup!="Y") %>% 
       tsp$aggregateAge() %>% 
       tsp$aggregateGender() %>% tsp$aggregateSubgroup() %>%
@@ -158,21 +165,22 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
   rationale(codeType = "UK","death","Sum of 4 nations figures previously selected for CTRY deaths from PHE API","none")
   
   ### Triage calls - NHSER ----
-  triageNHSER = dpc$spim$getOneOneOneIncidence(dateFrom = as.integer(Sys.Date()-26*7)) %>% filter(!ageCat %in% c("<1","1-4","5-14","15-24")) %>% 
-    tsp$aggregateAge() %>%
-    tsp$aggregateGeography(targetCodeTypes = "NHSER") %>%
+  triageNHSER = dpc$spim$getOneOneOneIncidence(dateFrom = as.integer(Sys.Date()-26*7)) %>% 
+    filter(!ageCat %in% c("<1","1-4","5-14","15-24")) %>% 
+    tsp$aggregateAge(na.rm=TRUE) %>%
+    tsp$aggregateGeography(targetCodeTypes = "NHSER",na.rm=TRUE) %>%
     filter(statistic == "triage" & codeType == "NHSER") %>% 
     #tsp$aggregateSource(fn=sum) %>% #, na.rm=TRUE) %>% 
     filter(date >= "2020-03-15") %>%
     dpc$demog$findDemographics()
   finalTriageNHSER = triageNHSER %>% filter(subgroup %in% c("urgent clinical review","emergency ambulance")) %>% 
-    tsp$aggregateSubgroup() %>% 
-    dpc$demog$findDemographics()
+    tsp$aggregateSubgroup() #%>% 
+    #dpc$demog$findDemographics()
   rationale(codeType = "NHSER","triage","SPI-M 111 feed","Selected only calls with outcomes with 1 or 2 hour urgent clinical review, or ambulance dispatch, in ages > 24.")
   
   ### Cases - NHSER ----
   casesNHSER = 
-    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator, filterExpr=is.na(pillar_2_testingkit)) %>% 
+    dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>% 
     filter(codeType == "NHSER") %>% 
     filter(code != "E99999999") %>%
     tsp$aggregateAge() %>% 
@@ -180,18 +188,31 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
     dpc$demog$findDemographics()
   finalCasesNHSER = casesNHSER %>% 
     filter(subgroup!="Y") %>%
-    tsp$aggregateSubgroup() %>%
-    dpc$demog$findDemographics()
+    tsp$aggregateSubgroup() #%>%
+    #dpc$demog$findDemographics()
   rationale(codeType = "NHSER","case","SPI-M line list","Line list aggregated by age and gender. unknown regions removed. Pillar 1 and 2 combined - symptomatic and unknown only.")
   
+  nhserApi = tsp$datasets$getPHEApiNHSRegions()
+  
   ### Admissions - NHSER ----
-  admissionsNHSER = dpc$spim$getSPIMextract() %>% 
-    filter(source %in% c("hospital_inc","hospital_inc_new") & is.na(ageCat) & codeType=="NHSER") %>% 
+  
+  sariAdmissions = tsp$spim$getSARISummary()
+  tmp = sariAdmissions %>% tsp$aggregateAge()
+  tmp2 = tmp %>% tsp$imputeAndWeeklyAverage()
+  tmp3 = tmp2 %>% select(-value) %>% rename(value = Imputed.value) %>% tsp$aggregateGeography(targetCodeTypes = "NHSER")
+  sariAdmissionsNHSER = tmp3 %>% filter(type=="incidence" & statistic=="hospital admission" & date > "2020-03-15")
+  
+  admissionsNHSER = bind_rows(
+      nhserApi %>% filter(statistic =="hospital admission"), 
+      dpc$spim$getSPIMextract() %>% filter(source %in% c("hospital_inc","hospital_inc_new") & is.na(ageCat) & codeType=="NHSER"),
+      sariAdmissionsNHSER
+    ) %>% 
     dpc$demog$findDemographics()
   finalAdmissionsNHSER = admissionsNHSER %>% 
-    tsp$aggregateSource(list(admissions = c("hospital_inc","hospital_inc_new")), fn=sum)  %>% 
-    dpc$demog$findDemographics()
-  rationale(codeType = "NHSER","hospital admission","SPI-M hospital_inc and hospital_inc_new fields","Souces combined by summation")
+    filter(source=="phe api")
+    #tsp$aggregateSource(list(admissions = c("hospital_inc","hospital_inc_new")), fn=sum)  #%>% 
+    #dpc$demog$findDemographics()
+  rationale(codeType = "NHSER","hospital admission","PHE api","none") #"SPI-M hospital_inc and hospital_inc_new fields","Souces combined by summation")
   
   ### ICU Admissions - NHSER ----
   icuAdmissionsNHSER = dpc$spim$getSPIMextract() %>% 
@@ -207,7 +228,8 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
     tsp$aggregateAge() %>% 
     tsp$aggregateGender() %>% 
     dpc$demog$findDemographics()
-  finalDeathsNHSER = deathsNHSER %>% tsp$aggregateSubgroup(fn=sum) %>% dpc$demog$findDemographics() %>% filter(name != "Unknown (England)")
+  finalDeathsNHSER = deathsNHSER %>% tsp$aggregateSubgroup(fn=sum) %>% #dpc$demog$findDemographics() %>% 
+    filter(name != "Unknown (England)")
   rationale(codeType = "NHSER","death","SPI-M deaths line list","Various care settings aggregated by summation. Result is all deaths in all locations")
   
   ## Combined data set ----
@@ -288,6 +310,7 @@ currentDataset = tsp$getDaily(id = "CURRENT-DATASET", orElse=function() {
 currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
   set.seed(100)
   with(currentDataset, {
+    
     # finalRtDataset = finalDataset %>%
     #   tsp$estimateRt() %>%
     #   tsp$logIncidenceStats() %>%
@@ -300,9 +323,9 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
       tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
-    unsmoothed7DayRtDataset = finalDataset %>%
+    final7DayRtDataset = finalDataset %>%
       tsp$logIncidenceStats(growthRateWindow = 7) %>% 
-      tsp$estimateRt(window = 7,valueVar = value) %>%
+      tsp$estimateRt(window = 7) %>%
       tsp$adjustRtDates() %>%
       tsp$estimateVolatilty(valueVar = `Mean(R)`)
     
@@ -322,7 +345,7 @@ currentRtSlow = tsp$getDaily(id = "CURRENT-RT-SLOW", orElse=function() {
     return(list(
       # rt = finalRtDataset,
       rt14 = final14DayRtDataset,
-      rt7 = unsmoothed7DayRtDataset#,
+      rt7 = final7DayRtDataset#,
       # rt28 = final28DayRtDataset#,
       #rtAssumed = finalRtCorrected
     ))
@@ -335,42 +358,49 @@ currentRt = c(
   currentRtSlow
 )
 
-# devtools::install("~/Git/jepidemic/r-library/", upgrade = "never")
-# 
-# currentRtJEpidemic = tsp$getDaily(id = "CURRENT-RT-JEPIDEMIC", orElse=function() {
-#   set.seed(100)
-#   with(currentDataset, {
-# 
-#     unsmoothed7DayRtDataset = finalDataset %>%
-#       tsp$logIncidenceStats(growthRateWindow = 7)
-# 
-#     J = jepidemic::JavaApi$new()
-#     estim = J$CoriEstimator$new(r0Mean = 5,r0SD = 5,maxWindow = 21)
-#     lapply(1:100,function(x) estim$withInfectivityProfile(infectivityProfile = dpc$serial$getBasicConfig(quick = FALSE)$si_sample[,x]))
-#     estim$withAdaptivePrior(factor = 1.25)
-#     estim$selectAdaptiveWindow(incidenceSum = 100,minWindow = 4)
-#     estim$collectMixtureQuantiles()
-#     estim$inMiddleOfTimeseries()
-# 
-#     unsmoothed7DayRtDataset = unsmoothed7DayRtDataset %>% covidStandardGrouping()
-# 
-#     jepidem = estim$estimateRt(incidence = unsmoothed7DayRtDataset,dateColName = "date", incidenceColName = "Est.value")
-# 
-# 
-# 
-#     browser()
-#     unsmoothed7DayRtDataset = unsmoothed7DayRtDataset %>%
-#       tsp$estimateRt(window = 7,valueVar = value) %>%
-#       tsp$adjustRtDates() %>%
-#       tsp$estimateVolatilty(valueVar = `Mean(R)`)
-# 
-#     return(list(
-#       # rt = finalRtDataset,
-#       rt14 = final14DayRtDataset,
-#       rt7 = unsmoothed7DayRtDataset#,
-#       # rt28 = final28DayRtDataset#,
-#       #rtAssumed = finalRtCorrected
-#     ))
-#   })
-# })
 
+#try(detach("package:jepidemic", unload = TRUE),silent = TRUE)
+#remove.packages("jepidemic")
+
+if (!require(jepidemic)) {
+  devtools::install("~/Git/jepidemic/r-library/", upgrade = "never")
+}
+
+currentRtJEpidemic = tsp$getDaily(id = "CURRENT-RT-JEPIDEMIC", orElse=function() {
+  set.seed(100)
+  with(currentDataset, {
+
+    unsmoothed7DayRtDataset = finalDataset %>%
+      tsp$logIncidenceStats(growthRateWindow = 7) %>% mutate(
+        Imputed.value = ifelse(is.na(value), Est.value, value)
+      )  %>% 
+      filter(statistic %in% c("case","hospital admission","death")) %>% 
+      covidStandardGrouping() 
+
+    
+    
+    J = jepidemic::JavaApi$new()
+    estim = J$CoriEstimator$new(r0Mean = 5,r0SD = 5,maxWindow = 21)
+    estim$withInfectivityProfileMatrix(dpc$serial$getBasicConfig(quick = FALSE)$si_sample)
+    estim$withAdaptivePrior(factor = 1.25)
+    estim$selectAdaptiveWindow(incidenceSum = 200,minWindow = 7)
+    #estim$selectMinimumUncertainty(timeVsRt = 1,minWindow = 6)
+    estim$collectMixtureQuantiles()
+    estim$inMiddleOfTimeseries()
+    estim$legacySupport(TRUE)
+    jepidem = estim$estimateRt(unsmoothed7DayRtDataset,dateColName = "date", incidenceColName = "Imputed.value")
+    
+    unsmoothed7DayRtDataset = unsmoothed7DayRtDataset %>% mutate(Anomaly.R = Anomaly) %>% 
+      inner_join(jepidem, by = covidStandardJoins()) %>%
+      tsp$adjustRtDates() %>%
+      tsp$estimateVolatilty(valueVar = `Mean(R)`)
+    
+    return(list(jepi7 = unsmoothed7DayRtDataset))
+  })
+})
+
+currentRt = c(
+  currentDataset,
+  currentRtSlow,
+  currentRtJEpidemic
+)

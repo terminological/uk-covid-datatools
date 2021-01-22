@@ -64,8 +64,7 @@ Our purpose in this paper is to demonstrate and test different methods of genera
 
 ```{r}
 devtools::load_all("~/Git/uk-covid-datatools/")
-dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-tsp = dpc$timeseriesProcessor()
+ukcovidtools::setup()
 ```
 
 # Method

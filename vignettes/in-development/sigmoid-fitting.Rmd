@@ -1,0 +1,65 @@
+---
+title: "Sigmoid fitting"
+author: "Rob Challen"
+date: "15/01/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+devtools::load_all("~/Git/uk-covid-datatools/")
+# ukcovidtools::setup()
+ukcovidtools::reload()
+
+devtools::load_all("~/Git/standard-print-output/")
+standardPrintOutput::setDefaults()
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+
+tmp = dpc$spim$getSDropoutFreqency(codeTypes = c("LAD","NHSER","CTRY"))
+tmp = tmp %>% mutate(gender = NA)
+tmp = tmp %>% dpc$demog$findDemographics()
+
+tmpMap = bind_rows(
+  dpc$geog$getMap("LAD19") %>% as.data.frame() %>% ungroup() %>% select(code,area),
+  dpc$geog$getMap("NHSER20") %>% as.data.frame() %>% ungroup() %>% select(code,area),
+  dpc$geog$getMap("CTRY19") %>% as.data.frame() %>% ungroup() %>% select(code,area)
+)
+
+tmp = tmp %>% left_join(tmpMap,by="code")
+
+
+heirarchy = dpc$codes$getTransitiveClosure() %>% filter(
+  (fromCodeType == "LAD" & toCodeType == "NHSER") |
+  (fromCodeType == "NHSER" & toCodeType == "CTRY")
+) %>% group_by(fromCodeType, toCodeType) %>% distinct()
+
+tmp = tmp %>% left_join(heirarchy %>% select(-fromCodeType), by=c("code"="fromCode"))
+
+tmp %>% readr::write_csv("~/Dropbox/covid19/exports/sGeneSigmoidFitByHierarchicalGerographyRaw.csv")
+
+#tmp %>% filter(mean > 0.2 & sGene=="Negative") %>% group_by(code,name,sGene) %>% arrange(date) %>% filter(row_number()==1) %>% View()
+
+ggplot(tmp %>% filter(sGene=="Negative"),aes(x=date,group=name))+geom_line(aes(y=Roll.mean),alpha=0.2)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -26,6 +26,7 @@ out.width: "100%"
 bibliography: current-rt.bib
 csl: sage-vancouver.csl
 ---
+
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
@@ -66,24 +67,12 @@ ref = list(
   stab = function(name) cap$stab(name,display="cite")
 )
 
-dpc = tsp = chp = srv = mwp = NULL
-
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  chp <<- dpc$chessProcessor()
-  srv <<- dpc$survivalProcessor()
-  mwp <<- dpc$metawardProcessor()
-}
-
-reload()
+ukcovidtools::setup()
 ```
 
 # Authors
 
-Robert Challen^1,2^;  Krasimira Tsaneva-Atanasova^1,3,5^; Ellen Brooks-Pollock^4^; Leon Danon^3,5^
+Robert Challen^1,2^;  Krasimira Tsaneva-Atanasova^1,3,5^; Ellen Brooks-Pollock^4^; Leon Danon^3,4,5^
 
 1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
 2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
@@ -112,14 +101,16 @@ cases = dpc$spim$getLineListIncidence(ageBreaks = ageBreaks,subgroup = asymptoma
 deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = ageBreaks)
 
 events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
-  filter(Label %in% c("Lockdown","VE day","Hotels and bars reopen","Relaxation shielding","Shielding ends (excl Wales)","End summer term","Start autumn term","Start univerity term","England 2nd lockdown"))
+  filter(Label %in% c("Lockdown","VE day","Hotels and bars reopen","Relaxation shielding","Shielding ends (excl Wales)","End summer term","Start autumn term","Start univerity term","England 2nd lockdown","England tier system"))
 
 events2 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
-  filter(Label %in% c("Start autumn term","Start univerity term","Testing capacity limited","England 2nd lockdown","School half term"))
+  filter(Label %in% c("Start autumn term","Start univerity term","Testing capacity limited","England 2nd lockdown","School half term","England tier system"))
 
 events3 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
-  filter(Label %in% c("Start autumn term","North West England tier 3","School half term","England 2nd lockdown"))
+  filter(Label %in% c("Start autumn term","North West England tier 3","School half term","England 2nd lockdown","England tier system"))
 
+events4 = dpc$datasets$getSignificantDates(nocache=TRUE) %>% 
+  filter(Label %in% c("Lockdown","Hotels and bars reopen","Start autumn term","England 2nd lockdown","England tier system"))
 
 ```
 
@@ -142,7 +133,7 @@ We conducted an analysis of the evolving second wave of the COVID-19 outbreak in
 ```{r}
 totalCases = cases %>% filter(subgroup!="Y") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender()
 totalDeaths = deaths %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% filter(ageCat %in% c("23-59","60-74","75+"))
-combined = bind_rows(totalCases,totalDeaths)  %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$adjustGrowthRateDates() %>% dpc$demog$findDemographics()
+combined = bind_rows(totalCases,totalDeaths)  %>% tsp$logIncidenceStats(growthRateWindow = 7, leftSided=TRUE) %>% tsp$adjustGrowthRateDates() %>% dpc$demog$findDemographics()
 
 p1 = (combined %>% filter(codeType=="CTRY") %>% tsp$plotIncidenceQuantiles(dates = "2020-08-01", events = events2, colour=statistic, denominatorExpr = population/1000000)) + facet_wrap(vars(ageCat)) + scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000))+ylab("rate per 1M per day")
 
@@ -155,25 +146,25 @@ p1 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAnd
 * A fast increase in university age groups lead to a peak in late September / early October, with a slow decline since.
 * True size of university age peak may be underestimated due to saturation of testing capacity in September.
 * Rapid increase from low level in primary, and less so secondary, school age groups started before the beginning of term. 
-* Size of this outbreak is again likely to be an underestimate due to testing capacity issues.
+* Size of this outbreak is potentially an underestimate due to testing capacity issues.
 * Deaths in older age groups reached nadir around late August, after which cases have been growing. 
 * Exponential growth in older age groups seen to slow during half term.
-* Following second lockdown curves begin to flatten in all age groups except those in school which return to growth after half term break.
+* During second lockdown all age groups start to decline after 1 week delay, but effect far larger in adult age groups versus under 18.
 
 ```{r}
-p2 = combined %>% filter(codeType=="CTRY") %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events2, colour=statistic, rlim = c(-0.1,0.2)) + facet_wrap(vars(ageCat))
+p2 = combined %>% filter(codeType=="CTRY") %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events2, colour=statistic, rlim = c(-0.1,0.2), leftSided=TRUE) + facet_wrap(vars(ageCat))
 # tsp$estimateRt(window = 14) %>%  tsp$plotRt(dates = "2020-08-01", events = events2) + facet_wrap(vars(ageCat))
 p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAndDeathGrowthByAge")
 ```
 
 `r cap$fig("growthCTRY","Exponential growth rates of cases and deaths in various age groups. Growth rates are shifted in time to align to estimated date of infection, rather than date of case identification or death.")`
 
-* Most age groups show a transition to positive growth around the mid-late August, university age groups are seen to be growing from as early as the beginning of August.
-* True peak of growth rate in younger age groups is unknown as potentially affected by testing capacity issues. 
-* Growth has become negative in university age groups, although this is could be affected by access to and compliance with testing programmes.
-* Growth rate in cases in older age groups has been positive since late August, and this finding is reinforced by death statistics. If the relationship between cases and deaths stayed constant this suggests the ascertainment bias due to saturation of test availability has not affected this group, possibly as older age groups will have been prioritised for testing.
-* Growth rates in older age groups are reducing over half term but remain well above zero.
-* Pick up in growth rates post half term in school age groups.
+* In mid to late august growth became positive in most age groups, university age groups are seen to be growing from as early as the beginning of August.
+  * True peak of growth rate in younger age groups is unknown as potentially affected by testing capacity issues. 
+  * Older age groups case growth is mirrorer by death statistics, suggesting the ascertainment bias due to saturation of test availability has not affected this group.
+* University age groups peaked in late September,and largely in negative growth since, expect for prior to 2nd lockdown
+* Post second lockdown drop in growth rates in all age groups but less marked in school age groups
+  * Effect of half term versus lockdown unclear in these age groups
 
 ## Regional
 
@@ -181,23 +172,43 @@ p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAnd
 #p2 = 
 tmp = combined %>% filter(codeType=="NHSER" & statistic=="case" & name!="unknown")
 
-tmp %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events3, group=name, rlim = c(-0.1,0.2),colour="grey60") +
+tmp %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events3, group=name, rlim = c(-0.1,0.2), colour="grey60") +
   plotRibbons(data = tmp %>% filter(name=="North West"),meanVar = `Growth.windowed.value`,sdVar = `Growth.windowed.SE.value`,colourExpr = "red") +
-  plotRibbons(data = tmp %>% filter(name=="South West"),meanVar = `Growth.windowed.value`,sdVar = `Growth.windowed.SE.value`,colourExpr = "blue") +
-  facet_wrap(vars(ageCat))
+  plotRibbons(data = tmp %>% filter(name=="London"),meanVar = `Growth.windowed.value`,sdVar = `Growth.windowed.SE.value`,colourExpr = "blue") +
+  facet_wrap(vars(ageCat))#+
+  #gghighlight::gghighlight(name %in% c("London","North West"))
+  #scale_color_manual(
+  #  values = highlightList(vector=tmp3$name,list("North West"="dark red","London"="dark blue")))
 # tsp$estimateRt(window = 14) %>%  tsp$plotRt(dates = "2020-08-01", events = events2) + facet_wrap(vars(ageCat))
 #p2 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/by-age/CaseAndDeathGrowthByAge")
 ```
 
-`r cap$fig("growthNHSER","Exponential growth rates of cases in various age groups in the different NHS regions in England. Red is the North West, Blue is the South West. Other regions not highlighted. Growth rates are shifted in time to align to estimated date of infection.")`
+`r cap$fig("growthNHSER","Exponential growth rates of cases in various age groups in the different NHS regions in England. Red is the North West, Blue is London. Other regions not highlighted. Growth rates are shifted in time to align to estimated date of infection.")`
 
 * Growth shows different dynamics in different regions and national picture in `r ref$fig("growthCTRY")` is a superposition of the different regions.
-* For example the bi-phasic peak in primary school ages seen in `r ref$fig("growthCTRY")` is driven by 2 regional peaks initially in North West, and latterly in the South West.
-* Growth in school ages initially very much higher in North West compared to South West until late September, when South West begun to grow faster.
-* Growth rate in North West now seen to be approaching zero in all age groups.
-* Growth rate has slowed since early to mid October in all regions.
-* In the most vulnerable age groups growth currently highest in the South West. 
-* increases in growth rate in school children after lockdown seen across all regions but particularly in the South West.
+* For example the current flat growth in secondary schools in England belies significant differences between London and the rest of the country.
+* Growth in school ages initially very much higher in North West compared to South West until late September, when other regions begun to grow faster.
+* Growth rate in North West now seen to be negative in all age groups.
+* Growth rate has slowed since early to mid October in all regions, but trend is to the increase particularly in younger age groups.
+* In the most vulnerable age groups growth currently negative, or close to zero in all regions. 
+
+```{r}
+
+tmp3 = totalCases %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% filter(codeType=="NHSER" & statistic=="case" & name!="unknown") %>% tsp$demog$findDemographics()
+
+maxDate = (tmp3 %>% pull(date) %>% max())
+#plotDates = seq(maxDate,by = -14,length.out = 4)
+
+(tmp3 %>% filter(code != "E99999999") %>% group_by(name,ageCat) %>% tsp$plotGrowthIncidence(plotDates = maxDate,timespan = 31, populationExpr = population, colour = ageCat,maxSize = 4))+scale_color_manual(values = highlightList(vector=tmp3$ageCat,list("75+"="dark magenta","11-17"="#008000","6-10"="#00B000")))+facet_wrap(vars(name))+
+  xlab("7 day growth rate")+ylab("Symptomatic positives per 1M per day")
+
+#+facet_grid(cols=vars(plotDate),rows = vars(name))
+```
+
+`r cap$fig("growthVsIncidenceNHSER",paste0("Growth versus incidence per capita in different age groups on ",maxDate,". Green highlighting shows the school age groups, magenta the most vulnerable elderly."))`
+
+* Regional differences suggest current growth in South East and East of England and London has turned a corner in all age groups, and moved from negative to strong positive growth. This has been lead by school age groups.
+* Midlands, North East, and North west and South West rates all suggest a trend to a return to positive growth but no strong evidence this is isolated to any specific age groups. If anything this is more in elderly than school age.
 
 ```{r}
 
@@ -227,13 +238,24 @@ map = dpc$geog$getMap("LAD19") %>% inner_join(casesGeog %>% filter(date == maxDa
 ```
 
 ```{r}
-p3 = ggplot(map %>% ungroup() %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + facet_wrap(vars(ageCat), ncol = 3) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(
-  palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
+p3 = ggplot(map %>% ungroup() %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + facet_wrap(vars(ageCat), ncol = 3) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
 p3 %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/by-age/CaseGrowthByAgeAndLAD")
 ```
 
-
 `r cap$fig("growthLAD",paste0("Exponential growth rates of symptomatic cases by local authority district in functional age categories as of ",maxDate,". For clarity several age groups have been combined. School age comprises 6-17 year olds, University is from 18-22. Other family is 0-6 and 23-59, Retirement is 60 and over"))`
+
+```{r}
+p4 = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
+p4 %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/by-age/CaseGrowthByLAD") %>% invisible()
+```
+
+```{r}
+p5 = ggplot(map %>% ungroup() %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.ProbPos.value),size = 0.05) + facet_wrap(vars(ageCat), ncol = 3) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdYlGn", name="P(r>0)",lim = c(0,1)) #, oob=scales::squish, lim=c(-0.10,0.10))
+p5 %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/by-age/CasePGrowthPosByAgeAndLAD")
+```
+
+
+`r cap$fig("PgrowthPosLAD",paste0("Probability of positive exponential growth rates of symptomatic cases by local authority district in functional age categories as of ",maxDate,". For clarity several age groups have been combined. School age comprises 6-17 year olds, University is from 18-22. Other family is 0-6 and 23-59, Retirement is 60 and over"))`
 
 * Day to day variation, and very localized variation in growth rates makes trends identified in `r ref$fig("growthNHSER")` difficult to see. Only general conclusions can be made from a single day. 
 * Prior to second lockdown
@@ -280,6 +302,11 @@ ggplot(totalCases2 %>% filter(name=="England" & date > "2020-03-15"),aes(x=date,
 ```
 
 `r cap$sfig("propCTRY","The relative proportion of each age group as a percentage of total cases per day for pre-school, primary school, secondary school, university, working age, late middle age and elderly age groups, over the course of the epidemic.")`
+
+```{r}
+ggplot(totalCases2 %>% filter(name!="England" & date > "2020-03-15"),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+facet_wrap(vars(name))+ylab("%age of total") + scale_x_date(date_breaks = "4 weeks",date_labels = "%d-%m")+tsp$plotEvents(events4,labelSize = 8,labelY=75)+facet_wrap(vars(name))+narrowAndTall()
+```
+
 
 * Daily proportion of different age groups initially dominated by elderly as they were the ones being tested in hospitals.
 * Proportion of younger age groups being detected as a fraction of total cases has increased steadily - much of this will be due to increased testing.

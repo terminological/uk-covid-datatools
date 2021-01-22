@@ -24,7 +24,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     getSignificantDates = function(...) {
       #ukCovidDates
       ukCovidDates = readxl::read_excel(devtools::package_file("data-raw/COVID Dates.xlsx"))
-      ukCovidDates = ukCovidDates %>% mutate(`Start date`=as.Date(`Start date`), `End date`=as.Date(`End date`))
+      ukCovidDates = ukCovidDates %>% mutate(`Start date`=as.Date(`Start date`,"1970-01-01"), `End date`=as.Date(`End date`,"1970-01-01"))
       return(ukCovidDates)
     },
     
@@ -430,7 +430,81 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           statistic = ifelse(statistic == "admission","hospital admission",statistic),
           date = as.Date(date,"%Y-%m-%d")
         )
-      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(2) %>% self$complete())
+      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+    },
+    
+    getCOGUK = function(...) {
+      self$getDaily("COG", ..., orElse = function (...) {
+        cogDate = Sys.Date()
+        cogData = NULL
+        while (identical(cogData,NULL)) {
+          tryCatch({
+            cogData = readr::read_csv(paste0("http://cog-uk-microreact.s3.climb.ac.uk/",cogDate,"/cog_metadata_microreact_public.csv"))
+          }, error = function(e) {
+            #message(cogDate)
+            cogDate <<- cogDate-1
+          })
+        }
+        cogData = cogData %>% mutate(publish_date = cogDate)
+        return(cogData)
+      })
+    },
+    
+    getTiers = function(...) {
+      self$getDaily("TIERS", ..., orElse = function (...) {
+        # Tier data
+        fpath = system.file("data-raw", "NPI_dataset_full_extract_03_11_2020.xlsx", package="ukcovidtools")
+        prevTiers = readxl::read_xlsx(fpath)
+        
+        tidyTiers = prevTiers %>% 
+          mutate(local_lockdown = residents_cannot_leave_the_local_area) %>%
+          select(date,code = ltla20cd, name = ltla20nm, local_lockdown, tier_1, tier_2, tier_3, national_lockdown) %>% 
+          mutate(local_lockdown = ifelse(tier_1+tier_2+tier_3+national_lockdown==0, local_lockdown, 0)) %>%
+          pivot_longer(cols=c(local_lockdown,tier_1,tier_2,tier_3,national_lockdown),values_to = "present",names_to = "tier") %>% 
+          filter(present==1) %>% 
+          mutate(date = as.Date(date), tier = case_when(
+            tier=="local_lockdown" ~ "local",
+            tier=="tier_1" ~ "one",
+            tier=="tier_2" ~ "two",
+            tier=="tier_3" ~ "three",
+            TRUE ~ "lockdown"
+          ), codeType="LAD20") %>%
+          select(-present)
+        revert19to20 = tidyTiers %>% inner_join(tibble(
+          code="E06000060",
+          oldCode=c("E07000004","E07000005","E07000006","E07000007"),
+          oldName=c("Aylesbury Vale","Chiltern","South Bucks","Wycombe")),by="code") %>% 
+          select(-code,-name) %>%
+          rename(code = oldCode,name = oldName) %>% mutate(codeType="LAD")
+        
+        tidyTiers = tidyTiers %>% filter(code != "E06000060") %>% bind_rows(revert19to20) %>% mutate(codeType="LAD")
+        
+        fromDate = max(tidyTiers$date)+1
+        #https://api.coronavirus.data.gov.uk/v2/data?areaType=ltla&metric=alertLevel&format=csv
+        decTiers = readr::read_csv("https://api.coronavirus.data.gov.uk/v2/data?areaType=ltla&metric=alertLevel&format=csv")
+        
+        tidyTiers2 = decTiers %>% select(code = areaCode, name = areaName,FROM = date, alertLevel, alertLevelName) %>% 
+          mutate(tier = case_when(
+            alertLevel ==1 ~ "one+",
+            alertLevel ==2 ~ "one+", #Scot 
+            alertLevel ==3 ~ "two+",
+            alertLevel ==4 ~ "three+",
+            alertLevel ==5 ~ "four+",
+            alertLevel ==-99 ~ "lockdown",
+          ), codeType="LAD") %>%
+          group_by(code,name) %>% arrange(FROM) %>% mutate(TO = lead(FROM,default = NA)) %>%
+          mutate(TO = as.Date(ifelse(is.na(TO),Sys.Date(),TO-1),"1970-01-01")) %>% 
+          ungroup() %>%
+          group_by(across()) 
+        
+        
+        tidyTiers2 = tidyTiers2 %>% group_modify(function(d,g,...) 
+          tibble(date = as.Date(g$FROM:g$TO,"1970-01-01"))) %>% ungroup() %>% select(-TO,-FROM)
+        
+        tidyTiers3 = bind_rows(tidyTiers %>% anti_join(tidyTiers2, by=c("code","date")), tidyTiers2)
+        tidyOut = tidyTiers3 %>% tidyr::complete(nesting(code,name,codeType),date=seq(as.Date("2020-01-01"),Sys.Date(),1), fill=list(tier="none"))
+        return(tidyOut)
+      })
     },
     
     ####TODO: ----

@@ -3,6 +3,7 @@
 DataProviderController = R6::R6Class("DataProviderController", inherit = PassthroughFilesystemCache, public = list(
   
   directory = NULL,
+  fileProviders = list(),
   
   geog = NULL,
   demog = NULL,
@@ -91,14 +92,42 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     MetawardProcessingPipeline$new(self, ...)
   },
   
-  loadSpimSources = function(path, ...) {
-    self$spim = SPIMDatasetProvider$new(self, path %>% stringr::str_remove("/$"), ...)
+  loadSpimSources = function(fileProvider, ...) {
+    self$spim = SPIMDatasetProvider$new(self, fileProvider, ...)
     invisible(self)
+  },
+  
+  #' Title
+  #'
+  #' @param configFile 
+  #' @param name 
+  #'
+  #' @return
+  #' @export
+  #'
+  #' @examples
+  fileProvider = function(name, configFile = getOption("ukcovid.config"), nocache=FALSE,...) {
+    if (exists(name, where=self$fileProviders) && !nocache) {
+      return(self$fileProviders[[name]]) 
+    }
+    config = yaml::read_yaml(file = configFile)
+    cfg = config[[name]]
+    if(cfg$type == "local") {
+      prov = LocalFileProvider$new(cfg)
+    } else if(cfg$type == "s3") {
+      prov = S3FileProvider$new(cfg)
+    }  else if(cfg$type == "sftp-over-ssh") {
+      prov = SFTPOverSSHFileProvider$new(cfg)
+    } else if(cfg$type == "sftp") {
+      prov = SFTPFileProvider$new(cfg)
+    } else stop(paste0("Unknown file provider type: ",cfg$type))
+    self$fileProviders[[name]] = prov
+    return(self$fileProviders[[name]])
   }
   
 ))
 
-DataProviderController$setup = function(path, spimPath = NULL, ...) {
+DataProviderController$setup = function(path, spimSource = getOption("ukcovid.spim"), ...) {
     dir = path.expand(path) %>% stringr::str_remove("/$")
     out = DataProviderController$new(dir) 
     
@@ -109,7 +138,8 @@ DataProviderController$setup = function(path, spimPath = NULL, ...) {
     out$capac = NHSCapacityProvider$new(out)
     out$datasets = NHSDatasetProvider$new(out)
     out$serial = SerialIntervalProvider$default(out)
-    if (!identical(spimPath,NULL)) out$loadSpimSources(path = spimPath)
+    spimFiles = out$fileProvider(spimSource,...)
+    if (!identical(spimFiles,NULL)) out$loadSpimSources(fileProvider = spimFiles)
     return(out)
 }
 

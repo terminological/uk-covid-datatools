@@ -88,21 +88,8 @@ currentRt = c(
   readRDS("~/Git/uk-covid-datatools/vignettes/current-rt/CURRENT-RT-SLOW-2020-08-19.rda")
 )
 
-dpc = tsp = chp = srv = mwp = NULL
+ukcovidtools::setup()
 
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  chp <<- dpc$chessProcessor()
-  srv <<- dpc$survivalProcessor()
-  mwp <<- dpc$metawardProcessor()
-}
-
-
-
-reload()
 usedSerial = SerialIntervalProvider$resampledSerialInterval(dpc)
  
 ```

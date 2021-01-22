@@ -1,0 +1,6 @@
+default:
+  librarySource: ~/Git/uk-covid-datatools/
+  outputDir: ~/Dropbox/covid19/
+  cache: ~/Data/maps/
+  secrets: ~/Dropbox/coviddata.yaml
+  spimSource: s3

@@ -18,19 +18,7 @@ knitr::opts_chunk$set(
 devtools::load_all("~/Git/uk-covid-datatools/")
 #devtools::install_github("terminological/uk-covid-datatools", force = TRUE)
 
-dpc = tsp = NULL
-
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  # chp <<- dpc$chessProcessor()
-  # srv <<- dpc$survivalProcessor()
-  # mwp <<- dpc$metawardProcessor()
-}
-
-reload()
+ukcovidtools::setup()
 
 
 
@@ -57,7 +45,6 @@ testData %>% tsp$plotIncidenceQuantiles(colour = statistic)
 ```
 ```{r}
 
-reload()
 tn = SerialIntervalProvider$truncatedNormals(dpc)
 tsp$serial = tn
 

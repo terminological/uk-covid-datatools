@@ -13,10 +13,12 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataPro
   #' different hospitals have different reporting strategies
   #' @param CHESSdf - the raw chess data set
   #' @return a data frame of stats by trust representing reporting quality.
-  chessQuality = function(CHESSdf) {
+  chessQuality = function(CHESSdf, updatedWithin = 14, date = max(CHESSdf$dateupdated,na.rm=TRUE), unknownDatesPercent = 0.2) {
     tmp2 = CHESSdf %>% dplyr::select(trustcode, contains("date"))
     tmp3 = tmp2 %>% tidyr::pivot_longer(cols = contains("date"), names_to = "type", values_to = "date")
     tmp4 = tmp3 %>% dplyr::group_by(trustcode) %>% dplyr::summarise(recentDate = max(date,na.rm = TRUE))
+    
+    CHESS_date = as.Date(date,"1970-01-01")
     
     hospAcc = CHESSdf %>% dplyr::group_by(trustcode, trustname) %>% dplyr::summarise(
       records = n(),
@@ -27,7 +29,16 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataPro
       knownAdmittedItu = sum(if_else(is.na(dateadmittedicu),0,1)),
       knownAdmittedItuPercent = knownAdmittedItu/records,
       knownOutcomePercent = knownOutcomes/records
-    ) %>% dplyr::inner_join(tmp4, by="trustcode")
+    ) %>% dplyr::inner_join(tmp4, by="trustcode") %>% mutate(
+      ituSubset = 
+        as.Date(recentDate) >= CHESS_date-updatedWithin &  
+        outcomeWithoutDates/knownOutcomes < unknownDatesPercent,
+      admissionSubset = 
+        as.Date(recentDate) >= CHESS_date-updatedWithin & 
+        outcomeWithoutDates/knownOutcomes < unknownDatesPercent &
+        knownAdmittedItuPercent < 0.5 &
+        knownOutcomePercent > 0.1
+    )
     return(hospAcc)
   },
   
@@ -40,16 +51,11 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataPro
   #' @param CHESSdf - the raw chess data set
   #' @param date - the date of the data set
   #' @return a data frame of stats by trust representing reporting quality.
-  chessItuSubset = function(CHESSdf = self$getCHESS(), updatedWithin = 14, date = max(CHESSdf$dateupdated,na.rm=TRUE)) {
-    CHESS_date = as.Date(date,"1970-01-01")
-    # hospitals must have updated their data in last 14 days
-    # and have fewer than 10% outcomes recorded with unknown dates
-    incHosp = self$chessQuality(CHESSdf) %>%
-      filter(
-        as.Date(recentDate) >= CHESS_date-updatedWithin & 
-          outcomeWithoutDates/knownOutcomes < 0.1
-      )
+  chessItuSubset = function(CHESSdf = self$getCHESS(), updatedWithin = 14, date = max(CHESSdf$dateupdated,na.rm=TRUE), unknownDatesPercent = 0.2) {
     
+    # hospitals must have updated their data in last 14 days
+    # and have fewer than 20% outcomes recorded with unknown dates
+    incHosp = self$chessQuality(CHESSdf, updatedWithin, date, unknownDatesPercent) %>% filter(ituSubset)
     return(
       CHESSdf %>% self$chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
         inner_join(incHosp %>% dplyr::select(-trustname), by="trustcode") %>% 
@@ -66,25 +72,15 @@ ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataPro
   #' @param CHESSdf - the raw chess data set
   #' @param date - the date of the data set
   #' @return a data frame of stats by trust representing reporting quality.
-  chessAdmissionSubset = function(CHESSdf = self$getCHESS(), date = max(CHESSdf$dateupdated,na.rm = TRUE)) {
-    CHESS_date = as.Date(date,"1970-01-01")
-    # hospitals must have updated their data in last 3 days
-    # and have fewer than 5 outcomes recorded with unknown dates
+  chessAdmissionSubset = function(CHESSdf = self$getCHESS(), updatedWithin = 14, date = max(CHESSdf$dateupdated,na.rm = TRUE), unknownDatesPercent = 0.2) {
+    # hospitals must have updated their data in last N days
+    # and have fewer than 20% outcomes recorded with unknown dates
     # and have fewer than half of their patients admitted to ITU (remove hospitals that only submit ITU data)
-    # and have non zero outcomes
-    # excludes in hospital cases
-    incHosp = self$chessQuality(CHESSdf) %>% dplyr::select(-trustname) %>%
-      filter(
-        as.Date(recentDate) >= CHESS_date-3 & 
-          outcomeWithoutDates/knownOutcomes < 0.1 &
-          knownAdmittedItuPercent < 0.5 &
-          knownOutcomePercent > 0.1
-      )
-    
+    incHosp = self$chessQuality(CHESSdf, updatedWithin, date, unknownDatesPercent) %>% filter(admissionSubset)
     
     return(
       CHESSdf %>% self$chessDefaultFilter(as.numeric(labtestdate - hospitaladmissiondate) < 10) %>%
-        inner_join(incHosp, by="trustcode") %>% 
+        inner_join(incHosp %>% dplyr::select(-trustname), by="trustcode") %>% 
         mutate(censorDate = as.Date(recentDate))
     )
   },

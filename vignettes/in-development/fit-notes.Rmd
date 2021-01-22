@@ -1,0 +1,94 @@
+---
+title: "Fit notes and long covid"
+author: "Rob Challen"
+date: "10/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+#fitnote <- readr::read_csv("https://files.digital.nhs.uk/BC/7BBC78/gp-fit-note-eng-csv-ep-diag-ccg-jun-20.csv", col_types = cols(Date = col_date(format = "%b%Y")))
+fitnote <- readr::read_csv("https://files.digital.nhs.uk/4C/4A4207/gp-fit-note-eng-csv-fn-ccg-jun-20.csv", col_types = cols(Date = col_date(format = "%b%Y")))
+
+fitnote2 = fitnote %>% mutate(month = lubridate::month(Date),year = lubridate::year(Date))
+fitnote2 = fitnote2 %>% rename(
+  ccgCode = `CCG ONS Code`,
+  icd10 = `Diagnosis (ICD10 chapter)`,
+  count = `Number of fit notes`, #`Count of episodes`,
+  date = Date
+)
+
+
+
+mapping = dpc$codes$getTransitiveClosure() %>% filter(fromCodeType %in% c("CCG20","CCG") & toCodeType == "NHSER") %>% select(fromCode, nhserCode = toCode) %>% distinct() 
+
+fitnote2 = fitnote2 %>% left_join(mapping, by = c("ccgCode"="fromCode"))
+
+fitnoteByNHSER = fitnote2 %>% group_by(date, month, year, nhserCode, icd10) %>% summarise(count = sum(count))
+names = dpc$codes$getCodes() %>% filter(codeType=="NHSER") %>% mutate(ageCat="18-60", gender=NA) %>% dpc$demog$findDemographics()
+fitnoteByNHSER = fitnoteByNHSER %>% left_join(names, by=c("nhserCode"="code"))
+
+
+baselineByNHSER = fitnoteByNHSER %>% filter(date<="2019-12-01" & !is.na(nhserCode)) %>% group_by(month, nhserCode, icd10,name,population) %>% summarise(countPer1M.Mean = mean(count/population*1000000),countPer1M.SE = sd(count/population*1000000))
+
+ggplot(baselineByNHSER, aes(x=month,y=countPer1M.Mean,ymin=countPer1M.Mean-1.96*countPer1M.SE, ymax=countPer1M.Mean+1.96*countPer1M.SE, colour=name, fill=name))+geom_line(show.legend = TRUE)+geom_ribbon(colour=NA,alpha=0.2,show.legend = FALSE)+facet_wrap(vars(icd10),scales = "free_y")
+```
+
+```{r}
+baselineProportions = baselineByNHSER %>% filter(!(icd10 %in% c("Unknown","Not Provided"))) %>% group_by(month,nhserCode,name,population) %>% mutate(proportion = countPer1M.Mean/sum(countPer1M.Mean))
+
+ggplot(baselineProportions,aes(x=month,y=proportion,fill=icd10))+geom_area()+facet_wrap(vars(name))
+```
+
+```{r}
+fitnoteProportions = fitnoteByNHSER %>% filter(!(icd10 %in% c("Unknown","Not Provided")) & !is.na(name)) %>% group_by(date,month,nhserCode,name,population) %>% mutate(proportion = count/sum(count))
+
+
+
+icd10Types = unique(fitnoteProportions$icd10)
+
+i = seq(from = 0.25,to = 0.75,length.out = length(icd10Types))
+pal = colorspace::hex(colorspace::RGB(i,i,i))
+names(pal) = icd10Types
+
+pal["Certain infectious and parasitic diseases"] = "#0000C0"
+pal["Diseases of the respiratory system"] = "#00C000"
+pal["Mental and behavioural disorders"] = "#C00000"
+
+ggplot(fitnoteProportions,aes(x=date,y=proportion,fill=icd10))+geom_area()+facet_wrap(vars(name))+scale_fill_manual(values=pal, guide="none")
+
+```
+
+```{r}
+
+fitnoteProportionsEng = fitnoteByNHSER %>% filter(!(icd10 %in% c("Unknown","Not Provided")) & !is.na(name)) %>% 
+  mutate(icd10 = ifelse(
+    icd10 %in% c("Certain infectious and parasitic diseases","Diseases of the respiratory system","Mental and behavioural disorders"),
+    icd10,"Other")) %>%
+  group_by(date,month,year,icd10) %>% summarize(count=sum(count)) %>% mutate(proportion = count/sum(count))
+
+
+
+ggplot(fitnoteProportionsEng,aes(x=date,y=proportion,fill=icd10))+geom_bar(stat="identity")+scale_fill_brewer(palette = "Set1")#+scale_fill_manual(values=pal, guide="none")
+
+ggplot(fitnoteProportionsEng,aes(x=month,y=proportion*100,colour=as.factor(year)))+geom_point()+geom_line()+facet_wrap(vars(icd10),scales = "free_y")#+scale_fill_brewer(palette = "Set1")#+scale_fill_manual(values=pal, guide="none")
+
+```
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,94 @@
+---
+title: "Reporting delays in deaths and cases"
+author: "Rob Challen"
+date: "01/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::setup()
+```
+
+## Cases line list data
+
+
+```{r cars}
+ll = dpc$spim$getLineList()
+ll2 = ll %>% mutate(delay = as.numeric(lab_report_date-specimen_date))
+pdf = ll2 %>% group_by(pillar,NHSER_name,delay) %>% summarise(count = n()) %>% group_by(pillar,NHSER_name) %>% mutate(prob = count/sum(count)) %>% mutate(surv = 1-cumsum(prob))
+
+
+
+
+```
+
+```{r}
+ggplot(pdf,aes(x=delay,y = prob,fill=surv<0.05))+geom_bar(stat="identity")+xlim(c(-2,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))
+```
+```{r}
+ggplot(pdf,aes(x=delay,y = surv,fill=surv<0.05))+geom_bar(stat="identity")+coord_cartesian(xlim=c(0,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))
+```
+```{r}
+ggplot(ll2 %>% filter(delay>0 & delay<7),aes(x=as.character(specimen_date,format="%a"),y=delay))+geom_violin(adjust=4)+facet_wrap(vars(pillar))
+```
+
+## Deaths line list
+
+```{r}
+
+dll = dpc$spim$getDeathsLineList()
+
+dll2 = dll %>% mutate(delay = as.numeric(report_date_earliest-dod))
+
+dpdf = dll2 %>% group_by(nhser_name,delay) %>% summarise(count = n()) %>% group_by(nhser_name) %>% mutate(prob = count/sum(count)) %>% mutate(surv = 1-cumsum(prob))
+
+```
+```{r}
+ggplot(dpdf,aes(x=delay,y = prob,fill=surv<0.05))+geom_bar(stat="identity")+coord_cartesian(xlim=c(-2,20))+facet_wrap(vars(nhser_name))
+```
+
+```{r}
+
+cdpdf = 
+  tibble(dod = as.Date(min(dll2$dod,na.rm = TRUE):max(dll2$dod,na.rm = TRUE),"1970-01-01")) %>% 
+  inner_join(tibble(delay = 0:100), by=character()) #%>%
+  #inner_join(tibble(nhser_name = unique(na.omit(dll2$nhser_name))), by=character()) 
+
+cdpdf = cdpdf %>% left_join(
+  dll2 %>% 
+    #filter(!is.na(death_type28) | !is.na(death_type60cod)) %>%
+    #filter(tt_death_cat=="0-28 days (incl post mortem)") %>% 
+    filter(covidcod=="Y") %>%
+    group_by(dod,delay) %>% #,nhser_name) %>% 
+    summarise(count = n()),
+  by = c("dod","delay") #,"nhser_name")
+) %>% mutate(count = ifelse(is.na(count),0,count))
+
+cdpdf = cdpdf %>% group_by(delay) %>% #,nhser_name) %>% 
+  arrange(dod) %>% mutate(sumCount = cumsum(count)) %>% mutate(winCount = sumCount-lag(sumCount,7))
+
+cdpdf = cdpdf %>% group_by(dod) %>% #,nhser_name) %>% 
+  arrange(delay) %>% 
+  mutate(prob = count/sum(count)) %>% mutate(surv = 1-cumsum(prob)) %>%
+  mutate(winProb = winCount/sum(winCount)) %>% mutate(winSurv = 1-cumsum(winProb))
+
+cdQuantiles = bind_rows(
+  cdpdf %>% group_by(dod) %>% arrange(delay) %>% filter(lag(winSurv)>=0.5 & winSurv<0.5) %>% mutate(quantile = "q.0.5"),
+  cdpdf %>% group_by(dod) %>% arrange(delay) %>% filter(lag(winSurv)>=0.25 & winSurv<0.25) %>% mutate(quantile = "q.0.25"),
+  cdpdf %>% group_by(dod) %>% arrange(delay) %>% filter(lag(winSurv)>=0.05 & winSurv<0.05) %>% mutate(quantile = "q.0.05")
+) %>% select(dod,delay,quantile)# %>% pivot_wider(names_from = quantile, values_from = delay)
+
+limit = tibble(dod = as.Date(min(dll2$dod,na.rm = TRUE):max(dll2$dod,na.rm = TRUE),"1970-01-01"))
+limit$cutoff = (nrow(limit)-1):0
+
+ggplot(cdpdf %>% filter(delay<=100), aes(x=dod,y=delay,fill=winProb))+geom_tile(stat = "identity",width=1,height=1)+
+  #facet_wrap(vars(nhser_name))+
+  scale_y_continuous(trans = "log1p", breaks=c(0,1,4,7,14,28,54,108))+scale_fill_gradient(low="white",high="black",trans="sqrt",na.value = "white",lim=c(0,0.25),oob=scales::squish)+
+  scale_x_date(date_breaks = "2 weeks")+
+  geom_smooth(data = cdQuantiles,mapping = aes(x=dod,y=delay,linetype=quantile),inherit.aes = FALSE,colour="red",se = FALSE,size=0.5)+
+  geom_line(data=limit, mapping=aes(x=dod,y=cutoff),inherit.aes = FALSE,colour="blue")+coord_cartesian(ylim=c(0,54),xlim=c(as.Date("2020-03-01"),NA))
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

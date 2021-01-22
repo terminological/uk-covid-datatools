@@ -211,28 +211,30 @@ Processing: `r proc("UK","death")`
 
 ## Triage calls - NHSER
 
-```{r}
-with(currentRt$source, {
-  p = tsp$plotIncidenceRollmean(triageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=subgroup)+
-    facet_wrap(vars(name))+
-    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
-  p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig11_triageNHSER")
-})
-```
+- TODO: Disabled as problems with data
 
-Sources: `r datasrc("NHSER","triage")`
+<!-- ```{r} -->
+<!-- with(currentRt$source, { -->
+<!--   p = tsp$plotIncidenceRollmean(triageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=subgroup)+ -->
+<!--     facet_wrap(vars(name))+ -->
+<!--     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day") -->
+<!--   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig11_triageNHSER") -->
+<!-- }) -->
+<!-- ``` -->
 
-## Triage calls - NHSER (continued...)
+<!-- Sources: `r datasrc("NHSER","triage")` -->
 
-```{r}
-with(currentRt$source, {
-  p = tsp$plotIncidenceQuantiles(finalTriageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+
-    facet_wrap(vars(name))+
-    scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+
-    ylab("per 1M per day")
-  p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig12_finalTriageNHSER")
-})
-```
+<!-- ## Triage calls - NHSER (continued...) -->
+
+<!-- ```{r} -->
+<!-- with(currentRt$source, { -->
+<!--   p = tsp$plotIncidenceQuantiles(finalTriageNHSER, denominatorExpr = population/1000000, events = events, dates="2020-07-01")+ -->
+<!--     facet_wrap(vars(name))+ -->
+<!--     scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ -->
+<!--     ylab("per 1M per day") -->
+<!--   p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig12_finalTriageNHSER") -->
+<!-- }) -->
+<!-- ``` -->
 
 Processing: `r proc("NHSER","triage")`
 
@@ -353,7 +355,7 @@ Processing: `r proc("NHSER","death")`
 ## Combined data set
 
 ```{r}
-p = tsp$plotIncidenceQuantiles(currentRt$rt, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=statistic, ylim=c(0,1500))+
+p = tsp$plotIncidenceQuantiles(currentRt$rt7, denominatorExpr = population/1000000, events = events, dates="2020-07-01", colour=statistic, ylim=c(0,1500))+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")+
   scale_y_continuous(trans="log1p", breaks = c(0,5,15,50,150))+ylab("per 1M per day")
@@ -361,45 +363,44 @@ p %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/dat
 
 ```  
 
-<!-- ## Combined data set - 7 day $R_t$ -->
+## Combined data set - 7 day $R_t$
 
-<!-- ```{r} -->
-<!-- events2 = dpc$datasets$getSignificantDates() %>% filter(Label %in% c("VE day")) -->
+```{r}
+p2 = tsp$plotRt(
+    currentRt$rt7 %>% filter(statistic != "icu admission"),
+    events = events,
+    dates = "2020-07-01",
+    colour=statistic,
+    rtlim = c(0.5,1.75), ribbons=TRUE)+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p2 %>%
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels")
 
-<!-- p2 = tsp$plotRt( -->
-<!--     currentRt$rt %>% filter(statistic != "icu admission"),  -->
-<!--     events = events2,dates = "2020-05-01",  -->
-<!--     colour=statistic,  -->
-<!--     rtlim = c(0.5,2), ribbons=TRUE)+ -->
-<!--   facet_wrap(vars(name),ncol=4)+ -->
-<!--   theme(legend.position = "bottom") -->
-<!-- p2 %>%  -->
-<!--   standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig21_Rt7_AllGeogsAllModels") -->
+```
 
-<!-- ``` -->
+```{r}
+currentRt$rt7 %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate(
+  `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`),
+  `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`)
+  ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
+```
 
-<!-- ```{r} -->
-<!-- currentRt$rt %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>% group_by(name,statistic) %>% mutate( -->
-<!--   `Reproduction number` = sprintf("%1.2f (%1.2f; %1.2f)",`Median(R)`,`Quantile.0.025(R)`,`Quantile.0.975(R)`), -->
-<!--   `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`) -->
-<!--   ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab21_Rt7_AllGeogsAllModels",defaultFontSize = 6) %>% invisible() -->
-<!-- ``` -->
+## Combined data set - 7 day growth rates
 
-<!-- ## Combined data set - 7 day growth rates -->
+```{r}
+p3 = tsp$plotWindowedGrowthRate(
+    currentRt$rt7 %>% filter(statistic != "icu admission"),
+    colour=statistic,
+    events = events,
+    dates = "2020-07-01",
+    ribbons = TRUE,
+    rlim = c(-0.125,0.125))+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels")
 
-<!-- ```{r} -->
-<!-- p3 = tsp$plotWindowedGrowthRate( -->
-<!--     currentRt$rt %>% filter(statistic != "icu admission"),  -->
-<!--     colour=statistic,  -->
-<!--     events = events2, -->
-<!--     dates = "2020-05-01", -->
-<!--     ribbons = TRUE,  -->
-<!--     rlim = c(-0.125,0.125))+ -->
-<!--   facet_wrap(vars(name),ncol=4)+ -->
-<!--   theme(legend.position = "bottom") -->
-<!-- p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_GrowthRate7_AllGeogsAllModels") -->
-
-<!-- ``` -->
+```
 
 
 ## Combined data set - 14 day $R_t$
@@ -410,7 +411,7 @@ p2 = tsp$plotRt(
     currentRt$rt14 %>% filter(statistic != "icu admission"), 
     events = events,dates = "2020-07-01", 
     colour=statistic, 
-    rtlim = c(0.75,1.75), ribbons=TRUE)+
+    rtlim = c(0.5,1.75), ribbons=TRUE)+
   facet_wrap(vars(name),ncol=4)+
   theme(legend.position = "bottom")
 p2 %>% 
@@ -425,23 +426,6 @@ currentRt$rt14 %>% filter(statistic != "icu admission" & !is.na(`Mean(R)`) ) %>%
   `Doubling time` = sprintf("%1.2f (%1.2f; %1.2f)",doublingTime,`doublingTime.Quantile.0.025`,`doublingTime.Quantile.0.975`)
   ) %>% select(name,statistic,date,`Reproduction number`,`Doubling time`) %>% filter(date == max(date)) %>% group_by(name) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/current-rt/data/Tab22_Rt14_AllGeogsAllModels",defaultFontSize = 6) %>% invisible()
 ```
-
-## Combined data set - 7 day $R_t$
-
-```{r}
-
-p2 = tsp$plotRt(
-    currentRt$rt7 %>% filter(statistic != "icu admission"), 
-    events = events,dates = "2020-10-01", 
-    colour=statistic, 
-    rtlim = c(0.75,1.25), ribbons=TRUE)+
-  facet_wrap(vars(name),ncol=4)+
-  theme(legend.position = "bottom")
-p2 %>% 
-  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_Rt7_AllGeogsAllModels")
-
-```
-
 
 ## Combined data set - 14 day growth rates
 
@@ -458,6 +442,25 @@ p3 = tsp$plotWindowedGrowthRate(
 p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig23_GrowthRate14_AllGeogsAllModels")
 
 ```
+
+## Combined data set - 7 day $R_t$ - JEpi
+
+```{r}
+
+p2 = tsp$plotRt(
+    currentRt$jepi7 %>% filter(statistic != "icu admission"), 
+    events = events,dates = "2020-07-01", 
+    colour=statistic, 
+    rtlim = c(0.75,1.75), ribbons=TRUE)+
+  facet_wrap(vars(name),ncol=4)+
+  theme(legend.position = "bottom")
+p2 %>% 
+  standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/current-rt/data/Fig22_Rt7_AllGeogsAllModels")
+
+```
+
+
+
 
 <!-- ## Combined data set - 28 day $R_t$ -->
 

@@ -27,11 +27,11 @@ NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=DataProvider, p
   
   getNHSSiteIcuCatchment = function(...) {
     self$getSaved("SITE_ICU_CATCHMENT",...,orElse = function(...) {
-      tmp = self$getHospitals() %>% dplyr::filter(icuBeds>0 & sector=="NHS Sector")
+      tmp = self$getHospitals() %>% dplyr::filter(hduBeds>0 & sector=="NHS Sector")
       catch = self$geog$createCatchment(
         supplyShape = tmp %>% dplyr::rename(hospId = code, hospName = name) %>% dplyr::group_by(hospId,hospName), 
         supplyIdVar = hospId, 
-        supplyVar = icuBeds,
+        supplyVar = hduBeds,
         demandId = "DEMOG", 
         demandShape = self$demog$getDemographicsMap(),
         demandIdVar = code, 
@@ -43,11 +43,11 @@ NHSCapacityProvider = R6::R6Class("NHSCapacityProvider", inherit=DataProvider, p
   
   getNHSTrustIcuCatchment = function(...) {
     self$getSaved("TRUST_ICU_CATCHMENT",...,orElse = function(...) {
-      tmp = self$getHospitals() %>% dplyr::filter(icuBeds>0 & sector=="NHS Sector")
+      tmp = self$getHospitals() %>% dplyr::filter(hduBeds>0 & sector=="NHS Sector")
       catch = self$geog$createCatchment(
         supplyShape = tmp %>% dplyr::group_by(trustId,trustName), 
         supplyIdVar = trustId, 
-        supplyVar = icuBeds,
+        supplyVar = hduBeds,
         demandId = "DEMOG", 
         demandShape = self$demog$getDemographicsMap(),
         demandIdVar = code, 

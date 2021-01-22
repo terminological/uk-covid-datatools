@@ -1,0 +1,409 @@
+---
+title: "Increased hazard of mortality in cases compatible with SARS-CoV-2 variant under investigation 202012/1 - a matched cohort study"
+output:
+  pdf_document:
+    fig_caption: yes
+    keep_tex: true
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(
+    inputFile,
+    encoding = encoding,
+    output_dir = "~/Dropbox/covid19/current-rt", output_file=paste0('current-rt-',Sys.Date(),'.pdf'))
+  })
+# output:
+#   word_document :
+#     fig_caption: yes
+#     fig_width: 7
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(
+#     inputFile,
+#     encoding = encoding,
+#     output_dir = "~/Dropbox/covid19/new-variant", output_file=paste0('new-variant-mortality-',Sys.Date(),'.docx'))
+#   })
+#TODO: https://www.reed.edu/data-at-reed/software/R/markdown_multiple_reports.html
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}    
+
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+# bibliography: current-rt.bib
+# csl: current-rt.csl
+# vignette: >
+#  %\VignetteIndexEntry{New Variant Mortality}
+#  %\VignetteEngine{knitr::rmarkdown}
+#  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(patchwork)
+library(survival)
+library(survminer)
+
+# optional dependency:
+
+if (dir.exists("~/Git/standard-print-output/")) {
+  devtools::load_all("~/Git/standard-print-output/")
+  standardPrintOutput::setDefaults()
+  spo = TRUE
+} else {
+  spo = FALSE
+}
+
+# devtools::load_all("~/Git/uk-covid-datatools/")
+# ukcovidtools::reload()
+
+# load functions
+source("./new-variant-mortality-2.R")
+
+```
+
+```{r}
+## Do the analysis ----
+if(!exists("coxData")) 
+  coxData = loadData()
+
+ggplot(coxData,aes(x=time,fill=as.factor(status)))+geom_histogram(binwidth=1)+scale_y_log10()
+```
+
+## Main analysis
+
+```{r}
+if(!exists("run30")) 
+  run30 = runAnalysis(coxData, sGeneCtThreshold = 30, ctThreshold = 30,bootstraps = 100,ageTolerance = 3,specimenDateTolerance=5,includeMatched = TRUE)
+
+```
+
+
+### Median sample KM curve
+
+```{r}
+tmp = run30$table4Data %>% group_by(boot) %>% summarise(mean.HR = mean(HR)) %>% ungroup() 
+middleBoot = which.min(abs(tmp$mean.HR-median(tmp$mean.HR)))
+kmfit = survminer::surv_fit(Surv(time,status) ~ sGene, run30$rawMatchedData %>% filter(boot==middleBoot))
+ggs = survminer::ggsurvplot(kmfit, conf.int = TRUE)
+fig1 = ggs$plot+coord_cartesian(ylim=c(0.995,1))
+if(spo) {
+  (fig1+standardPrintOutput::defaultFigureLayout()+standardPrintOutput::narrower())  %>% 
+    standardPrintOutput::saveSixthPageFigure("~/Dropbox/covid19/new-variant/KMCurve")
+} else {
+  fig1
+}
+# rm(ggs,kmfit,fig1,tmp)
+```
+### Summary table
+
+```{r}
+
+if(spo) {
+  run30$table2Data %>% mutate(
+    `S pos N` = as.integer(`S pos N`),
+    `S neg N` = as.integer(`S neg N`),
+    `Died N` = as.integer(`Died N`),
+    ) %>% group_by(category) %>% 
+    standardPrintOutput::saveTable("~/Dropbox/covid19/new-variant/CaseMatchedSummaryTable",defaultFontSize = 8)
+} else {
+  knitr::kable(run30$table2Data)
+}
+```
+
+### HR table
+
+```{r}
+summary = summariseAnalysisRun(run30)
+if(spo) {
+  prettyPrintSummary(summary) %>% 
+    standardPrintOutput::saveTable("~/Dropbox/covid19/new-variant/HRSummaryTable",defaultFontSize = 8)
+} else {
+  knitr::kable(prettyPrintSummary(summary))
+}
+
+```
+
+## Biases in data set
+
+```{r}
+#ggplot(summaryAgeTol,aes(x=ageTolerance,y=mean.ageDifference))+geom_bar(stat="identity")
+
+## Check for residual biases in case matched data set ----
+# small mean age difference and specimen date difference
+# no obvious pattern in admission delays
+# CT values lower in sGene negative and in those who died. This is ? feature of sGene neg infection
+# specimen dates reasonably distributed in time given that the sGene negative numbers increasing. Could constrain analysis to post Dec only.
+
+# There is a mean age difference of `r sprintf("%1.1f",deltas$ageDifference)` years.
+# There is a mean specimen date difference of `r sprintf("%1.1f",deltas$specimenDateDifference)` years.
+
+p1 = ggplot(coxFinal,aes(fill=sGene,x=admissionDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+
+  coord_cartesian(xlim=c(0,15))+facet_wrap(~sGene, scales = "free_y", ncol=1)
+
+p2 = ggplot(coxFinal,aes(x=sGene,colour=diedWithin28days,y=CT_N))+geom_boxplot()+ylab("N Gene CT value")
+
+p3 = ggplot(coxFinal,aes(fill=sGene,x=specimen_date.sgene))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("count")+
+  facet_wrap(~sGene, scales = "free_y", ncol=1)
+
+fig1 = p1+p2+p3+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=3,guides="collect")
+```
+
+## Sensitivity analysis
+
+```{r}
+
+summaryCT = NULL
+for(ct in seq(20,35,1)) {
+  run = runAnalysis(coxData, ctThreshold = ct,bootstraps = 25,max=Inf)
+  summaryCT = summaryCT %>% bind_rows(summariseAnalysisRun(run))
+}
+p1 = ggplot(summaryCT %>% filter(model=="S gene only"), aes(x=ctThreshold, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("CT threshold")+ylab("Hazard rate")#+
+  #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
+  #geom_smooth(method = "lm",se=TRUE,alpha=0.5)
+
+```
+
+```{r}
+summaryDateTol = NULL
+for(dateTol in c(0:14)) {
+  run = runAnalysis(coxData, specimenDateTolerance = dateTol,bootstraps = 25)
+  summaryDateTol = summaryDateTol %>% bind_rows(summariseAnalysisRun(run))
+}
+
+p2 = ggplot(summaryDateTol %>% filter(model=="S gene only"), aes(x=specimenDateTolerance, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("Mismatch tolerance - sample date (days)")+ylab("Hazard rate")+
+  #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
+  geom_smooth(method = "lm",se=TRUE,alpha=0.5)+scale_x_continuous(breaks = c(0,7,14))
+
+p4 = ggplot(summaryDateTol %>% filter(model=="S gene only"),aes(x=specimenDateTolerance,y=mean.specimenDateDifference))+geom_bar(stat="identity", width=0.7, fill="steelblue") + 
+  xlab("Mismatch tolerance - sample date (days)")+ylab("Pairwise bias (days)")+scale_x_continuous(breaks = c(0,7,14))
+
+```
+
+```{r}
+
+summaryAgeTol = NULL
+for(ageTol in c(0,1,2,3,4,5,6,7,8,9)) {
+  run = runAnalysis(coxData, ageTolerance = ageTol,bootstraps = 25)
+  summaryAgeTol = summaryAgeTol %>% bind_rows(summariseAnalysisRun(run))
+}
+
+p3 = ggplot(summaryAgeTol %>% filter(model=="S gene only"), aes(x=ageTolerance, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("Mismatch tolerance - age (years)")+ylab("Hazard rate")+
+  #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
+  geom_smooth(method = "lm",se=TRUE,alpha=0.5)+scale_x_continuous(breaks = c(0,3,6,9))
+```
+
+```{r}
+fig3 = p1+p2+p3+p4+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=2)
+if(spo) {
+  fig3 %>% 
+    standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/new-variant/SensitivityAnalysis")
+} else {
+  fig3
+}
+```
+
+
+
+```{r}
+# Supplementary materials
+## Summary of full unmatched dataset
+# combinedSummary = summaryTable(coxData3) %>% rename_with(~paste0("All ",.x),.cols=c(N,`%age`,`mean (SD)`)) %>%
+#   left_join(summaryTable(coxData3 %>% filter(!is.na(sGene))) %>% rename_with(~paste0("Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+#   left_join(summaryTable(coxData3 %>% filter(diedWithin28days)) %>% rename_with(~paste0("Died ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+#   left_join(summaryTable(coxData3 %>% filter(diedWithin28days & !is.na(sGene))) %>% rename_with(~paste0("Died + Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value"))
+
+
+## Outputs ----
+# View(table1Data)
+# fig1
+# summary(survModel)
+# summary(survModel2)
+
+# Prep the data set.
+# source("./new-variant-mortality.R")
+
+# # grab some ethnicity data. Not going to be used at this point.
+# tmp2 = dpc$demog$getDemographicsWithEstimatedEthnicity()
+# tmp3 = tmp2 %>% filter(is.finite(count)) %>% inner_join(dpc$codes$getTransitiveClosure() %>% filter(fromCodeType=="LSOA",toCodeType=="NHSER"),by=c("code"="fromCode")) %>% group_by(toCode,ethnicity_final) %>% summarise(count=sum(count))
+# popByRegion = tmp3 %>% rename(code = toCode, population = count) #%>% dpc$codes$findNamesByCode()
+# coxData3 = coxData3 %>% left_join(popByRegion, by=c("NHSER_code"="code","ethnicity_final"))
+# 
+# # get overall population by region
+# tmp = dpc$demog$getDetailedDemographics()
+# popData = tmp %>% semi_join(dpc$codes$getTransitiveClosure() %>% filter(toCode=="E92000001"),by=c("code"="fromCode")) %>% group_by(age) %>% summarise(count = sum(count)) %>% mutate(percent = count/sum(count))
+# 
+# rm(coxData,coxData2)
+
+# combinedSummary2 %>% group_by(category) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/new-variant/CaseMatchedSummaryTable",defaultFontSize = 8)
+# 
+# km = survminer::surv_fit(Surv(time,status) ~ sGene, coxFinal)
+# tmp = survminer::ggsurvplot(km,conf.int = TRUE,risk.table = "absolute")
+# (tmp$plot + coord_cartesian(ylim=c(0.9925,1))) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/KMCurve")
+
+
+```
+
+# Results
+
+Biases in data set need describing.
+
+* Pillar 2 tests younger
+* S Gene negativity proxy for B.1.1.7. Equivocal results
+* Rationale for case matching approach.
+
+## Age distributions of cases by sGene status
+
+```{r}
+
+
+
+fig1 = ggplot(coxData3,aes(fill=sGeneEra,x=age))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  geom_line(data=popData,aes(x=age,y=percent),colour="grey60",inherit.aes = FALSE)+
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  
+
+fig1 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/new-variant/ProportionByAgeGroup")
+  
+```
+
+## Age distributions of infections by sGene status who died
+
+```{r}
+fig2 = ggplot(coxData3 %>% filter(diedWithin28days),aes(fill=sGeneEra,x=age))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  
+
+fig2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/ProportionDeathsByAgeGroup")
+```
+
+
+
+
+
+
+There is a mean age difference of `r sprintf("%1.1f",deltas$ageDifference)` years.
+
+There is a mean specimen date difference of `r sprintf("%1.1f",deltas$specimenDateDifference)` years.
+
+## Survival models
+
+* Basic model
+* Adjusted for age to check for residual biases due to non exact matching on age
+* Adjusted for N gene CT values
+
+
+
+
+# Discussion
+
+Its bad.
+
+# Conclusion
+
+Sigh.
+
+# Supplementary materials
+
+
+## Summary of full unmatched dataset
+
+```{r}
+
+combinedSummary = summaryTable(coxData3) %>% rename_with(~paste0("All ",.x),.cols=c(N,`%age`,`mean (SD)`)) %>%
+  left_join(summaryTable(coxData3 %>% filter(!is.na(sGene))) %>% rename_with(~paste0("Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+  left_join(summaryTable(coxData3 %>% filter(diedWithin28days)) %>% rename_with(~paste0("Died ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+  left_join(summaryTable(coxData3 %>% filter(diedWithin28days & !is.na(sGene))) %>% rename_with(~paste0("Died + Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value"))
+
+combinedSummary %>% group_by(category) %>% standardPrintOutput::saveTableLandscape("~/Dropbox/covid19/new-variant/CombinedSummaryTable",defaultFontSize = 8)
+```
+
+## Cases by IMD
+
+```{r}
+s1 = ggplot(coxData3 %>% mutate(
+    imd_decile=as.factor(as.numeric(as.character(imd_decile)))
+  ),aes(fill=sGeneEra,x=imd_decile))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("cases")+facet_wrap(vars(sGeneEra), scales = "free")
+
+s1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/SGenePercentByIMD")
+```
+
+## Deaths by IMD
+
+```{r}
+s2 = ggplot(coxData3 %>% filter(diedWithin28days) %>% mutate(
+    imd_decile=as.factor(as.numeric(as.character(imd_decile)))
+  ),aes(fill=sGeneEra,x=imd_decile))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("deaths")+facet_wrap(vars(sGeneEra), scales = "free")
+
+s2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/SGeneDeathsPercentByIMD")
+```
+
+## Cases per 1M by Ethnicity
+
+```{r}
+s3 = ggplot(
+  coxData3 %>% group_by(sGeneEra,ethnicity_final,NHSER_name,population) %>% summarise(count = n()) %>% group_by(sGeneEra,ethnicity_final) %>% summarise(per1M = sum(count)/sum(population)*1000000, pop = sum(population)),
+  aes(fill=sGeneEra,x=ethnicity_final,y=per1M))+
+  geom_bar(stat="identity",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("cases per 1M")+facet_wrap(vars(sGeneEra), scales = "free")
+
+s3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/SGeneCasesPer1MByEthnicity")
+```
+
+## Deaths per 1M by Ethnicity
+
+```{r}
+s4 = ggplot(
+  coxData3 %>% filter(diedWithin28days) %>% group_by(sGeneEra,ethnicity_final,NHSER_name,population) %>% summarise(count = n()) %>% group_by(sGeneEra,ethnicity_final) %>% summarise(per1M = sum(count)/sum(population)*1000000),
+  aes(fill=sGeneEra,x=ethnicity_final,y=per1M))+
+  geom_bar(stat="identity",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("deaths per 1M")+facet_wrap(vars(sGeneEra), scales = "free")
+
+s4 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/SGeneDeathsPer1MByEthnicity")
+```
+
+## Test reporting delay versus S Gene status
+
+
+```{r}
+s5 = ggplot(coxData3,aes(fill=sGeneEra,x=reportingDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")
+  # geom_text(aes( label = scales::percent(..prop..,accuracy=1),
+  #                  y= ..prop.. ), stat= "count", vjust = 0.5, hjust=-0.1, position = position_dodge(width=0.6),size=3,angle=90)
+
+s5 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/ReportingDelayBySGeneCases")
+```
+
+## Time to admission versus S Gene status
+
+
+```{r}
+s6 = ggplot(coxData3,aes(fill=sGeneEra,x=admissionDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+
+  #geom_density(mapping=aes(colour=sGene),alpha=0.2)+
+  #facet_wrap(vars(ethnicity_final),scales="free_y")+
+  coord_cartesian(xlim=c(0,15))+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+
+s6 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/new-variant/AdmissionDelayBySGeneCases")
+```
+
+## Death within 28 days versus CT values / relative copy numbers
+
+```{r}
+p1 = ggplot(coxData3,aes(x=sGeneEra,colour=diedWithin28days,y=CT_N))+geom_boxplot()
+p2 = ggplot(coxData3,aes(x=sGeneEra,colour=diedWithin28days,y=relativeCopyNumber))+coord_cartesian(ylim=c(0,100))+geom_boxplot()#+facet_wrap(vars(ethnicity_final))
+s7 = p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides="collect")
+
+s7 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/NGeneCTBySGeneAndDeathStatus")
+```

@@ -1,5 +1,5 @@
 ---
-title: "Metawards uncertainty quantification parameterisation and output mapping"
+title: "Hospital catchment areas algorithm"
 author: "Rob Challen"
 date: '`r format(Sys.Date(), "%d-%m-%Y")`'
 output: 
@@ -43,8 +43,7 @@ library(sp)
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 
 devtools::load_all("~/Git/uk-covid-datatools/")
-dpc = DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-tsp = dpc$timeseriesProcessor()
+ukcovidtools::setup()
 ```
 
 
@@ -102,6 +101,8 @@ dpc$geog$preview(
   poi = catch$suppliers
   
 )
+
+ggplot(catch$suppliedArea,aes(fill=as.factor(iteration)))+geom_sf(size=0.05,colour="yellow")+scale_fill_viridis_d()+geom_sf(data=catch$map,colour="white",size=0.1,inherit.aes = FALSE,fill=NA)
 
 setwd("~/Dropbox/covid19/metawards")
 dpc$geog$saveShapefile(shape = catch$map,overwrite = TRUE,mapId = "WD11-TRUST")

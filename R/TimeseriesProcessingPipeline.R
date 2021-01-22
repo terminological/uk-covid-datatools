@@ -51,7 +51,29 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   
   #### aggregation functions ----
   
-  
+  aggregateRagged = function(groupedDf, originalVar, aggregateVars, ..., fn = sum, dateVar = "date", valueVars = vars(value)) {
+    dateVar = ensym(dateVar)
+    originalVar = ensym(originalVar)
+    grps = groupedDf %>% groups()
+    
+    output = groupedDf %>% select(!!!grps,!!originalVar,!!!aggregateVars) %>% distinct()
+    cross = groupedDf %>% select(!!!grps,!!dateVar) %>% distinct()
+    complete = output %>% inner_join(cross, by=unlist(sapply(grps,as_label)))
+    
+    join = sapply(c(grps,aggregateVars,originalVar,dateVar), as_label)
+    output2 = complete %>% left_join(groupedDf %>% select(!!!grps,!!!aggregateVars,!!originalVar,!!dateVar, !!!valueVars), by=join)
+    
+    tmpFn = function(x) fn(x,...)
+    
+    output3 = output2 %>% group_by(!!!grps,!!!aggregateVars,!!dateVar) %>% 
+      dplyr::summarise(
+        across(sapply(valueVars,as_label), tmpFn)
+        #!!(paste0("Count.",as_label(originalVar))) := sum()
+      ) %>% 
+      dplyr::mutate(across(sapply(valueVars,as_label), ~ifelse(is.nan(.x),NA,.x)))
+    
+    return(output3 %>% dplyr::ungroup())
+  },
   
   aggregateAge = function(covidTimeseries, fn = sum, ...) {covidTimeseriesFormat %def% {
     tmp = covidTimeseriesFormat(covidTimeseries)
@@ -62,25 +84,16 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by age, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
     
-    #TODO: check unequal lengths or non overlapping timeseries dates
+    tmp = tmp %>% mutate(oldAgeCat = ageCat, ageCat = NA_character_) %>% covidStandardGrouping(ageCat)
     
-    tmp= tmp %>% dplyr::mutate(ageCat=NA_character_)
     if ("population" %in% colnames(tmp)) {
       tmp = tmp %>% 
-        covidStandardDateGrouping() %>%
-        dplyr::summarise(
-          value = fn(value, ...),
-          population = fn(population, ...)
-        ) %>%
-        dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+        self$aggregateRagged(originalVar = oldAgeCat, aggregateVars = vars(ageCat), ..., fn = fn, valueVars = vars(value,population))
     } else {
       tmp = tmp %>% 
-        covidStandardDateGrouping() %>%
-        dplyr::summarise(
-          value = fn(value, ...)
-        ) %>%
-        dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+        self$aggregateRagged(originalVar = oldAgeCat, aggregateVars = vars(ageCat), ..., fn = fn, valueVars = vars(value))
     }
+    tmp = tmp %>% self$trimNAs()
     return(tmp %>% dplyr::ungroup())
   }},
   
@@ -93,11 +106,16 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by gender, but some groups have mixed NAs and values. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
     
-    tmp= tmp %>% dplyr::mutate(gender=NA_character_)
-    tmp = tmp %>% 
-      covidStandardDateGrouping() %>% 
-      dplyr::summarise(value = fn(value, ...)) %>%
-      dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+    tmp= tmp %>% dplyr::mutate(oldGender=gender, gender=NA_character_) %>% covidStandardGrouping(gender)
+    if ("population" %in% colnames(tmp)) {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldGender, aggregateVars = vars(gender), ..., fn = fn, valueVars = vars(value,population))
+    } else {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldGender, aggregateVars = vars(gender), ..., fn = fn, valueVars = vars(value))
+    }
+    
+    tmp = tmp %>% self$trimNAs()
     return(tmp %>% dplyr::ungroup())
   }},
   
@@ -110,38 +128,41 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(mixed==TRUE)
     if(nrow(errors) > 0) warning("aggregating by subgroup, but not all items have a subgroup. You maybe wanted to filter out the NAs:\n", paste(capture.output(print(errors)), collapse = "\n"))
   
-    tmp= tmp %>% dplyr::mutate(subgroup=NA_character_)
-    tmp = tmp %>% 
-      covidStandardDateGrouping() %>% 
-      dplyr::summarise(value = fn(value, ...)) %>%
-      dplyr::mutate(value = ifelse(is.nan(value),NA,value))
+    tmp= tmp %>% dplyr::mutate(oldSubgroup=subgroup, subgroup=NA_character_) %>% covidStandardGrouping(subgroup)
+    if ("population" %in% colnames(tmp)) {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldSubgroup, aggregateVars = vars(subgroup), ..., fn = fn, valueVars = vars(value,population))
+    } else {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldSubgroup, aggregateVars = vars(subgroup), ..., fn = fn, valueVars = vars(value))
+    }
+    tmp = tmp %>% self$trimNAs()
     return(tmp %>% dplyr::ungroup())
   }},
   
   aggregateSource = function(covidTimeseries, namedListOfSources = list("All sources"=unique(covidTimeseries$source)), fn=sum, ...) {covidTimeseriesFormat %def% {
     tmp = covidTimeseriesFormat(covidTimeseries)
-    tmp$newSource = tmp$source
+    tmp$oldSource = tmp$source
     for (name in names(namedListOfSources)) {
-      tmp$newSource[tmp$source %in% namedListOfSources[[name]]] = name; 
+      tmp$source[tmp$oldSource %in% namedListOfSources[[name]]] = name; 
     }
-    # filter out dates where there are non equal numbers of sources
     
-    tmp = tmp %>% 
-      covidStandardGrouping(source) %>% 
-      dplyr::group_modify(function(d,g,...) {
-        # check each date has the same number of elements and introduce NAs for those dates where not every source is represented
-        out = tidyr::crossing(
-          d %>% select(source,newSource) %>% distinct(),
-          tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
-        ) %>% left_join(d, by=c("date","source","newSource"))
-        out = out %>% dplyr::group_by(newSource,date) %>% dplyr::summarise(value = fn(value,...)) %>% rename(source = newSource)
-      })
-    return(tmp %>% dplyr::ungroup() %>% self$trimNAs())
+    tmp= tmp %>% covidStandardGrouping(source)
+    if ("population" %in% colnames(tmp)) {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldSource, aggregateVars = vars(source), ..., fn = fn, valueVars = vars(value,population))
+    } else {
+      tmp = tmp %>% 
+        self$aggregateRagged(originalVar = oldSource, aggregateVars = vars(source), ..., fn = fn, valueVars = vars(value))
+    }
+    tmp = tmp %>% self$trimNAs()
+    return(tmp %>% dplyr::ungroup())
   }},
   
   #' @param completeness should the mapping be complete? if the mapping is "source" complete it will only be successful if all source codes are present when mapping to a higher region. if the mapping is target, then only if all the target codes are represented. Or both if the mapping must be complete at both ends.
-  aggregateGeography = function(covidTimeseries, targetCodeTypes, completeness = "source", fn=sum, keepOriginal = TRUE, ...) {covidTimeseriesFormat %def% {
+  aggregateGeography = function(covidTimeseries, targetCodeTypes, completeness = "source", fn=sum, ...) {covidTimeseriesFormat %def% {
     tmp = covidTimeseriesFormat(covidTimeseries)
+    
     mapping = self$codes$getTransitiveClosure() %>% 
       dplyr::filter(toCodeType %in% targetCodeTypes) %>%
       dplyr::semi_join(tmp, by=c("fromCode" = "code")) %>%
@@ -149,52 +170,62 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       self$codes$findNamesByCode(codeVar = toCode, outputNameVar = toName, outputCodeTypeVar = toCodeType) %>%
       dplyr::distinct()
     if(nrow(mapping)==0) stop("no route to target code types in transitive closure.")
+    
     tmp2 = tmp %>% 
       dplyr::inner_join(mapping, by=c("code" = "fromCode"))
     tmp3 = tmp2 %>%
-      dplyr::mutate(fromCode=code,fromCodeType = codeType, fromName = name) %>%
-      dplyr::ungroup() 
-    tmp3 = tmp3 %>%
-      dplyr::select(-code,-codeType,-name) %>%
+      dplyr::rename(fromCode=code,fromCodeType = codeType, fromName = name) %>%
+      dplyr::ungroup() %>%
       dplyr::mutate(
         note = paste0(fromCodeType,"->",toCodeType),
         source = paste0(source," (aggr ",fromCodeType,")")
       ) %>%
       dplyr::group_by(source,statistic,type,fromCodeType,toCodeType)
+    
     tmp3 = tmp3 %>%
       dplyr::group_modify(function(d,g,...) {
           # targets with no sources in the map:
           nosource = mapping %>% dplyr::filter(toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="toCode")
           # sources with no targets in the map:
           notarget = mapping %>% dplyr::filter(toCodeType == g$toCodeType) %>% dplyr::anti_join(d, by="fromCode")
-          #TODO: There are lots of edge cases here.
           mapped = d %>% 
             dplyr::filter(!is.na(fromCode) & !is.na(toCode)) %>% 
             dplyr::ungroup() %>%
             dplyr::mutate(codeType=g$toCodeType) %>%
             dplyr::rename(code = toCode, name = toName) %>%
-            dplyr::group_by(subgroup,gender,ageCat,date,code,codeType,name) %>% 
-            dplyr::summarise(value = fn(value,...))
-         
+            dplyr::select(-fromName) %>%
+            dplyr::group_by(subgroup,gender,ageCat) 
+          
+          if("population" %in% colnames(d)) {
+            mapped = mapped %>% 
+              self$aggregateRagged(originalVar = fromCode, aggregateVars = vars(code,name,codeType), ..., fn = fn,valueVars = vars(value,population))
+          } else {
+            mapped = mapped %>% 
+              self$aggregateRagged(originalVar = fromCode, aggregateVars = vars(code,name,codeType), ..., fn = fn,valueVars = vars(value))
+          }
+          
           if("source"==completeness) { 
             if(nrow(notarget) == 0) {
               # complete mapping
               return(mapped)
             } else {
-              return(tibble())
+              stop("Cannot map sources:\n",printDataframeToString(notarget))
+              #return(tibble())
             }
           } else if("target"==completeness) {
             if(nrow(nosource) == 0) {
               # complete mapping
               return(mapped)
             } else {
-              return(tibble())
+              stop("Cannot map targets:\n",printDataframeToString(nosource))
+              #return(tibble())
             }
-          } else if("all"==completeness) {
+          } else if(completeness %in% c("all","both")) {
             if(nrow(notarget) == 0 & nrow(nosource) == 0) {
               # complete mapping
               return(mapped)
             } else {
+              stop("Cannot map targets:\n",printDataframeToString(nosource),"\n","Cannot map sources:\n",printDataframeToString(notarget))
               return(tibble())
             }
           } else {
@@ -211,9 +242,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             return(mapped)
           }
       })
-    tmp3 = tmp3 %>% dplyr::ungroup() %>% dplyr::select(-fromCodeType, -toCodeType)
-    if(keepOriginal) return(covidTimeseries %>% dplyr::bind_rows(tmp3))
-    else return(tmp3)
+    tmp3 = tmp3 %>% dplyr::ungroup() %>% dplyr::select(-fromCodeType, -toCodeType) %>% self$trimNAs()
+    return(tmp3 %>% dplyr::ungroup())
   }},
   
   #### smoothing and imputing
@@ -224,7 +254,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       return(covidTimeseries)
     }
     ts=covidTimeseries
-    #self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+    self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       tmp = ts %>%
         covidStandardGrouping() %>%
         dplyr::mutate(
@@ -232,14 +262,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         self$completeAndRemoveAnomalies(valueVar = logValue1, originalValueVar = logValue1.original) %>%
         covidStandardGrouping() %>%
         dplyr::group_modify(function(d,g,...) {
-         d = d %>%
-          dplyr::mutate(
-            logValue1 = forecast::na.interp(logValue1)
-          ) %>% 
-          dplyr::mutate(
-            #logValue1 = stats::filter(logValue1,rep(1,7)/7)
-            logValue2 = signal::sgolayfilt(logValue1,p=1,n=window) 
-          )
+          d = d %>% arrange(date)
+          d$logValue1 = forecast::na.interp(d$logValue1)
+          if (length(d$logValue1) > window) {
+            d$logValue2 = signal::sgolayfilt(d$logValue1,p=1,n=window)
+          } else {
+            d$logValue2 = rep(NA,length(d$logValue1))
+          }
+          return(d) 
         }) %>%
         dplyr::mutate(
           Imputed.value = ifelse(logValue1 < 0,0,exp(logValue1)-1),
@@ -251,10 +281,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         dplyr::ungroup() 
       #browser(expr = self$debug)
       return(tmp)
-    #}})
+    }})
   },
   
-  completeAndRemoveAnomalies = function(r0Timeseries, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001) {covidTimeseriesFormat %def% {
+  completeAndRemoveAnomalies = function(r0Timeseries, outlier_min = 10, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001) {covidTimeseriesFormat %def% {
     valueVar = ensym(valueVar)
     originalValueVar = ensym(originalValueVar)
     if (as_label(originalValueVar) %in% colnames(r0Timeseries)) {
@@ -291,7 +321,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           m_sd = m_sd,
           m_low = m_low,
           m_high = m_high,
-          tmp_y = ifelse(tmp_y < m_low | tmp_y > m_high, NA, tmp_y),
+          tmp_y = ifelse(
+              (tmp_y > m_low & tmp_y < m_high) |
+              (tmp_y < outlier_min & m_high < outlier_min)
+            , tmp_y, NA), # Do not remove any values unless > outlier_min
         ) %>% dplyr::mutate(
           Anomaly = is.na(tmp_y)
         )
@@ -310,7 +343,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' 
   #' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
   
-  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, window = 14) {covidTimeseriesFormat %def% {
+  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, ..., window = 14, leftSided = FALSE) {covidTimeseriesFormat %def% {
     smoothExpr = enexpr(smoothExpr)
     smoothLabel = as_label(smoothExpr)
     if (smoothLabel == "value") warning("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
@@ -343,9 +376,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         }
         # calculate derivative using a loess method
         # tmp = locfit::locfit(log(value+1) ~ day,loessTest,deg = 2,alpha=0.25,deriv=1)
-        tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts)
+        if (leftSided) {
+          tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts)#, family="qgamma")
+          tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+        } else {
+          tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha, deg=1), tmp_ts)#, family="qgamma")
+          tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+        }
         #tmp_intercept_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha)
-        tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts, deriv=1)
         #tmp_slope_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha, deriv=1)
         tmp_intercept = predict(tmp_intercept_model, tmp_ts$x, band="local")
         tmp_slope = predict(tmp_slope_model, tmp_ts$x, band="local")
@@ -386,7 +424,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 
   #### calculate baskets of stats ----
   
-  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,...) {
+  logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,earliestPossibleDate = "2020-02-01", ...) {
     valueVar = ensym(valueVar)
     self$getHashCached(object = covidTimeseries, operation="LOG-INCIDENCE", params=list(as_label(valueVar),growthRateWindow,smoothingWindow), ... , orElse = function (...) {covidTimeseriesFormat %def% {
       
@@ -404,13 +442,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         return(covidTimeseries) 
       }
       
-      tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow)
+      tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow,...)
       
       tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
       tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
       tmp[[lblV("Growth.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]])
       
       tmp$interceptDate = as.Date(tmp$date - tmp[[lbl("Est")]]/tmp[[lbl("Slope")]])
+      tmp$interceptDate = ifelse(tmp$interceptDate<earliestPossibleDate, NA, tmp$interceptDate)
       
       tmp$doublingTime = log(2)/tmp[[lblV("Growth")]]
       tmp$doublingTime.Quantile.0.025 = log(2)/qnorm(mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]],p = 0.975)
@@ -981,23 +1020,31 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param rlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
   #' @param ribbons - display the confidence limit as ribbons
-  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, ...) {
+  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, growthVar = "Growth.value", growthSEVar = "Growth.SE.value", ...) {
+    growthVar=  ensym(growthVar)
+    growthSEVar=  ensym(growthSEVar)
+    
     df = covidRtTimeseries %>% 
       dplyr::filter(type=="incidence") %>%
-      self$logIncidenceStats()
-    colour = tryCatch(ensym(colour),error = function(e) NULL)
+      self$logIncidenceStats(...)
+    colour = enexpr(colour)
     
-    p2 = self$plotDefault(df, events,dates, ylim=rlim) + ylab(latex2exp::TeX("$r$"))
+    p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$"))
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = "black",...)
-      else p2 = p2 + geom_line(aes(y=`Growth.value`,...))
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = "black",...)
+      else p2 = p2 + geom_line(aes(y=!!growthVar,...))
+    } else if (class(colour) == "character") {
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = !!colour,...)
+      else p2 = p2 + geom_line(aes(y=!!growthVar, ...),colour=!!colour)
     } else {
-      if(ribbons) p2 = p2 + plotRibbons(`Growth.value`,`Growth.SE.value`,colourExpr = !!colour,...)
-      else p2 = p2 + geom_line(aes(y=`Growth.value`,colour=!!colour, ...))
+      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = !!colour,...)
+      else p2 = p2 + geom_line(aes(y=!!growthVar,colour=!!colour, ...))
     }
-    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.value`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
+    if ("Anomaly" %in% colnames(df)) {
+      p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=!!growthVar),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
+    }
     
     return(p2)
   },
@@ -1008,29 +1055,50 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param rlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
   #' @param ribbons - display the confidence limit as ribbons
-  plotWindowedGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, ...) {
-    df = covidRtTimeseries %>% 
+  plotWindowedGrowthRate = function(covidRtTimeseries, ...) {
+    self$plotGrowthRate(covidRtTimeseries,...,growthVar = Growth.windowed.value,growthSEVar = Growth.windowed.SE.value)
+  },
+  
+  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates, timespan=15, colour=NULL, growthVar="Growth.windowed.value", incidenceVar="Est.value", populationExpr=1000000, populationPer = 1000000, maxAlpha=0.6, rlim=c(-0.15,0.15), maxSize=6) {
+    colour = enexpr(colour)
+    grps = groupedCovidRtTimeseries %>% groups()
+    if (length(grps)==0) grps = list(as.symbol("code"))
+    populationExpr = enexpr(populationExpr)
+    incidenceVar = ensym(incidenceVar)
+    growthVar = ensym(growthVar)
+    plotDates = as.Date(plotDates)
+    
+    df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
-    colour = enexpr(colour)
     
-    p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$"))
-    p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
+    subsetDf = bind_rows(lapply(plotDates, function(plotDate) {
+      return(df %>% filter(date <= plotDate & date > plotDate-timespan) %>% mutate(plotDate = plotDate, timeOffset = as.numeric(plotDate-date), fade=(timespan-as.numeric(plotDate-date))/timespan))
+    }))
+    
+    #browser()
+    subsetDf$tmpGrpId = subsetDf %>% group_by(!!!grps, plotDate) %>% group_indices()
     
     if(identical(colour,NULL)) {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = "black",...)
-      else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`,...))
+      p2 = ggplot(subsetDf, aes(x=!!growthVar, y=!!incidenceVar/!!populationExpr*populationPer, group=tmpGrpId))
     } else if (class(colour) == "character") {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = !!colour,...)
-      else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`, ...),colour=!!colour)
+      p2 = ggplot(subsetDf, aes(x=!!growthVar, y=!!incidenceVar/!!populationExpr*populationPer, group=tmpGrpId),colour=colour)
     } else {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=`Growth.windowed.value`,sdVar=`Growth.windowed.SE.value`,colourExpr = !!colour,...)
-      else p2 = p2 + geom_line(aes(y=`Growth.windowed.value`,colour=!!colour, ...))
+      p2 = ggplot(subsetDf, aes(x=!!growthVar, y=!!incidenceVar/!!populationExpr*populationPer, colour=!!colour,group=tmpGrpId))
     }
-    p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=`Growth.windowed.value`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
-    
+    p2 = p2 +
+      geom_vline(xintercept = 0, colour="grey40")+
+      geom_path(aes(alpha=fade, size=!!populationExpr*(1+fade)))+
+      geom_point(data = subsetDf %>% filter(timeOffset==0),mapping = aes(size=!!populationExpr))+#, alpha=maxAlpha) + 
+      scale_size_area(max_size=maxSize,guide="none")+
+      scale_y_continuous(trans="log1p", breaks=ukcovidtools::breaks_log1p())+
+      scale_alpha_continuous(range=c(0,maxAlpha),guide="none")+
+      coord_cartesian(xlim=rlim)
+      
     return(p2)
   },
+  
+  gogPlot = function(...) self$plotGrowthIncidence(...),
   
   plotEvents = function(events,labelSize=7,labelY=Inf,...) {
     rects = events %>% filter(!is.na(`End date`))
@@ -1072,7 +1140,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
 
-  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=NULL, ...) {
+  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), ...) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
       self$logIncidenceStats()
@@ -1129,7 +1197,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, ...
+  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=c(0,NA), ...
   ) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%

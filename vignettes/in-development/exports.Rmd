@@ -1,0 +1,86 @@
+---
+title: "Exports for various people"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::reload()
+```
+
+```{r}
+#casesPerPillar = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = pillar)
+casesPerSymptomatic = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = asymptomatic_indicator)
+#casesPerEthnicity = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = ethnicity_final)
+#casesPerIMD = dpc$spim$getLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = imd_decile)
+
+#breakdown111 = dpc$spim$getOneOneOneIncidence(dateFrom = as.Date("2020-07-01"))
+
+#deathsPerResidence = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = residence_type)
+#deathsPerEthicity = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85),subgroup = ethnicity_final)
+deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(5,15,25,35,45,55,65,75,85))
+
+others = dpc$spim$getSPIMextract()
+
+icuAdmissions = others %>% filter(source == "chess_icu_admissions" & !is.na(ageCat) & codeType %in% c("CTRY","NHSER"))
+admissions = others %>% filter(source %in% c("hospital_inc","hospital_inc_new") & !is.na(ageCat) & codeType %in% c("CTRY","NHSER"))
+```
+
+```{r}
+## data for TJ
+tmp1 = casesPerSymptomatic %>% filter(subgroup != "Y" & ageCat!="unknown")  %>% mutate(ageCat = as.character(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
+tmp2 = admissions %>% mutate(ageCat = as.character(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+tmp3 = icuAdmissions %>% mutate(ageCat = as.character(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+tmp4 = deaths  %>% mutate(ageCat = as.character(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
+tmp5 = bind_rows(tmp1,tmp2,tmp3,tmp4) %>% tsp$logIncidenceStats() %>% filter(date > "2020-03-23")
+tmp5 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forTJ-symptomaticCasesAdmissionsAndDeaths-AgeAndNHSER-GrowthRate-",Sys.Date(),".csv"))
+```
+
+## data for Ellen
+
+```{r}
+
+tmp = casesPerSymptomatic %>% filter(codeType %in% c("CTRY","NHSER") & subgroup != "Y" & ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
+tmp2 = tmp %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$estimateRt(window = 14)
+tmp2 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forEllen-symptomaticCases-AgeAndRegionStratifiedRtAndGrowthRate-",Sys.Date(),".csv"))
+```
+
+## data for Leon - universities
+
+Do you have an easy to digest incidence by ltla over time?
+we're looking to do something quick with the university movement data....
+Do you want smooth or raw incidence?
+Raw (edited) 
+we especially want students
+
+```{r}
+
+casesPerSymptomaticByAge = dpc$spim$getLineListIncidence(codeTypes = c("LAD","NHSER"), ageBreaks = c(6,10,18,23,35,45,55,65,75,85),filterExpr = asymptomatic_indicator!="Y")
+tmp = casesPerSymptomaticByAge %>% filter(ageCat!="unknown") %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
+tmp %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forLeon-symptomaticCases-AgeAndLADStratified-raw-",Sys.Date(),".csv"))
+describeDataframe(tmp) %>% yaml::write_yaml(paste0("~/Dropbox/covid19/exports/forLeon-symptomaticCases-AgeAndLADStratified-description-",Sys.Date(),".yaml"))
+```
+## Maps for TJ
+
+```{r}
+tmp = dpc$geog$getIntersection(inputMapId = "WD11", outputMapId = "LAD19")
+tmp2 = tmp %>% as.data.frame() %>%mutate( areaFrac = intersectionArea/as.numeric(area.src)) %>% select(WD11_code = code.src,WD11_name = name.src, LAD19_code = code,LAD19_name=name,areaFrac)
+tmp2 %>% write_csv("~/Dropbox/covid19/exports/WD11toLAD19byArea.csv")
+```
+
+## Catchment areas
+
+```{r}
+
+hosp = dpc$capac$getHospitals()
+inputShape = hosp %>% filter(sector == "NHS Sector" & tier1)
+wd19 = dpc$geog$getMap("WD19")
+demogWd19 = dpc$demog$getDemographicsForShape(mapId = "WD19",ageBreaks = c(18),combineGenders = TRUE)
+demogWd19 = demogWd19 %>% filter(ageCat == "18+")
+wd19 = wd19 %>% left_join(demogWd19)
+catch = dpc$geog$createCatchment(supplyShape = hosp  %>% dplyr::group_by(trustId,trustName),supplyIdVar = trustId,supplyVar = acuteBeds,demandId="WD19",demandShape = wd19,demandVar = count,demandIdVar = code)
+dpc$geog$preview(mapId = catch$map, poi = catch$suppliers)
+
+```

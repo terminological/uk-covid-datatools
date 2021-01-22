@@ -73,25 +73,15 @@ ref = list(
   stab = function(name) cap$stab(name,display="cite")
 )
 
-dpc = tsp = chp = srv = mwp = NULL
-
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  chp <<- dpc$chessProcessor()
-  srv <<- dpc$survivalProcessor()
-  mwp <<- dpc$metawardProcessor()
-}
+ukcovidtools::setup()
 
 distLabel = function(fit) {
   fit$printDistributionSummary() %>% select(dist,param,mean) %>% pivot_wider(names_from = param, values_from = mean) %>% ungroup() %>% summarise(label = paste0(sprintf("%s: %1.1f (\u00B1%1.1f) days",dist,mean,sd),collapse = "\n"))
 }
 
+# This is needed as the code saves some rData files and otherwise this gets into the final output document.
 options("usethis.quiet"=TRUE)
 
-reload()
 ```
 
 ```{r}

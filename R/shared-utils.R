@@ -206,3 +206,62 @@ mode <- function(x) {
 #   ux <- unique(x)
 #   ux[which.max(tabulate(match(x, ux)))]
 }
+
+setup = function() {
+  if(!exists("dpc")) ukcovidtools::reload()
+}
+
+reload = function() {
+  paths = config::get()
+  #devtools::load_all(paths$librarySource)
+  options("ukcovid.config"=paths$secrets)
+  options("ukcovid.spim"=paths$spimSource)
+  dpc = DataProviderController$setup(paths$cache)
+  assign("dpc", dpc, envir = .GlobalEnv)
+  assign("tsp", dpc$timeseriesProcessor(), envir = .GlobalEnv)
+}
+  
+describeDataframe = function(df) {
+  sapply(colnames(df),function(x) {
+    if(all(is.character(tmp[[x]]) | is.factor(tmp[[x]]))) return(unique(tmp[[x]]))
+    if(all(is.numeric(tmp[[x]]))) return(c(min(tmp[[x]],na.rm=TRUE),max(tmp[[x]],na.rm=TRUE)))
+    if("Date" %in% class(tmp[[x]])) return(c(min(tmp[[x]],na.rm=TRUE),max(tmp[[x]],na.rm=TRUE)))
+  })
+}
+
+breaks_log1p = function(n=5,base=10) {
+  #scales::force_all(n, base)
+  n_default = n
+  function(x, n = n_default) {
+    tmp = scales::breaks_log(n_default,base)(x+1,n)
+    return(c(0,tmp[-1]))
+  }
+}
+
+highlight = function(vector, value, backgroundColour = "grey80", highlightColour = "red") {
+  tmp = unique(vector)
+  out = rep(backgroundColour,length(tmp))
+  names(out) = as.character(tmp)
+  out[as.character(value)] = highlightColour
+  return(out)
+}
+
+highlightList = function(vector, highlightList, backgroundColour = "grey80") {
+  tmp = unique(vector)
+  out = rep(backgroundColour,length(tmp))
+  names(out) = as.character(tmp)
+  for (key in names(highlightList)) {
+    out[[key]]=highlightList[[key]]
+  }
+  return(out)
+}
+
+# scale_colour_highlight_d = function(..., highlightList, backgroundColour="grey80") {
+#   browser()
+#   tmp = ggplot2::discrete_scale(
+#     "colour",
+#     "highight_d",
+#     viridis_pal(alpha, begin, end, direction, option),
+#     ...
+#   )
+# }

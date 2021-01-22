@@ -1,0 +1,741 @@
+---
+title: "New Variant"
+author: "Rob Challen"
+date: "27/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+devtools::load_all("~/Git/uk-covid-datatools/")
+# ukcovidtools::setup()
+ukcovidtools::reload()
+
+devtools::load_all("~/Git/standard-print-output/")
+standardPrintOutput::setDefaults()
+```
+
+
+```{r}
+sgll = dpc$spim$getSGeneLineList()
+ll = dpc$spim$getLineList()
+dll = dpc$spim$getDeathsLineList()
+sgFrac = dpc$spim$getSDropoutFreqency(codeTypes = "LAD")
+```
+
+## What does reporting of S gene level look like across regions?
+
+```{r}
+
+sGeneTested = bind_rows(
+  ll %>% semi_join(sgll,by="FINALID") %>% mutate(SGeneResult = "Known"),
+  ll %>% anti_join(sgll,by="FINALID") %>% mutate(SGeneResult = "Unknown")
+)
+
+#summary = sGeneTested %>% group_by(pillar,NHSER_name,SGeneResult) %>% summarise(n=n(),maxDate=max(specimen_date))
+#summary %>% View()
+#truncate = as.Date(min(summary$maxDate),"1970-01-01")
+#tmp4 = sGeneTested %>% filter(specimen_date < truncate)
+
+testedGeography = sGeneTested %>% filter(specimen_date > "2020-10-01") %>% group_by(LTLA_code, LTLA_name, pillar, SGeneResult) %>% summarise(count = n()) %>% mutate(percent = count/sum(count))
+ladMap = dpc$geog$getMap("LAD19") %>% inner_join(testedGeography, by=c("code"="LTLA_code"))
+ggplot(ladMap %>% filter(SGeneResult=="Unknown"),aes(fill=(1-percent)*100))+geom_sf()+facet_wrap(vars(pillar))
+```
+
+```{r}
+mutationIncidence = tsp$spim$getLineListIncidence(ll=sGeneTested %>% filter(pillar=="Pillar 2"), ageBreaks = c(5,17,23,60,75), subgroup = SGeneResult) %>% tsp$aggregateGender()
+
+#if(mutationIncidence %>% filter(codeType=="NHSER") %>% pull(value) %>% sum() != nrow(tmp4)) warning("incidence error")
+
+mutationIncidence2 = mutationIncidence %>% pivot_wider(names_from = subgroup,values_from=value)  %>%
+  mutate(
+    Known = ifelse(is.na(Known),0,Known),
+    Unknown = ifelse(is.na(Unknown),0,Unknown)
+  )
+
+mutationIncidence2 = mutationIncidence2 %>% covidStandardGrouping() %>% arrange(date) %>% mutate(
+  Roll.Known = stats::filter(Known,filter=rep(1,7),sides=1),
+  Roll.Unknown = stats::filter(Unknown,filter=rep(1,7),sides=1)
+) %>% filter(!is.na(Roll.Known) & !is.na(Roll.Unknown)) %>% ungroup()
+
+mutationIncidence2 = mutationIncidence2 %>% mutate(
+  binom::binom.confint(Roll.Known,Roll.Unknown+Roll.Known,methods = "wilson")
+)
+
+ggplot(mutationIncidence2 %>% filter(name !="Unknown (England)" & ageCat != "unknown" & date > "2020-09-01"), aes(x=date,y=mean,ymin=lower,ymax=upper,fill=ageCat,colour=ageCat))+geom_ribbon(alpha=0.4,colour=NA)+geom_line()+facet_wrap(vars(name))+ylab("P(S gene status known)")
+
+```
+
+## S gene detection frequency over time as function of ORF1ab and N gene cutoff
+
+```{r}
+
+tmp2 = bind_rows(
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 15,N_CT = 15) %>% mutate(cutoff=15),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 20,N_CT = 20) %>% mutate(cutoff=20),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 25,N_CT = 25) %>% mutate(cutoff=25),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 30,N_CT = 30) %>% mutate(cutoff=30),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 35,N_CT = 35) %>% mutate(cutoff=35),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 40,N_CT = 40) %>% mutate(cutoff=40)
+)
+
+
+ggplot(tmp2,aes(x=date,y=mean*100,ymin=lower*100,ymax=upper*100))+
+  #geom_ribbon(alpha=0.4,mapping=aes(fill=as.factor(cutoff)))+
+  geom_line(mapping=aes(colour=as.factor(cutoff)))+
+  facet_grid(rows=vars(name),cols=vars(sGene))
+
+# Beta distribution with parameters (x + 1/2, n – x + 1/2).
+
+# a = ggplot(tmp2,aes(x=P2CH1CQ,y=P2CH3CQ,colour=sgtf))+geom_point()
+# b = ggplot(tmp2,aes(x=P2CH2CQ,y=P2CH3CQ,colour=sgtf))+geom_point()
+# c = ggplot(tmp2,aes(x=P2CH1CQ,y=P2CH2CQ,colour=sgtf))+geom_point()
+# a+b+c+patchwork::plot_layout(ncol=3)
+
+```
+
+```{r}
+
+tmp2 = bind_rows(
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 15,N_CT = 15,equivocal.rm = FALSE) %>% mutate(cutoff=15),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 20,N_CT = 20,equivocal.rm = FALSE) %>% mutate(cutoff=20),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 25,N_CT = 25,equivocal.rm = FALSE) %>% mutate(cutoff=25),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 30,N_CT = 30,equivocal.rm = FALSE) %>% mutate(cutoff=30),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 35,N_CT = 35,equivocal.rm = FALSE) %>% mutate(cutoff=35),
+  dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 40,N_CT = 40,equivocal.rm = FALSE) %>% mutate(cutoff=40)
+)
+
+
+ggplot(tmp2,aes(x=date,y=mean*100,ymin=lower*100,ymax=upper*100))+
+  #geom_ribbon(alpha=0.4,mapping=aes(fill=as.factor(cutoff)))+
+  geom_line(mapping=aes(colour=as.factor(cutoff)))+
+  facet_grid(rows=vars(name),cols=vars(sGene))
+
+```
+
+proportion of S neg dropout seems to be plateau-ing (sic?) on most recent data. The level depends on the definition of S negativity - in terms of the CT values of the other genes needed to define a positive - the "standard" definition is S_neg_30. Which gives the dropout at around 70% of the total. This could be successful prevention of spread... or maybe indication that 
+
+## SGene versus COG Data
+
+```{r}
+
+cogData = dpc$datasets$getCOGUK()
+
+cogSf = cogData %>% filter(adm1=="UK-ENG" & !is.na(latitude) & !is.na(longitude) & latitude>0) %>% group_by(latitude,longitude) %>% sf::st_as_sf(coords=c("longitude","latitude"),crs=4326) %>% mutate(name=id, code=id)
+tmp = dpc$geog$getContainedIn(inputSf = cogSf,outputMapId = "NHSER20", outputIdVar = name)
+
+# missing NHSER values are mostly in wales and scotland
+# missingSf = cogData %>% filter(adm1=="UK-ENG" & !is.na(latitude) & !is.na(longitude)) %>% filter(is.na(NHSER)) %>% sf::st_as_sf(coords=c("longitude","latitude"),crs=4326) %>% mutate(name=id, code=id)
+# dpc$geog$preview(mapId="NHSER20",poi = missingSf)
+
+cogData = cogData %>% mutate(voc = lineage %>% stringr::str_detect("^B\\.1\\.1\\.7(\\..+)?$")) %>% left_join(tmp %>% rename(NHSER = to), by=c("id"="from"))
+```
+
+```{r}
+# ggplot(cogData %>% filter(voc),aes(x=sample_date))+geom_histogram()
+# cogData %>% filter(voc & adm1=="UK-ENG") %>% View()
+
+vocProp = cogData %>% filter(adm1=="UK-ENG") %>% group_by(sample_date,voc) %>% count() %>% ungroup() %>% tidyr::complete(sample_date = as.Date(min(cogData$sample_date):max(cogData$sample_date),"1970-01-01"),voc, fill=list(n=0)) %>% group_by(voc) %>% arrange(sample_date) %>% mutate(Roll.n = stats::filter(n,filter=rep(1,7),sides = 1)) %>% filter(!is.na(Roll.n)) %>% group_by(sample_date) %>% mutate(binom::binom.confint(Roll.n,sum(Roll.n),methods = "wilson"))
+
+sgene = dpc$spim$getSDropoutFreqency(codeTypes = "CTRY",ORF1ab_CT = 30,N_CT = 30) %>% select(date,sGene,mean,lower,upper)
+b117 = vocProp %>% rename(date = sample_date) %>% mutate(sGene = ifelse(voc,"B.1.1.7","Non B.1.1.7")) %>% select(date,sGene,mean,lower,upper)
+
+ggplot(bind_rows(sgene,b117) %>% filter(sGene %in% c("B.1.1.7","Negative")),aes(x=date,y=mean*100,ymin=lower*100,ymax=upper*100))+
+  geom_ribbon(alpha=0.4,mapping=aes(fill=sGene),alpha=0.5)+
+  geom_line(mapping=aes(colour=sGene))+coord_cartesian(xlim = as.Date(c("2020-10-01",NA)))
+
+```
+
+```{r}
+# ggplot(cogData %>% filter(voc),aes(x=sample_date))+geom_histogram()
+# cogData %>% filter(voc & adm1=="UK-ENG") %>% View()
+
+vocPropNHSER = cogData %>% filter(adm1=="UK-ENG") %>% group_by(sample_date,voc,NHSER) %>% count() %>% ungroup() %>% tidyr::complete(sample_date = as.Date(min(cogData$sample_date):max(cogData$sample_date),"1970-01-01"),voc,NHSER, fill=list(n=0)) %>% group_by(voc,NHSER) %>% arrange(sample_date) %>% mutate(Roll.n = stats::filter(n,filter=rep(1,7),sides = 1)) %>% filter(!is.na(Roll.n)) %>% group_by(sample_date,NHSER) %>% mutate(binom::binom.confint(Roll.n,sum(Roll.n),methods = "wilson"))
+
+sgeneNHSER = dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",ORF1ab_CT = 30,N_CT = 30) %>% select(date,sGene,mean,lower,upper,NHSER=name)
+b117 = vocPropNHSER %>% rename(date = sample_date) %>% mutate(sGene = ifelse(voc,"B.1.1.7","Non B.1.1.7")) %>% select(date,sGene,mean,lower,upper,NHSER) %>% filter(!is.na(NHSER))
+
+
+
+
+ggplot(bind_rows(sgeneNHSER,b117) %>% filter(sGene %in% c("B.1.1.7","Negative")),aes(x=date,y=mean*100,ymin=lower*100,ymax=upper*100))+
+  geom_ribbon(alpha=0.4,mapping=aes(fill=sGene),alpha=0.5)+
+  geom_line(mapping=aes(colour=sGene))+coord_cartesian(xlim = as.Date(c("2020-10-01",NA)))+facet_wrap(vars(NHSER))
+
+```
+
+
+
+```{r}
+
+currentLineages = bind_rows(
+  cogData %>% filter(adm1=="UK-ENG" & sample_date > "2020-11-01") %>% group_by(lineage) %>% count() %>% arrange(desc(n)) %>% head(7),
+  cogData %>% filter(adm1=="UK-ENG" & sample_date < "2020-03-01") %>% filter(sample_date == min(sample_date)) %>% select(lineage)
+)
+
+lineageFreq = cogData %>% filter(adm1=="UK-ENG") %>% 
+  mutate(
+    lineage = ifelse(lineage %in% currentLineages$lineage, lineage, "other"),
+    lineage__colour= ifelse(lineage %in% currentLineages$lineage, lineage__colour, "#c0c0c0"),
+  ) %>%
+  group_by(sample_date,lineage,lineage__colour) %>% count() %>% ungroup() %>%
+  tidyr::complete(sample_date = as.Date(min(cogData$sample_date):max(cogData$sample_date),"1970-01-01"),nesting(lineage,lineage__colour), fill=list(n=0)) %>%
+  group_by(lineage,lineage__colour) %>% arrange(sample_date) %>% mutate(Roll.n = stats::filter(n, rep(1,7))) %>% filter(!is.na(Roll.n)) %>%
+  group_by(sample_date) %>% mutate(binom::binom.confint(Roll.n, sum(Roll.n),methods = "wilson"))
+
+colours = lineageFreq %>% ungroup() %>% select(lineage,lineage__colour) %>% distinct() %>% deframe()
+
+ggplot(lineageFreq,aes(x=sample_date,fill=lineage,y=mean))+geom_area()+
+  #scale_fill_manual(values = colours)
+  scale_fill_brewer(palette = "Set1")+
+  coord_cartesian(xlim=as.Date(c("2020-04-01",NA)))
+
+
+```
+
+```{r}
+
+lineageFreqNHSER = cogData %>% filter(adm1=="UK-ENG") %>% 
+  mutate(
+    lineage = ifelse(lineage %in% currentLineages$lineage, lineage, "other"),
+    lineage__colour= ifelse(lineage %in% currentLineages$lineage, lineage__colour, "#c0c0c0")
+  ) %>%
+  group_by(sample_date,lineage,lineage__colour,NHSER) %>% count() %>% ungroup() %>%
+  tidyr::complete(sample_date = as.Date(min(cogData$sample_date):max(cogData$sample_date),"1970-01-01"),nesting(lineage,lineage__colour),NHSER, fill=list(n=0)) %>%
+  group_by(lineage,lineage__colour,NHSER) %>% arrange(sample_date) %>% mutate(Roll.n = stats::filter(n, rep(1,7))) %>% filter(!is.na(Roll.n)) %>%
+  group_by(sample_date,NHSER) %>% mutate(binom::binom.confint(Roll.n, sum(Roll.n),methods = "wilson"))
+
+colours = lineageFreq %>% ungroup() %>% select(lineage,lineage__colour) %>% distinct() %>% deframe()
+
+ggplot(lineageFreqNHSER %>% filter(!is.na(NHSER)),aes(x=sample_date,fill=lineage,y=mean))+geom_area()+
+  #scale_fill_manual(values = colours)
+  scale_fill_brewer(palette = "Set1")+
+  coord_cartesian(xlim=as.Date(c("2020-07-01",NA)))+
+  facet_wrap(vars(NHSER))
+
+
+```
+
+
+```{r}
+cogSf = cogData %>% filter(adm1=="UK-ENG" & !is.na(latitude) & !is.na(longitude) & latitude>0) %>% group_by(latitude,longitude) %>% sf::st_as_sf(coords=c("longitude","latitude"),crs=4326) %>% mutate(name=id, code=id)
+tmp = dpc$geog$getContainedIn(inputSf = cogSf,outputMapId = "NHSER20", outputIdVar = name)
+
+# names(dpc$geog$sources$maps)
+# "WD11"      "LSOA11"    "MSOA11"    "DZ11"      "HB19"      "LHB19"     "CTYUA19"   "LAD19"     "LAD20"     "CCG20"     "NHSER20"   "PHEC16"    "CTRY19"    "LGD12"     "OUTCODE"   "ISO3166_2" "ISO3166_3"
+# phec16 = dpc$geog$getMap("ISO3166_2",nocache=TRUE)
+# ggplot()+geom_sf(data = phec16)+geom_sf(data = cogSf)
+# dpc$geog$preview(mapId="NHSER20",poi = cogSf)
+```
+
+# QA of S Gene dropout
+
+```{r}
+tmp3 = ll %>% left_join(sgll, by="FINALID", suffix=c("",".sgene"))
+tmp3 = tmp3 %>% group_by(FINALID) %>% arrange(specimen_date.sgene) %>% mutate(est.testNumber = row_number()) %>%
+  ungroup()
+
+# How many do we have CT values for? & how many of those were repeat tests?
+sGeneTestStatus = tmp3 %>% group_by(specimen_date,age,FINALID,NHSER_code,NHSER_name,LTLA_code,LTLA_name) %>% summarise(
+  sGeneTested = all(!is.na(sgtf)),
+  sGeneRepeats = n()
+) %>% mutate(sGeneRepeats = sGeneRepeats-ifelse(sGeneTested,0,1))
+```
+
+
+```{r}
+sGeneTestStatus %>% group_by(NHSER_name,sGeneTested) %>% summarise(count = n()) %>% 
+  mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sGeneTested, "CT known", "CT unknown")) %>% ungroup() %>% 
+  select(NHSER_name,col,percent) %>% pivot_wider(names_from=col,values_from=percent)
+
+
+tmp3 %>% filter(!is.na(sgtf)) %>% group_by(est.testNumber,sgtf) %>% summarise(count=n()) %>% 
+  mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sgtf==1, "S-", "S+")) %>% ungroup() %>% 
+  select(est.testNumber,col,percent) %>% pivot_wider(names_from=col,values_from=percent)
+
+# pillar 2 testing kit changes don't affect
+tmp6 = tmp3 %>% ungroup() %>% filter(!is.na(sgtf) & specimen_date > as.Date("2020-11-01"))
+tmp6 = tmp6 %>% mutate(pillar_2_testingkit = tolower(pillar_2_testingkit)) 
+tmp6 %>% filter(specimen_date > as.Date("2020-12-15") & specimen_date < as.Date("2020-12-21")) %>% group_by(pillar_2_testingkit,sgtf) %>% summarise(count=n()) %>% 
+  mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sgtf==1, "S-", "S+"), N=sum(count)) %>% ungroup() %>% 
+  select(pillar_2_testingkit,col,percent,N) %>% pivot_wider(names_from=col,values_from=percent)
+
+```
+
+## Repeat specimens
+
+```{r}
+
+
+
+byPatient = tmp3 %>% filter(!is.na(sgtf)) %>% group_by(FINALID) %>% summarise(sgtfResults = n_distinct(sgtf), sgtf=mean(sgtf), sgtfTests = n()) 
+duplicates = byPatient %>% filter(sgtfTests > 1)
+# of all patients most have had only one test sequenced. A small number have had a lot.
+byPatient %>% group_by(sgtfTests) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+duplicates %>% group_by(sgtfResults) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+
+# excluding patients with inconsistent results 20% are S-
+# in the subgroup that have repeat tests fewer - 9% are S-. If repeat tests is a function of time and S- are more recent then this is explainable by right censoring.
+byPatient %>% filter(sgtfResults == 1) %>% group_by(sgtf) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+duplicates %>% filter(sgtfResults == 1) %>% group_by(sgtf) %>% count() %>% ungroup() %>% mutate(percent  = sprintf("%1.2f%%",n/sum(n)*100))
+
+
+# Find patients that switch from S+ to S-
+tmp4 = tmp3 %>% dpc$spim$interpretSGene() %>%
+  mutate(result = ifelse(result %in% c("S+N+ORF+","S-N+ORF+"),result,"Other")) %>%
+  arrange(FINALID,specimen_date.sgene) %>% 
+  mutate(
+  lead.FINALID = lead(FINALID),
+  lead.sgtf = lead(sgtf),
+  lead.result = lead(result),
+  lead.specimen_date.sgene = lead(specimen_date.sgene),
+  lead.CDR_Specimen_Request_SK = lead(CDR_Specimen_Request_SK)
+) %>% filter(lead.FINALID == FINALID)
+
+repeats = tmp4 %>% 
+  mutate(interval = as.numeric(lead.specimen_date.sgene-specimen_date.sgene)) %>% # was it > 12 days later
+  mutate(transition = paste0(result," > ",lead.result))
+  #View()
+```
+
+## Repeats and entropy
+
+```{r}
+probSgene = dpc$spim$getSDropoutFreqency(codeTypes = "CTRY",equivocal.rm = FALSE) %>%
+  mutate(result = case_when(
+    sGene == "Positive" ~ "S+N+ORF+",
+    sGene == "Negative" ~ "S-N+ORF+",
+    TRUE ~ "Other"
+  ))
+
+repeats = repeats %>% 
+  left_join(probSgene, by=c("specimen_date.sgene"="date","result"="result"),suffix=c("",".prob")) %>% #P(first result observed at time t1|a result observed at time t1)
+  left_join(probSgene %>% rename_with(~paste0("lead.",.x)), by=c("lead.specimen_date.sgene"="lead.date","lead.result"="lead.result"),suffix=c("",".lead.prob")) #P(second result observed at time t2|a result observed at time t2)
+
+repeats = repeats %>% mutate(transition.prob = mean*lead.mean)
+
+tmp = repeats %>% filter(interval>14) %>% mutate(transition = ifelse(transition %in% c("S+N+ORF+ > S-N+ORF+","S-N+ORF+ > S+N+ORF+"),"Sneg/Spos","Other")) %>% group_by(lead.specimen_date.sgene,transition) %>% summarise(entropy = -mean(transition.prob*log(transition.prob),na.rm = TRUE))
+ggplot(tmp,aes(x=lead.specimen_date.sgene,y=entropy,colour=transition))+geom_line()
+
+# test = repeats %>% group_by(transition, transition.prob, lead.specimen_date.sgene) %>% summarise(transition.count = n()) %>% ungroup() %>%
+#   tidyr::complete(lead.specimen_date.sgene = as.Date(min(repeats$lead.specimen_date.sgene):max(repeats$lead.specimen_date.sgene),"1970-01-01"),nesting(transition, transition.prob), fill=list(transition.count=0)) %>%
+#   group_by(transition, transition.prob) %>% arrange(lead.specimen_date.sgene) %>% mutate(Roll.transition.count = stats::filter(transition.count, filter=rep(1,7), sides = 1)) %>%
+#   filter(!is.na(Roll.transition.count)) %>%
+#   group_by(lead.specimen_date.sgene) %>% mutate(binom::binom.confint(Roll.transition.count, sum(Roll.transition.count), methods="wilson")) %>% 
+#   rename(transition.obs = mean,transition.obs.lower = lower,transition.obs.upper = upper)
+```
+
+## potential reinfection timelines
+
+```{r}
+
+reinfections = repeats %>% filter(interval>14 & transition %in% c("S+N+ORF+ > S-N+ORF+","S-N+ORF+ > S+N+ORF+"))
+
+revReinfectPlot = sgll %>% semi_join(reinfections, by="FINALID")
+timelines = revReinfectPlot %>% group_by(FINALID) %>%
+  summarise(xmin=as.Date(min(specimen_date),"1970-01-01"),xmax=as.Date(max(specimen_date),"1970-01-01")) %>%
+  arrange(desc(xmin))
+
+ggplot()+
+  geom_errorbarh(data = timelines,mapping=aes(y=ordered(FINALID,levels=timelines$FINALID),xmin=xmin,xmax=xmax),inherit.aes = FALSE,colour="grey")+
+  geom_point(data=revReinfectPlot,mapping=aes(y=ordered(FINALID,levels=timelines$FINALID),x=specimen_date,colour=as.factor(sgtf)))+
+  theme(panel.grid = element_blank())
+
+
+#repeats %>% filter(interval < 10) %>% group_by(transition) %>% count() %>% readr::write_csv("~/tmp/transitions.csv")
+ggplot(repeats,aes(x=transition,y=interval))+geom_violin()
+  
+```
+
+## Repeat tests survival model
+
+Here we look at repeat samples available in S gene line list according to transition status. Need all SGene line list entries by FINALID, with end date as next date or censored if none
+
+```{r}
+
+# reinfectSurv = tmp3 %>% dpc$spim$interpretSGene() %>%
+#   mutate(result = ifelse(result %in% c("S+N+ORF+","S-N+ORF+"),result,"Other")) %>%
+#   arrange(FINALID,specimen_date.sgene) %>% 
+#   mutate(
+#   lead.FINALID = lead(FINALID),
+#   lead.sgtf = lead(sgtf),
+#   lead.result = lead(result),
+#   lead.specimen_date.sgene = lead(specimen_date.sgene),
+#   lead.CDR_Specimen_Request_SK = lead(CDR_Specimen_Request_SK)
+# ) %>% mutate(
+#   across(starts_with("lead"),~ifelse(lead.FINALID==FINALID,.x,NA))
+# ) %>% mutate(lead.specimen_date.sgene = as.Date(lead.specimen_date.sgene,"1970-01-01"))
+# 
+# reinfectSurv = reinfectSurv %>% filter(result == "S+N+ORF+") %>% mutate(
+#   time = as.numeric(ifelse(is.na(lead.specimen_date.sgene),Sys.Date()-specimen_date.sgene, lead.specimen_date.sgene-specimen_date.sgene)),
+#   preNov = ifelse(specimen_date.sgene<"2020-11-01","pre nov","post nov"),
+#   status = ifelse(is.na(lead.result),"No reinfection",lead.result) 
+# ) %>% mutate(
+#   status = ordered(status,levels=c("No reinfection","S-N+ORF+","S+N+ORF+","Other")),
+# )
+
+# summary(admissionToDischargeOrDeath)
+
+# TODO: msm - use 
+# survModel %>% gtsummary::tbl_regression(exp = TRUE) 
+
+
+```
+# Estimates of R(t)
+
+```{r}
+
+casesAge = dpc$spim$getLineListIncidence(codeTypes = c("CTRY"), ageBreaks = c(6,18,23,60,75), subgroup = ethnicity_final, filterExpr = asymptomatic_indicator!="Y") %>% 
+      #filter(subgroup!="Y") %>% 
+      tsp$aggregateGender() %>% 
+      tsp$aggregateSubgroup() %>%
+      dpc$demog$findDemographics()
+sgFracAge = dpc$spim$getSDropoutFreqency(codeTypes = c("CTRY"), ageBreaks = c(6,18,23,60,75))
+
+sgCasesAge = casesAge %>% left_join(sgFracAge, by=c("date","ageCat","name","code","codeType")) 
+
+sgCasesAge = sgCasesAge %>% mutate(subgroup = sGene, original.value = value) %>% mutate(value=mean*value) %>% select(-count,-Roll.count) %>% filter(date>"2020-09-06" & ageCat != "unknown")
+
+(sgCasesAge %>% tsp$plotIncidenceQuantiles(colour = subgroup,denominatorExpr = population/1000000))+facet_wrap(vars(ageCat),scales="free_y")+scale_y_continuous(trans="log1p")
+
+sgCasesAge %>% tsp$plotRt(colour = subgroup,quick=TRUE)+facet_wrap(vars(ageCat),scales="free_y")
+```
+
+```{r}
+
+
+tmp2 = dpc$demog$getDemographicsWithEstimatedEthnicity()
+tmp3 = tmp2 %>% filter(is.finite(count)) %>% inner_join(dpc$codes$getTransitiveClosure() %>% filter(fromCodeType=="LSOA",toCodeType=="NHSER"),by=c("code"="fromCode")) %>% group_by(toCode,ethnicity_final) %>% summarise(count=sum(count))
+popByRegion = tmp3 %>% rename(code = toCode, population = count) #%>% dpc$codes$findNamesByCode()
+
+
+```
+
+```{r}
+casesEthnic = dpc$spim$getLineListIncidence(codeTypes = c("NHSER"), subgroup = ethnicity_final, filterExpr = asymptomatic_indicator!="Y", nocache=TRUE) %>% 
+      #filter(subgroup!="Y") %>% 
+      tsp$aggregateGender() %>% 
+      inner_join(popByRegion,by=c("code","subgroup"="ethnicity_final"))
+
+tmpLL = dpc$spim$getLineList()
+
+casesEthnic %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000, colour=subgroup)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+
+sgFracEthnic = dpc$spim$getSDropoutFreqency(codeTypes = c("NHSER"), ll=tmpLL %>% group_by(ethnicity_final),nocache=TRUE)
+
+ggplot(sgFracEthnic %>% filter(sGene=="Negative"), aes(x=date,y=mean,ymin=lower,ymax=upper))+geom_ribbon(mapping=aes(fill=ethnicity_final),alpha=0.2)+geom_line(mapping=aes(colour=ethnicity_final))+
+  facet_wrap(vars(name))
+
+sgCasesEthnic = casesEthnic %>% left_join(sgFracEthnic %>% ungroup() %>% select(-ageCat), by=c("subgroup"="ethnicity_final","date","name","code","codeType")) 
+
+sgCasesEthnic = sgCasesEthnic %>% mutate(original.value = value) %>% mutate(value=mean*value) %>% select(-count,-Roll.count) %>% filter(date>"2020-09-06") %>% mutate(ageCat = sGene) 
+
+sgCasesEthnic %>% tsp$plotIncidenceQuantiles(colour = sGene,denominatorExpr = population/1000000)+facet_grid(cols=vars(subgroup),rows=vars(name),scales="free_y")+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+
+sgCasesEthnic %>% filter(date>"2020-10-26") %>% tsp$plotWindowedGrowthRate(colour = sGene,quick=TRUE,rlim=c(-0.1,0.2))+facet_grid(rows=vars(subgroup),cols=vars(name),scales="free_y")
+
+```
+
+```{r}
+
+cases = dpc$spim$getLineListIncidence(codeTypes = c("CTRY","NHSER"), filterExpr = asymptomatic_indicator != "Y") %>% 
+      tsp$aggregateGender() %>% 
+      tsp$aggregateSubgroup() %>%
+      tsp$aggregateAge() %>%
+      dpc$demog$findDemographics()
+sgFrac = dpc$spim$getSDropoutFreqency(codeTypes = c("CTRY","NHSER"))
+
+sgCases = cases %>% left_join(sgFrac, by=c("date","ageCat","name","code","codeType")) 
+
+sgCases = sgCases %>% mutate(subgroup = sGene, original.value = value) %>% mutate(value=mean*value) %>% select(-count,-Roll.count) %>% filter(date>"2020-09-06")
+
+(cases  %>% tsp$aggregateSubgroup() %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000))+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+
+(sgCases  %>% tsp$plotIncidenceQuantiles(colour=subgroup,denominatorExpr = population/1000000))+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+
+```
+```{r}
+sgRt = sgCases %>% tsp$logIncidenceStats() %>% tsp$estimateRtQuick() 
+sgRt %>% tsp$plotRt(colour = subgroup)+facet_wrap(vars(name),scales="free_y")
+
+sgDelta = sgRt %>% mutate(subgroup=NA) %>% ukcovidtools::covidStandardDateGrouping() %>% group_modify(function(d,g) {
+  tmp = d %>% select(sGene,growth=Growth.windowed.value,R=`Mean(R)`) %>% pivot_longer(cols = -sGene) %>% pivot_wider(names_from = sGene)
+  tmp = tmp %>% mutate(absolute = Negative-Positive, relative = Negative/Positive, log = log(Negative)/log(Positive)) %>% select(-Negative,-Positive) %>% mutate(name = paste0(name,".delta."))
+  tmp = tmp %>% pivot_longer(cols = -name, names_to="subname",values_to="value") %>% mutate(delta = paste0(name,subname)) %>% select(-subname,-name)
+  return(tmp)
+})
+
+ggplot(sgDelta %>% filter(delta %>% stringr::str_starts("R")),aes(x=date,y=value,colour=delta))+geom_line()+facet_wrap(vars(name))
+
+ggplot(sgDelta %>% filter(delta=="growth.delta.log"),aes(x=date,y=value,colour=delta))+geom_line()+facet_wrap(vars(name))+coord_cartesian(ylim=c(-2,2))
+
+```
+
+# Cox Model
+
+```{r}
+ll = dpc$spim$getLineList()
+dll = dpc$spim$getDeathsLineList()
+#sgll3 = dpc$spim$getSGeneLineList() %>% dpc$spim$interpretSGene() %>% filter(!is.na(FINALID)) %>% group_by(FINALID) %>% arrange(desc(specimen_date)) %>% filter(row_number() == 1) %>% ungroup()
+sgll3 = dpc$spim$getSGeneLineList() %>% dpc$spim$interpretSGene() %>% filter(!is.na(FINALID)) %>% group_by(FINALID) %>% filter(n() == 1) %>% ungroup()
+
+tmp2 = dpc$demog$getDemographicsWithEstimatedEthnicity()
+tmp3 = tmp2 %>% filter(is.finite(count)) %>% inner_join(dpc$codes$getTransitiveClosure() %>% filter(fromCodeType=="LSOA",toCodeType=="NHSER"),by=c("code"="fromCode")) %>% group_by(toCode,ethnicity_final) %>% summarise(count=sum(count))
+popByRegion = tmp3 %>% rename(code = toCode, population = count) #%>% dpc$codes$findNamesByCode()
+
+coxData = ll %>% left_join(sgll3, by="FINALID", suffix=c("",".sgene")) %>% left_join(popByRegion, by=c("NHSER_code"="code","ethnicity_final"))
+coxData = coxData %>% left_join(dll %>% mutate(FINALID=as.numeric(finalid)), by=c("FINALID"),suffix=c("",".death"))
+
+censorLength = 28
+```
+
+```{r}
+coxData2 = coxData %>% select(FINALID, specimen_date, lab_report_date, specimen_date.sgene, dateadmission_NHSE, dod,death_type28,age,sex,imd_decile,sGene,NHSER_name,CT_N = N_L, ethnicity_final,NHSER_population=population,LTLA_name) %>% 
+  mutate(
+    died = !is.na(dod),
+    diedWithin28days = !is.na(death_type28),
+    dodAt28days = ifelse(is.na(specimen_date.sgene) | dod > specimen_date.sgene+censorLength | dod < specimen_date.sgene, NA, dod),
+    censoredAt28days = ifelse(is.na(dodAt28days),0,1),
+    censoredDate = pmin(Sys.Date(),specimen_date.sgene+censorLength,na.rm = TRUE),
+    censoredDate2 = pmin(Sys.Date(),pmax(dateadmission_NHSE,specimen_date.sgene,na.rm = TRUE)+censorLength)
+  ) %>% 
+  mutate(
+    reportingDelay = as.numeric(lab_report_date-specimen_date),
+    time = ifelse(censoredAt28days==0, censoredDate-as.numeric(specimen_date.sgene), dodAt28days-as.numeric(specimen_date.sgene)), 
+    time2 = ifelse(censoredAt28days==0, censoredDate2-as.numeric(pmax(dateadmission_NHSE,specimen_date.sgene,na.rm = TRUE)), dodAt28days-as.numeric(pmax(dateadmission_NHSE,specimen_date.sgene,na.rm = TRUE))), 
+    admissionDelay = as.numeric(dateadmission_NHSE-specimen_date),
+    status = censoredAt28days
+  ) %>%
+  mutate(
+    ageCat = tsp$cutByAge(age, ageBreaks = c(60,70,80)),
+    sGeneEra = case_when(
+      is.na(sGene) ~ "Unknown (and P1)",
+      sGene == "Negative" & specimen_date.sgene>="2020-10-01" ~ "Neg Post B.1.1.7",
+      sGene == "Negative" & specimen_date.sgene<"2020-10-01" ~ "Neg Pre B.1.1.7",
+      TRUE ~ as.character(sGene))
+  )
+
+#ggplot(coxData2,aes(x=admissionDelay,fill=sGene))+geom_histogram(position="dodge")
+```
+
+```{r}
+coxData3 = coxData2 %>%
+  filter(!is.na(imd_decile)) %>%
+  filter(!is.na(sex) & sex != "Unknown") %>% mutate() %>%
+  filter(!is.na(ageCat) & !is.na(age)) %>%
+  filter(!is.na(ethnicity_final) & !ethnicity_final %in% c("Unknown")) %>%
+  filter(is.na(admissionDelay) | admissionDelay >= 0) %>%
+  filter(is.na(reportingDelay) | (reportingDelay >= 0 & reportingDelay <10) ) %>%
+  mutate(
+    ethnicity_final = ethnicity_final %>% forcats::as_factor() %>% forcats::fct_relevel("White"),
+    sex = sex %>% forcats::as_factor(),
+    imd_decile = forcats::fct_relevel(forcats::as_factor(as.numeric(imd_decile)),"5"),
+    imd_decile_2 = forcats::as_factor(as.numeric(imd_decile)),
+    sGene = sGene %>% forcats::fct_relevel("Positive"),
+    sGeneEra = sGeneEra %>% forcats::as_factor() %>% forcats::fct_relevel("Positive"),
+    relativeCopyNumber = 2^(median(CT_N,na.rm=TRUE)-CT_N),
+    deathStatus = ifelse(diedWithin28days,"Dead <28 days","Other")
+  )
+
+rm(coxData,coxData2)
+```
+
+## Summary
+
+```{r}
+
+summaryTable = function(tmp) {
+  groupPercent = function(df) df %>% summarise(N=n()) %>% mutate(`%age`=sprintf("%1.1f%%",N/sum(N)*100))
+  groupMean = function(df,col) df %>% filter(is.finite({{col}})) %>% summarise(N=n(),  `mean (SD)`=sprintf("%1.1f (\u00B1%1.1f)",mean({{col}},na.rm=TRUE),sd({{col}},na.rm=TRUE)))
+   bind_rows(
+    tmp %>% group_by(value = NHSER_name) %>% groupPercent() %>% mutate(category="Region"),
+    tmp %>% group_by(value = ethnicity_final) %>% groupPercent() %>% mutate(category="Ethnicity"),
+    tmp %>% group_by(value = sGeneEra) %>% groupPercent() %>% mutate(category="S gene status"),
+    tmp %>% group_by(value = deathStatus) %>% groupPercent() %>% mutate(category="Status"),
+    tmp %>% group_by(value = ageCat) %>% groupPercent() %>% mutate(category="Age by category"),
+    tmp %>% groupMean(age) %>% mutate(category="Age"),
+    tmp %>% groupMean(CT_N) %>% mutate(category="N Gene CT"),
+    tmp %>% group_by(value=imd_decile_2) %>% groupPercent() %>% mutate(category="IMD")
+  ) %>% ungroup()
+}
+
+combinedSummary = summaryTable(coxData3) %>% rename_with(~paste0("All ",.x),.cols=c(N,`%age`,`mean (SD)`)) %>%
+  left_join(summaryTable(coxData3 %>% filter(!is.na(sGene))) %>% rename_with(~paste0("Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+  left_join(summaryTable(coxData3 %>% filter(diedWithin28days)) %>% rename_with(~paste0("Died ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+  left_join(summaryTable(coxData3 %>% filter(diedWithin28days & !is.na(sGene))) %>% rename_with(~paste0("Died + Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value"))
+
+combinedSummary %>% group_by(category) %>% standardPrintOutput::saveTableLandscape("~/Dropbox/covid19/new-variant/CombinedSummaryTable",defaultFontSize = 8)
+```
+
+## Test reporting delay versus S Gene status
+
+
+```{r}
+ggplot(coxData3,aes(fill=sGeneEra,x=reportingDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")
+  # geom_text(aes( label = scales::percent(..prop..,accuracy=1),
+  #                  y= ..prop.. ), stat= "count", vjust = 0.5, hjust=-0.1, position = position_dodge(width=0.6),size=3,angle=90)
+  
+```
+
+## Time to admission versus S Gene status
+
+
+```{r}
+ggplot(coxData3,aes(fill=sGeneEra,x=admissionDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+
+  #geom_density(mapping=aes(colour=sGene),alpha=0.2)+
+  #facet_wrap(vars(ethnicity_final),scales="free_y")+
+  coord_cartesian(xlim=c(0,15))+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+```
+
+## Age distributions of cases by sGene status
+
+```{r}
+
+tmp = dpc$demog$getDetailedDemographics()
+tmp2 = tmp %>% semi_join(dpc$codes$getTransitiveClosure() %>% filter(toCode=="E92000001"),by=c("code"="fromCode")) %>% group_by(age) %>% summarise(count = sum(count)) %>% mutate(percent = count/sum(count))
+
+ggplot(coxData3,aes(fill=sGeneEra,x=age))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  geom_line(data=tmp2,aes(x=age,y=percent),colour="grey60",inherit.aes = FALSE)+
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  # geom_text(aes( label = scales::percent(..prop..,accuracy=1),
+  #                  y= ..prop.. ), stat= "count", vjust = 0.5, hjust=-0.1, position = position_dodge(width=0.6),size=3,angle=90)
+  
+```
+## Age distributions of infections by sGene status who died
+
+```{r}
+ggplot(coxData3 %>% filter(diedWithin28days),aes(fill=sGeneEra,x=age))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  # geom_text(aes( label = scales::percent(..prop..,accuracy=1),
+  #                  y= ..prop.. ), stat= "count", vjust = 0.5, hjust=-0.1, position = position_dodge(width=0.6),size=3,angle=90)
+  
+```
+
+## Death within 28 days versus CT values / relative copy numbers
+
+```{r}
+p1 = ggplot(coxData3,aes(x=sGeneEra,colour=diedWithin28days,y=CT_N))+geom_boxplot()
+p2 = ggplot(coxData3,aes(x=sGeneEra,colour=diedWithin28days,y=relativeCopyNumber))+coord_cartesian(ylim=c(0,100))+geom_boxplot()#+facet_wrap(vars(ethnicity_final))
+p1+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides="collect")
+```
+## Cases by IMD
+
+```{r}
+ggplot(coxData3 %>% mutate(
+    imd_decile=as.factor(as.numeric(as.character(imd_decile)))
+  ),aes(fill=sGeneEra,x=imd_decile))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("cases")+facet_wrap(vars(sGeneEra), scales = "free")
+```
+## Deaths by IMD
+
+```{r}
+ggplot(coxData3 %>% filter(diedWithin28days) %>% mutate(
+    imd_decile=as.factor(as.numeric(as.character(imd_decile)))
+  ),aes(fill=sGeneEra,x=imd_decile))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("deaths")+facet_wrap(vars(sGeneEra), scales = "free")
+```
+## Cases per 1M by Ethnicity
+
+```{r}
+ggplot(
+  coxData3 %>% group_by(sGeneEra,ethnicity_final,NHSER_name,NHSER_population) %>% summarise(count = n()) %>% group_by(sGeneEra,ethnicity_final) %>% summarise(per1M = sum(count)/sum(NHSER_population)*1000000, pop = sum(NHSER_population)),
+  aes(fill=sGeneEra,x=ethnicity_final,y=per1M))+
+  geom_bar(stat="identity",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("cases per 1M")+facet_wrap(vars(sGeneEra), scales = "free")
+```
+
+## Deaths per 1M by Ethnicity
+
+```{r}
+ggplot(
+  coxData3 %>% filter(diedWithin28days) %>% group_by(sGeneEra,ethnicity_final,NHSER_name,NHSER_population) %>% summarise(count = n()) %>% group_by(sGeneEra,ethnicity_final) %>% summarise(per1M = sum(count)/sum(NHSER_population)*1000000),
+  aes(fill=sGeneEra,x=ethnicity_final,y=per1M))+
+  geom_bar(stat="identity",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("deaths per 1M")+facet_wrap(vars(sGeneEra), scales = "free")
+```
+
+
+```{r}
+
+posSgene = coxData3 %>% filter(sGene=="Positive" & specimen_date.sgene > "2020-10-01" & age > 30)
+negSgene = coxData3 %>% filter(sGene=="Negative" & specimen_date.sgene > "2020-10-01" & age > 30)
+
+matches = negSgene %>% inner_join(posSgene, by=c("sex","imd_decile","LTLA_name","ethnicity_final","ageCat"),suffix=c("",".match")) %>% filter(
+  abs(age-age.match)<2 & 
+  abs(as.numeric(specimen_date.sgene-specimen_date.sgene.match)) < 4
+)
+
+set.seed(101)
+matchesSelected = matches %>% group_by(FINALID) %>% sample_n(1) %>% ungroup()
+
+matchesSelected %>% summarise(
+  ageDifference = mean(age-age.match),
+  specimenDateDifference = mean(as.numeric(specimen_date.sgene-specimen_date.sgene.match))
+)
+
+#matches = matches %>% group_by(FINALID) %>% mutate(matches=n()) %>% filter(matches>=2) %>% ungroup()
+negMatched = matchesSelected %>% select(-ends_with(".match"))
+posMatched = matchesSelected %>% select(FINALID = FINALID.match) %>% inner_join(posSgene, by="FINALID")
+
+coxFinal = bind_rows(posMatched,negMatched) %>% mutate(sGene = sGene %>% forcats::fct_drop())
+
+combinedSummary2 = summaryTable(coxFinal) %>% rename_with(~paste0("All ",.x),.cols=c(N,`%age`,`mean (SD)`)) %>%
+  left_join(summaryTable(posMatched) %>% rename_with(~paste0("S pos ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
+  left_join(summaryTable(negMatched) %>% rename_with(~paste0("S neg ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) 
+
+combinedSummary2 %>% group_by(category) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/new-variant/CaseMatchedSummaryTable",defaultFontSize = 8)
+```
+
+## Time to admission versus S Gene status
+
+
+```{r}
+ggplot(coxFinal,aes(fill=sGene,x=admissionDelay))+
+  geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+
+  #geom_density(mapping=aes(colour=sGene),alpha=0.2)+
+  #facet_wrap(vars(ethnicity_final),scales="free_y")+
+  coord_cartesian(xlim=c(0,15))+facet_wrap(~sGene, scales = "free_y", ncol=1)
+
+ggplot(coxFinal,aes(x=sGene,colour=diedWithin28days,y=CT_N))+geom_boxplot()
+
+ggplot(coxFinal,aes(fill=sGene,x=specimen_date.sgene))+
+  geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
+  ylab("probability")+
+  facet_wrap(~sGene, scales = "free_y", ncol=1)
+```
+
+# summary(admissionToDischargeOrDeath)
+
+# survModel = coxph(Surv(time,status) ~ rcs(age,nk=3)+sex+sGeneEra+imd_decile, coxData3)
+# survModel %>% gtsummary::tbl_regression(exp = TRUE) 
+
+```{r}
+library(survival)
+survModel = survival::coxph(Surv(time,status) ~ sGene, coxFinal)
+survminer::ggforest(survModel)
+
+survModel1_5 = survival::coxph(Surv(time2,status) ~ sGene, coxFinal)
+survminer::ggforest(survModel1_5)
+
+survModel2 = survival::coxph(Surv(time,status) ~ pspline(admissionDelay,4), coxFinal)
+termplot(survModel2, se=TRUE, term=1, col.term=1, col.se=1, xlab="Admission delay")
+
+survModel3 = survival::coxph(Surv(time,status) ~ sGene+age, coxFinal)
+survminer::ggforest(survModel3)
+
+survModel4 = survival::coxph(Surv(time2,status) ~ pspline(CT_N,4), coxFinal)
+termplot(survModel4, se=TRUE, term=1, col.term=1, col.se=1, xlab="N Gene CT value")
+
+survModel5 = survival::coxph(Surv(time,status) ~ sGene+CT_N, coxFinal)
+survminer::ggforest(survModel5)
+```

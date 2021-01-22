@@ -4,8 +4,19 @@
 #' @export
 CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataProvider, public = list(
   
+  truncation = list(
+    "case" = 4,
+    "hospital admission" = 4,
+    "icu admission" = 4,
+    "death" = 10
+  ),
+  
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
+  },
+  
+  setTruncation = function(listDays) {
+    self$truncation = listDays
   },
   
   trimNAs = function(r0Timeseries) {
@@ -44,7 +55,8 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
             date = as.Date(minDate:maxDate,"1970-01-01")
           )
           codesAndNames = d %>% select(code,name,codeType) %>% distinct()
-          combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+          combinations = #tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+            dates %>% left_join(ageCats, by=character()) %>% left_join(genders, by=character()) %>% left_join(subgroups, by=character()) %>% left_join(codesAndNames, by=character())
           d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
           if("Implicit" %in% colnames(d)) d = d %>% mutate(Implicit = ifelse(is.na(Implicit),FALSE,Implicit))
           return(d)
@@ -77,7 +89,8 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           )
           codeTypes = d %>% filter(!is.na(codeType)) %>% pull(codeType) %>% unique()
           codesAndNames = self$codes$getCodes() %>% filter(codeType %in% codeTypes & status == "live") 
-          combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+          combinations = #tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+            dates %>% left_join(ageCats, by=character()) %>% left_join(genders, by=character()) %>% left_join(subgroups, by=character()) %>% left_join(codesAndNames, by=character())
           d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
           if("Implicit" %in% colnames(d)) d = d %>% mutate(Implicit = ifelse(is.na(Implicit),FALSE,Implicit))
           return(d)
@@ -105,7 +118,8 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           dates = tibble(date = as.Date(min(d$date):max(d$date),"1970-01-01"))
           
           codesAndNames = d %>% select(code,name,codeType) %>% distinct()
-          combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+          combinations = #tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+            dates %>% left_join(ageCats, by=character()) %>% left_join(genders, by=character()) %>% left_join(subgroups, by=character()) %>% left_join(codesAndNames, by=character())
           d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
           if (g$type == "cumulative") {
             d = d %>% dplyr::group_by(ageCat,gender,subgroup,code,name,codeType) %>% dplyr::arrange(date) %>% dplyr::mutate(Implicit = is.na(value)) %>% tidyr::fill(value) %>% dplyr::ungroup()
@@ -144,7 +158,8 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
           dates = tibble(date = unique(d$date))
           codeTypes = d %>% filter(!is.na(codeType)) %>% pull(codeType) %>% unique()
           codesAndNames = self$codes$getCodes() %>% filter(codeType %in% codeTypes & status == "live") 
-          combinations = tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+          combinations = #tidyr::crossing(ageCats,genders,subgroups,dates,codesAndNames)
+            dates %>% left_join(ageCats, by=character()) %>% left_join(genders, by=character()) %>% left_join(subgroups, by=character()) %>% left_join(codesAndNames, by=character())
           d = combinations %>% dplyr::left_join(d, by=c("ageCat","gender","subgroup","date","code","name","codeType"))
           if (g$type == "cumulative") {
             d = d %>% dplyr::group_by(ageCat,gender,subgroup,code,name,codeType) %>% dplyr::arrange(date) %>% dplyr::mutate(Implicit = is.na(value)) %>% tidyr::fill(value) %>% dplyr::ungroup()
@@ -198,19 +213,30 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
   #' @description Take a set of timeseries and fixes any non standard names, trncates time series bu truncate days. 
   #' intially Fills all regions to be the same length but with trim trailing NAs
   #' @return a covidTimeseriesFormat dataframe
-  fixDatesAndNames = function(covidTimeseries, truncate) {
+  fixDatesAndNames = function(covidTimeseries, truncate=0) {
     tmp5 = covidTimeseriesFormat(covidTimeseries)
     if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA_character_)
+    
+    truncations = tibble::tibble(
+      statistic = names(self$truncation),
+      tmpTrunc = unlist(self$truncation))
+    
     tmp5 = tmp5 %>% 
       dplyr::ungroup() %>%
       dplyr::select(-name) %>%
+      dplyr::left_join(truncations,by="statistic") %>%
+      dplyr::mutate(tmpTrunc = ifelse(is.na(tmpTrunc),truncate,tmpTrunc)) %>%
       self$codes$findNamesByCode( outputCodeTypeVar = "lookupCodeType" ) %>% 
       dplyr::select(-lookupCodeType) %>% 
       dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
-      dplyr::filter(date <= max(date)-truncate) %>%
+      dplyr::filter(date <= max(date-tmpTrunc)) %>%
+      dplyr::select(-tmpTrunc) %>%
       dplyr::ungroup()
     return(tmp5)
   },
+  
+  
+  
   
   #' @description Check timeseries conforms
   timeseriesQA = function(covidTimeseries) {

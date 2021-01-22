@@ -104,10 +104,16 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
    },
    
    labelsFromBreaks = function(ageBreaks) {
-      c(
-         paste0("<",ageBreaks[1]),
-         paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
-         paste0(ageBreaks[length(ageBreaks)],"+"))
+      if(length(ageBreaks)==1) {
+         return(c(
+            paste0("<",ageBreaks[1]),
+            paste0(ageBreaks[1],"+")))
+      } else {
+         return(c(
+            paste0("<",ageBreaks[1]),
+            paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
+            paste0(ageBreaks[length(ageBreaks)],"+")))
+      }
    },
    
    #' @description ordered factor from age range labels

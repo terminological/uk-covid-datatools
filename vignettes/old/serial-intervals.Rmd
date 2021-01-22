@@ -34,7 +34,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(tidyverse)
 
-# devtools::load_all("~/Git/uk-covid-datatools/")
+devtools::load_all("~/Git/uk-covid-datatools/")
 # devtools::install_github("terminological/uk-covid-datatools")
 # library(ukcovidtools)
 library(rgdal)
@@ -48,19 +48,7 @@ library(sp)
 devtools::load_all("~/Git/standard-print-output/")
 ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 
-dpc = tsp = chp = srv = mwp = NULL
-
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  chp <<- dpc$chessProcessor()
-  srv <<- dpc$survivalProcessor()
-  mwp <<- dpc$metawardProcessor()
-}
-
-reload()
+ukcovidtools::setup()
 ```
 
 Robert Challen ^1,2^; Leon Danon ^3,4^

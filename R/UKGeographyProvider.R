@@ -15,6 +15,15 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         altCodeCol = "wd11cdo",
         simplify = FALSE
       ),
+      WD19 = list(
+        # https://geoportal.statistics.gov.uk/datasets/wards-december-2019-boundaries-ew-bgc
+        url = "https://opendata.arcgis.com/datasets/bf1a23cfe83f4da9844e7f34e4824d03_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        mapName = "Wards__December_2019__Boundaries_EW_BGC",
+        codeCol = "wd19cd",
+        nameCol = "wd19nm",
+        altCodeCol = NA,
+        simplify = FALSE
+      ),
       LSOA11 = list(
         # https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-boundaries-ew-bgc
         url = "https://opendata.arcgis.com/datasets/e993add3f1944437bc91ec7c76100c63_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
@@ -24,8 +33,17 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         altCodeCol = NA,
         simplify = FALSE
       ),
+      MSOA11 = list(
+        # https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-boundaries-ew-bgc
+        url = "https://opendata.arcgis.com/datasets/5d4e4cc075ef4a40acbe6e50735451ef_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        mapName = "Middle_Layer_Super_Output_Areas__December_2011__EW_BGC_V2",
+        codeCol = "MSOA11CD",
+        nameCol = "MSOA11NM",
+        altCodeCol = NA,
+        simplify = FALSE
+      ),
       DZ11 = list(
-        # 
+        # https://data.gov.uk/dataset/ab9f1f20-3b7f-4efa-9bd2-239acf63b540/data-zone-boundaries-2011
         url = "http://sedsh127.sedsh.gov.uk/Atom_data/ScotGov/ZippedShapefiles/SG_DataZoneBdry_2011.zip",
         mapName = "SG_DataZone_Bdry_2011",
         codeCol = "DataZone",
@@ -69,6 +87,15 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         altCodeCol = NA,
         simplify = FALSE
       ),
+      LAD20 = list(
+        # https://geoportal.statistics.gov.uk/datasets/local-authority-districts-may-2020-boundaries-uk-buc
+        url = "https://opendata.arcgis.com/datasets/910f48f3c4b3400aa9eb0af9f8989bbe_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        mapName = "Local_Authority_Districts__May_2020__UK_BUC",
+        codeCol = "LAD20CD",
+        nameCol = "LAD20NM",
+        altCodeCol = NA,
+        simplify = FALSE
+      ),
       CCG20 = list(
         # https://geoportal.statistics.gov.uk/datasets/clinical-commissioning-groups-april-2020-generalised-clipped-boundaries-en
         url = "https://opendata.arcgis.com/datasets/e33a6b14379f4d0b9890f9dfa26f8a1f_1.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
@@ -106,7 +133,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         simplify = FALSE
       ),
       LGD12 = list(
-        # https://geoportal.statistics.gov.uk/datasets/countries-december-2019-boundaries-uk-bgc/data
+        # https://data.gov.uk/dataset/05f72866-b72b-476a-b6f3-57bd4a768674/osni-open-data-largescale-boundaries-local-government-districts-2012
         url = "http://osni-spatialni.opendata.arcgis.com/datasets/eaa08860c50045deb8c4fdc7fa3dac87_2.zip",
         mapName = "OSNI_Open_Data_-_Largescale_Boundaries_-_Local_Government_Districts__2012_",
         codeCol = "LGDCode",
@@ -131,6 +158,15 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         nameCol = "NAME_2",
         altCodeCol = "HASC_2",
         simplify = FALSE
+      ),
+      ISO3166_3 = list(
+        # https://gadm.org/download_country_v3.html
+        url="https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip",
+        mapName="gadm36_GBR_3",
+        codeCol = "GID_3",
+        nameCol = "NAME_3",
+        altCodeCol = "HASC_3",
+        simplify = FALSE
       )
     ),
     #### tweaks ----
@@ -147,6 +183,10 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
+  },
+  
+  getMapList = function() {
+    return(names(self$sources$maps))
   },
   
   #### Methods ----
@@ -172,7 +212,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       browser(expr=self$debug)
       if(loader$simplify) map = suppressWarnings(map %>% sf::st_simplify(dTolerance=0.001))
       map = self$standardiseMap(map, !!loader$codeCol, !!loader$nameCol, !!loader$altCodeCol, mapId)
-      return(map %>% ungroup()) #dplyr::group_by(code,name))
+      return(map %>% ungroup() %>% sf::st_as_sf()) #dplyr::group_by(code,name))
     })
   },
   
@@ -207,6 +247,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
  
   #' @description finds shapes that contain the give shape
   getContainedIn = function( inputSf,  outputShape = self$getMap(outputMapId), outputMapId=NA,  inputIdVar = "code", outputIdVar = "code") {
+    inputIdVar = ensym(inputIdVar)
+    outputIdVar = ensym(outputIdVar)
     #browser()
     outputShape = outputShape %>% dplyr::mutate(tmp_output_id = row_number())
     inputSf = inputSf %>% dplyr::mutate(tmp_input_id = row_number())
@@ -366,22 +408,23 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   
   #' @description warm up caches
   loadAllMaps = function() {
-    self$getMap("WD11")
-    self$getMap("LSOA11")
-    self$getMap("SGDZ11")
-    self$getMap("SHB19")
-    self$getMap("LHB19")
-    self$getMap("CTYUA19")
-    self$getMap("LAD19")
-    self$getMap("CCG20")
-    self$getMap("NHSER20")
-    self$getMap("PHEC16")
-    self$getMap("CTRY19")
-    self$getMap("LGD12")
+    lapply(names(self$sources$maps), self$getMap)
   },
   
   
- 
+  #' @description create a catchment area map from 
+  #' @param supplyShape - a sf object containing a list of the locations of supply points, with a column containing supply capacity, for example NHS hospital sites, with a bed 
+  #' @param supplyIdVar - the variable name of the identifier of the supplier or group of suppliers. For example this could be an NHS trust (multiple sites)
+  #' @param supplyVar - the column name of the supply parameter. This could be number of beds in a hospital.
+  #' @param supplyOutputVars - the columns from the input that are to be retained in the output
+  #' @param demandShape - the sf object with the geographical map of the demand surface. For example the geographical distribution of the population served,
+  #' @param demandIdVar - the column name of the unique identifier of the areas,
+  #' @param demandVar - the column name of the demand parameter. This could be the population in each region
+  #' @param growthRates - a function to calculate 
+  #' @param distanceModifier - 
+  #' @param tweakNetwork - a named list containing extra linkages beyond those inferred by the demandShape topology. These are used to add in bridges 
+  #' @param outputMap
+  #' @return a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
   createCatchment = function(
       supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% dplyr::groups(),
       demandId, demandShape, demandIdVar = "code", demandVar, 
@@ -395,6 +438,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       demandIdVar = ensym(demandIdVar)
       demandVar = ensym(demandVar)
       
+      # rename key columns for consistent 
       demandShape = demandShape %>% dplyr::ungroup() %>% dplyr::rename(demandCode = !!demandIdVar, demand = !!demandVar) %>% dplyr::mutate(tmp_demand_id = row_number())
       # preserve the features we want to output
       supplyFeatures = supplyShape %>% dplyr::ungroup() %>% tibble::as_tibble() %>% dplyr::select(!!supplyIdVar, !!!supplyOutputVars, !!supplyVar) %>% dplyr::distinct()
@@ -402,7 +446,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       
       supplyShape = supplyShape %>% dplyr::ungroup() %>% dplyr::rename(supplyCode = !!supplyIdVar, supply = !!supplyVar) %>% dplyr::mutate(tmp_supply_id = row_number()) 
       
-      
+      # define $V_j$ as the geographic region in $G$ containing point $P_j$
       # create an edgelist of supplyIdVar, demandIdVar
       # containment is a list of lists
       containment = demandShape %>% sf::st_contains(supplyShape)
@@ -415,6 +459,9 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         dplyr::left_join(supplyShape %>% tibble::as_tibble() %>% dplyr::select(tmp_supply_id, supplyCode, supply), by="tmp_supply_id") %>%
         dplyr::select(-tmp_demand_id, -tmp_supply_id)
       # if there are multiple providers in one area we merge them (creating a new supplier id).
+      # resource provider is $G_j$
+      
+      # merge multiple providers in same are into single $P_j$ in $V_i$
       mergedSuppliers = NULL
       if(any(resourceProvider %>% dplyr::group_by(demandCode) %>% dplyr::count() %>% dplyr::pull(n)>1)) {
         warning("More than one supplier was found in a single region. These the first value will be picked, and the total capacity combined, but as a result the catchment map will be missing some values from the supplier list.")
@@ -422,6 +469,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       }
       resourceProvider = resourceProvider %>% dplyr::group_by(demandCode) %>% dplyr::summarise(supplyCode := first(supplyCode), supply=sum(supply))%>% dplyr::rename(areaId = demandCode)
       
+      # define the neigbourhood network $N(V_x)$ - connecting disconnected areas
       areaNetwork = self$createNeighbourNetwork(demandId, demandShape, demandCode) 
       if(exists("add",where = tweakNetwork)) areaNetwork = areaNetwork %>% dplyr::union(tweakNetwork$add) %>% dplyr::union(tweakNetwork$add %>% dplyr::rename(tmp = from) %>% dplyr::rename(from=to,to=tmp)) 
       if(exists("remove",where = tweakNetwork)) areaNetwork = areaNetwork %>% dplyr::setdiff(tweakNetwork$remove) %>% dplyr::setdiff(tweakNetwork$remove %>% dplyr::rename(tmp = from) %>% dplyr::rename(from=to,to=tmp)) 
@@ -434,6 +482,7 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         
       # ensure entire area is connected - otherwise we get problems with islands
       
+      # areas with resource is $G_j$
       areasWithResource = entireArea %>% 
         dplyr::inner_join(resourceProvider, by="areaId") %>% 
         dplyr::rename(supplierId = supplyCode, supplyCapacity = supply) %>% tibble::as_tibble()

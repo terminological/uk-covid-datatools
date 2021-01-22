@@ -70,19 +70,7 @@ ref = list(
   stab = function(name) cap$stab(name,display="cite")
 )
 
-dpc = tsp = chp = srv = mwp = NULL
-
-reload = function() {
-  devtools::load_all("~/Git/uk-covid-datatools/")
-  dpc <<- DataProviderController$setup("~/Data/maps/", "~/S3/encrypted/")
-  tsp <<- dpc$timeseriesProcessor()
-  # tsp$printSerialInterval()
-  chp <<- dpc$chessProcessor()
-  srv <<- dpc$survivalProcessor()
-  mwp <<- dpc$metawardProcessor()
-}
-
-reload()
+ukcovidtools::setup()
 ```
 
 ## Authors

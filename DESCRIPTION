@@ -25,7 +25,8 @@ Imports:
     rgeos,
     ggspatial,
     sf,
-    metR
+    metR,
+    ssh
 Remotes:  
     thomasp85/patchwork
 Suggests: 

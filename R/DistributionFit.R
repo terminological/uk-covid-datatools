@@ -296,7 +296,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     invisible(self)
   },
   
-  plot = function(xlim, binwidth = 1, summary=FALSE, pts=8) {
+  plot = function(xlim, binwidth = 1, summary=FALSE, pts=8, facet2d = TRUE) {
     
     #TODO: attribute fractions of survivalDf to different times based on left and right censoring.
     # This needs a review of structure fo whole thing
@@ -312,7 +312,15 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     
     
     p1 = ggplot()
-    if(!self$censored & !identical(self$fitData,NULL)) p1 = p1 + geom_histogram(data=self$fitData, aes(x=value-self$shifted, y=..density..),fill=NA,colour = "grey50",binwidth = binwidth)
+    if (!identical(self$fitData,NULL)) {
+      if(!self$censored) {
+        p1 = p1 + geom_histogram(data=self$fitData, aes(x=value-self$shifted, y=..density..),fill=NA,colour = "grey50",binwidth = binwidth)
+      } else {
+        p1 = p1 + 
+          geom_histogram(data=self$fitData, aes(x=left-self$shifted, y=..density..),fill="grey70",colour = NA,alpha=0.5,binwidth = binwidth) +
+          geom_histogram(data=self$fitData, aes(x=right-self$shifted, y=..density..),fill="grey70",colour = NA,alpha=0.5,binwidth = binwidth)
+      }
+    }
     
     disc = unlist(map(DistributionFit$standardDistributions, ~ .$discrete))
     
@@ -350,7 +358,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     # https://stackoverflow.com/questions/45908120/add-shaded-standard-error-curves-to-geom-density-in-ggplot2
     
     grps = self$grps
-    if (length(grps) == 2) {
+    if (length(grps) == 2 & facet2d) {
       p1 = p1 + facet_grid(rows = vars(!!grps[[1]]), cols = vars(!!grps[[2]]), scales="free", shrink = TRUE) 
     } else if(length(grps) != 0) {
       p1 = p1 + facet_wrap(facets = grps, scales="free", shrink = TRUE)
@@ -413,11 +421,12 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   },
   
   filterModels = function(...) {
-    self$fittedModels = self$fittedModels %>% group_by(!!!self$grps) %>% filter(...)
-    self$bootstraps = self$bootstraps %>% semi_join(self$fittedModels, by=unlist(c(sapply(self$grps,as_label),"dist")))
-    if (!identical(self$samples,NULL))
-      self$samples = self$samples %>% semi_join(self$fittedModels, by=unlist(c(sapply(self$grps,as_label),"dist")))
-    invisible(self)
+    clone = self$clone()
+    clone$fittedModels = clone$fittedModels %>% group_by(!!!clone$grps) %>% filter(...)
+    clone$bootstraps = clone$bootstraps %>% semi_join(clone$fittedModels, by=unlist(c(sapply(clone$grps,as_label),"dist")))
+    if (!identical(clone$samples,NULL))
+      clone$samples = clone$samples %>% semi_join(clone$fittedModels, by=unlist(c(sapply(clone$grps,as_label),"dist")))
+    invisible(clone)
   },
   
   #' #' @description calculates a set of bootstrap parameter values
@@ -822,7 +831,7 @@ DistributionFit$conversionTo = list(
   ),
   lnorm = list(
     mean = function(meanlog,sdlog) exp(meanlog+(sdlog^2)/2),
-    sd = function(meanlog,sdlog) sqrt(exp(sdlog^2-1)*exp(2*meanlog+sdlog^2))
+    sd = function(meanlog,sdlog) sqrt((exp(sdlog^2)-1)*exp(2*meanlog+sdlog^2))
   ),
   norm = list(
     mean = function(mean,sd) mean,

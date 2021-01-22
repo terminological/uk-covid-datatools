@@ -39,20 +39,27 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
     },
     
     #' @description a pass through 2 level cache (memory / saved file / orElse function)
-    getSaved = function(id, orElse, params = NULL, ...) {
-      dots = rlang::list2(...)
-      if("nocache" %in% names(dots)) {
-        nocache = dots$nocache
-        dots$nocache = NULL
-      } else {
+    getSaved = function(id, orElse, ..., params = NULL, nocache=NULL, dir=NULL) {
+      # dots = rlang::list2(...)
+      # if("nocache" %in% names(dots)) {
+      #   nocache = dots$nocache
+      #   dots$nocache = NULL
+      # } else {
+      #   nocache = self$nocache
+      # }
+      # if("dir" %in% names(dots)) {
+      #   dir = dots$dir
+      #   dots$dir = NULL
+      # } else {
+      #   dir = self$wd
+      # }
+      if (identical(nocache,NULL)) {
         nocache = self$nocache
       }
-      if("dir" %in% names(dots)) {
-        dir = dots$dir
-        dots$dir = NULL
-      } else {
+      if (identical(dir,NULL)) {
         dir = self$wd
       }
+      
       # 
       # if(length(dots)>0) {
       #   dots = dots[order(names(dots))]
@@ -76,7 +83,12 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
         return(map)
       } else {
         message("caching: ", id)
-        map = rlang::exec("orElse", !!!params, !!!dots)
+        #map = rlang::exec("orElse", !!!params, !!!dots)
+        if(!identical(params,NULL)) {
+          map = orElse(!!!params, ...)
+        } else {
+          map = orElse(...)
+        }
         saveRDS(map,filename)
         self$cache[[id]]=map
         return(map)

@@ -10,6 +10,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
   getDetailedDemographics = function(...) {
     self$getSaved("DEMOG_DETAIL",..., orElse=function(...) {
       # England and wales:
+      # https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/lowersuperoutputareamidyearpopulationestimates
       # https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2flowersuperoutputareamidyearpopulationestimates%2fmid2018sape21dt1a/sape21dt2mid2018lsoasyoaestimatesunformatted.zip
       destfile = paste0(self$wd,"/demographicsUK.zip")
       if(!file.exists(destfile)) download.file(url="https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2flowersuperoutputareamidyearpopulationestimates%2fmid2018sape21dt1a/sape21dt2mid2018lsoasyoaestimatesunformatted.zip",destfile = destfile)
@@ -80,6 +81,41 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
     })
   },
   
+  getDemographicsWithEstimatedEthnicity = function(...) {
+    self$getSaved("DEMOG_ETHNIC",..., orElse=function(...) {
+      #https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationcharacteristicsresearchtables
+      ethnPopFile = self$download(id = "ONS_DEMOG_ETHNICITY",
+                    url = "https://www.ons.gov.uk/file?uri=%2fpeoplepopulationandcommunity%2fpopulationandmigration%2fpopulationestimates%2fdatasets%2fpopulationcharacteristicsresearchtables%2fdecember2019/supportingtablesforpub.xlsx",
+                    type = "xlsx")
+      ethnPop = readxl::read_excel(ethnPopFile,sheet = "Table A",skip = 6,na = "NA")
+      ethnPop = ethnPop %>% 
+        rename(
+          code=`Area Code`,
+          name=`Area Name`,
+        ) %>% select(-`2011 Census Supergroup`,-Total) %>%
+        filter(!is.na(code)) %>%
+        mutate(
+          `Afro-carribbean` = `Black / African / Caribbean / Black British`,
+          `Asian` = `Asian / Asian British`,
+          `White` = `White British`+`All Other White`,
+          `Other` = `Other ethnic group`+`Mixed / Multiple ethnic groups`
+        ) %>% select(-`White British`,-`All Other White`,-`Mixed / Multiple ethnic groups`,-`Asian / Asian British`,-`Black / African / Caribbean / Black British`,-`Other ethnic group`)
+      ethnPop = ethnPop %>% pivot_longer(cols=c(everything(),-code,-name),names_to="ethnicity_final",values_to="thousands")
+      ethnPop = ethnPop %>% mutate(thousands = ifelse(is.na(thousands),0,thousands)) %>% group_by(code,name) %>% mutate(proportion = thousands/sum(thousands))
+      ethnPop = ethnPop %>% self$codes$findNamesByCode()
+      
+      tmp = self$getDetailedDemographics() %>% group_by(code,name) %>% summarise(count=sum(count))
+      tc = self$codes$getTransitiveClosure() %>% semi_join(tmp, by=c("fromCode"="code")) %>% semi_join(ethnPop, by=c("toCode"="code"))
+      tc2 = tc %>% group_by(fromCode) %>% arrange(distance,path) %>% filter(row_number()==1)
+      
+      # TODO: Codes from demographics map that are not covered by England only ethnicity estimates. To make this work we would need to have ethnicity estimates for NI & Scotland
+      # tmp %>% anti_join(tc2, by=c("code"="fromCode")) %>% View()
+      
+      tmp2 = tmp %>% inner_join(tc2, by=c("code"="fromCode")) %>% inner_join(ethnPop %>% ungroup() %>% select(-name), by=c("toCode"="code"))
+      tmp2 = tmp2 %>% mutate(count=count*proportion) %>% select(code,name,ethnicity_final,count)
+      return(tmp2)
+    })
+  },
   
   #' @description LSOA & Scottish Data Zones
   getDemographicsMap = function(...) {
@@ -102,14 +138,9 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
   getDemographicsForShape = function(mapId, outputShape = self$geog$getMap(mapId), outputVars = vars(code,name), ageBreaks = seq(5,90,5), combineGenders=FALSE) {
     
     # Cut the detailed demographics into desired age bands
-    ageLabels = c(
-      paste0("<",ageBreaks[1]),
-      paste0(ageBreaks[1:(length(ageBreaks)-1)],"-",ageBreaks[2:(length(ageBreaks))]-1),
-      paste0(ageBreaks[length(ageBreaks)],"+"))
-    ageBreaks2 = c(-Inf,ageBreaks,Inf)
     
     demog = self$getDetailedDemographics() %>% 
-      dplyr::mutate(ageCat = cut(age,breaks = ageBreaks2,labels=ageLabels,ordered_result = TRUE,right=FALSE,include.lowest = TRUE)) %>%
+      dplyr::mutate(ageCat = self$cutByAge(age,ageBreaks = ageBreaks)) %>%
       dplyr::select(-age) 
     if (isTRUE(combineGenders)) {
       demog = demog %>% dplyr::group_by(ageCat,code) %>% dplyr::summarise(count = sum(count))
@@ -266,6 +297,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
   },
   
   findDemographics = function(df, codeVar="code", codeTypeVar="codeType", ageCatVar="ageCat", genderVar="gender", ...) {
+    if ("population" %in% colnames(df)) return(df)
     codeVar = ensym(codeVar)
     codeTypeVar = ensym(codeTypeVar)
     ageCatVar = ensym(ageCatVar)
@@ -321,7 +353,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
     })
     
     # combine output with input
-    out = df %>% left_join(df6, by=c("code","gender","ageCat","codeType"))
+    out = df %>% left_join(df6, by=c("code","gender","ageCat","codeType"),suffix=c(".old",""))
     return(out)
   }
   

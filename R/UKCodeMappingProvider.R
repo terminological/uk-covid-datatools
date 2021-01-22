@@ -481,7 +481,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
       mappings = self$getMappings() %>% 
         dplyr::mutate(distance = ifelse(rel=="synonym",0,1)) %>%
         dplyr::select(-rel, -weight) %>% 
-        dplyr::semi_join(self$getCodes() %>% filter(status=="live"), by=c("toCode"="code"))
+        dplyr::semi_join(self$getDescriptions() %>% filter(status=="live" | end>"2020-01-01"), by=c("toCode"="code"))
       out = out %>% dplyr::bind_rows(
         mappings %>% dplyr::mutate(path = paste0(fromCodeType,"-",toCodeType))
       ) 
@@ -631,7 +631,19 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
     tmp = self$getCodes() %>% filter(codeType %in% codeTypes)
     notFound = df %>% anti_join(tmp, by = c("code"))
     return(nrow(notFound) == 0)
-  }
+  },
   
+  parentCode = function(df, parentCodeTypes, codeVar = "code", codeTypeVar = "codeType", parentCodeVar = "parentCode", parentNameVar = "parentName", parentCodeTypeVar = "parentCodeType") {
+    codeVar = ensym(codeVar)
+    codeTypeVar = ensym(codeTypeVar)
+    parentCodeVar = ensym(parentCodeVar)
+    parentNameVar = ensym(parentNameVar)
+    parentCodeTypeVar = ensym(parentCodeTypeVar)
+    tmp = self$getTransitiveClosure() %>% filter(toCodeType %in% parentCodeTypes) %>% select(.joinCode = fromCode, .joinCodeType = fromCodeType, !!parentCodeVar := toCode)
+    tmp2 = df %>% mutate(.joinCode=!!codeVar) %>% left_join(tmp, by=c(".joinCode")) %>% select(-.joinCode)
+    if(nrow(tmp2) > nrow(df)) message("Some codes have more than one parents, i.e. hierarchical nesting is not one to one and duplicates have been created.")
+    tmp2 = tmp2 %>% self$findNamesByCode(codeVar = !!parentCodeVar, outputNameVar = !!parentNameVar, outputCodeTypeVar = !!parentCodeTypeVar, codeTypes = parentCodeTypes)
+    return(tmp2)
+  }
 ))
 

@@ -1,0 +1,154 @@
+---
+title: "Growth rate versus incidence in LTLAs"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output:
+  pdf_document
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/lockdown2-impact/", output_file=paste0('covid-growth-by-ltla-',Sys.Date(),'.pdf') ) })
+# output:
+#   word_document :
+#     fig_caption: yes
+#     fig_width: 7
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(
+#     inputFile,
+#     encoding = encoding,
+#     output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-growth-by-age-',Sys.Date(),'.docx') ) 
+#     })
+# TODO: https://www.reed.edu/data-at-reed/software/R/markdown_multiple_reports.html
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}    
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+# bibliography: current-rt.bib
+# csl: sage-vancouver.csl
+---
+
+# Authors
+
+Robert Challen^1,2^;  Krasimira Tsaneva-Atanasova^1,3,5^; Ellen Brooks-Pollock^4^; Leon Danon^3,4,5^
+
+1) EPSRC Centre for Predictive Modelling in Healthcare, University of Exeter, Exeter, Devon, UK.
+2) Taunton and Somerset NHS Foundation Trust, Taunton, Somerset, UK.
+3) The Alan Turing Institute, British Library, 96 Euston Rd, London NW1 2DB, UK.
+4) Bristol Medical School, Population Health Sciences, University of Bristol, Bristol, UK
+5) Data Science Institute, College of Engineering, Mathematics and Physical Sciences, University of Exeter, Exeter, UK.
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+library(tidyverse)
+devtools::load_all("~/Git/uk-covid-datatools/")
+devtools::load_all("~/Git/standard-print-output/")
+#ukcovidtools::reload()
+ukcovidtools::setup()
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
+
+cap = list(
+  fig = captioner::captioner(prefix="Figure"),
+  tab = captioner::captioner(prefix="Table"),
+  sfig = captioner::captioner(prefix="Supplemental figure"),
+  stab = captioner::captioner(prefix="Supplemental table")
+)
+
+ref = list(
+  fig = function(name) cap$fig(name,display="cite"),
+  tab = function(name) cap$tab(name,display="cite"),
+  sfig = function(name) cap$sfig(name,display="cite"),
+  stab = function(name) cap$stab(name,display="cite")
+)
+```
+
+# Methods
+
+* TBD
+
+```{r}
+# Tier data
+tidyOut = dpc$datasets$getTiers()
+```
+
+```{r}
+ll = dpc$spim$getLineList()
+#ll %>% filter(LTLA_code == "E06000001") %>% group_by(specimen_date,asymptomatic_indicator) %>% count() %>% pivot_wider(names_from=asymptomatic_indicator, values_from = n) %>% View()
+
+
+ltla = dpc$spim$getLineListIncidence(specimenOrReport = "specimen", codeTypes = c("NHSER","LAD"),subgroup = asymptomatic_indicator) %>%
+  filter(codeType %in% c("NHSER","LAD") & subgroup!="Y") %>% 
+      tsp$aggregateAge() %>% 
+      tsp$aggregateGender() %>% 
+      tsp$aggregateSubgroup() %>%
+      dpc$demog$findDemographics()
+
+ltla2 = ltla %>% tsp$logIncidenceStats(growthRateWindow = 14, smoothingWindow = 14)
+# Get NHSER parent for each LTLA 
+ltla3 = ltla2 %>% tsp$codes$parentCode(parentCodeTypes = "NHSER")
+ltla4 = ltla3 %>% left_join(tidyOut %>% select(-name,-codeType), by=c("code","date"))
+ltla4$tier = factor(ltla4$tier, levels=c("none","one","one+","two","two+","local","three","three+","four+","lockdown"),ordered=TRUE)
+
+## Join colours with transitions
+# ltla4_lag = ltla4 %>% group_by(code) %>% group_modify(function(d,g,...) {
+#   d %>% arrange(date) %>% mutate(tier = lag(tier)) %>% filter(!is.na(tier)) %>% return()
+# }) 
+# ltla4_both = ltla4 %>% bind_rows(ltla4_lag) %>% distinct()
+
+ltlaByTier = ltla4 %>% filter(codeType!="NHSER" & name!="Unknown (England)") %>% group_by() %>% arrange(code,date)
+pal = c("none"="#D0D0D0","one"="#A0A0A0","one+"="#40C040","two"="#6060C0","two+"="#4040C0","local"="#C08080","three"="#C06060","three+"="#C04040","four+"="#C040C0","lockdown"="#404040")
+
+```
+
+# Results
+
+```{r}
+plotDates = as.Date(seq(max(ltlaByTier$date)-5*7,max(ltlaByTier$date),by = 7))
+```
+
+\newpage
+## Growth rates by NHS region
+
+```{r}
+
+region = ltlaByTier %>% group_by(code,parentName) %>% filter(codeType!="NHSER" & name!="Unknown (England)") %>% tsp$plotGrowthIncidence(plotDates = plotDates,timespan = 21,colour = parentName,populationExpr = population,maxSize = 2,maxAlpha = 0.3,rlim=c(-0.15,0.15))+
+  #scale_color_brewer(palette="RdYlBu",direction=-1)+
+  scale_color_brewer(palette="Dark2")+
+  ylab("Symptomatic covid per 1M per day")+
+  xlab("Growth rate")+facet_wrap(vars(plotDate))+
+  standardPrintOutput::narrower()
+
+region %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/lockdown2-impact/GrowthRateVsIncidenceRegions")
+```
+
+`r cap$fig("byNHSER", "Growth rates versus incidence in LTLA coloured by NHS region. Trails represent 21 days of history.")`
+
+\newpage
+## Growth rates by restriction level
+
+```{r}
+
+lockdown = ltlaByTier %>% tsp$plotGrowthIncidence(plotDates = plotDates,timespan = 21,colour = tier,populationExpr = population,maxSize = 2,maxAlpha = 0.3,rlim=c(-0.15,0.15))+
+  #scale_color_brewer(palette="RdYlBu",direction=-1)+
+  scale_color_manual(values = pal)+
+  ylab("Symptomatic covid per 1M per day")+
+  xlab("Growth rate")+facet_wrap(vars(plotDate))+
+  standardPrintOutput::narrower()
+
+lockdown %>% standardPrintOutput::saveTwoThirdPageFigure("~/Dropbox/covid19/lockdown2-impact/GrowthRateVsIncidenceLockdown2")
+```
+
+`r cap$fig("byTier", "Growth rates versus incidence in LTLA coloured by restriction level. Trails represent 21 days of history.")`
+
+# Discussion
+
+# Conclusion
+
+# Supplementary material

@@ -56,8 +56,8 @@ SurvivalProcessingPipeline = R6::R6Class("SurvivalProcessingPipeline", inherit=P
     out = df %>% 
       filter(!is.na(!!startDateVar)) %>% 
       mutate(
-        startDate = as.Date(!!startDateVar),
-        endDate = as.Date(!!endDateExpr),
+        startDate = as.Date(!!startDateVar,"1970-01-01"),
+        endDate = as.Date(!!endDateExpr,"1970-01-01"),
         id = !!idVar,
         status = !!statusExpr
       ) %>% mutate(
