@@ -3,7 +3,7 @@
 \name{printDataframeToString}
 \alias{printDataframeToString}
 \title{#' colApply apply the function to the rows of a dataframe row-wise
-#' 
+#'
 #' @param f - a function which operates on a vector
 #' @param ... a list of vectors
 colApply = function(f, ...) {
@@ -22,7 +22,7 @@ printDataframeToString(x)
 }
 \description{
 #' colApply apply the function to the rows of a dataframe row-wise
-#' 
+#'
 #' @param f - a function which operates on a vector
 #' @param ... a list of vectors
 colApply = function(f, ...) {

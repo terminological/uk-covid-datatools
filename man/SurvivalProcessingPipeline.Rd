@@ -14,16 +14,12 @@ Survival data procesing
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
+\item \href{#method-new}{\code{SurvivalProcessingPipeline$new()}}
 \item \href{#method-generateSurvivalData}{\code{SurvivalProcessingPipeline$generateSurvivalData()}}
+\item \href{#method-generateNoAgeSurvivalData}{\code{SurvivalProcessingPipeline$generateNoAgeSurvivalData()}}
 \item \href{#method-getMaxDate}{\code{SurvivalProcessingPipeline$getMaxDate()}}
 \item \href{#method-transitionMatrix}{\code{SurvivalProcessingPipeline$transitionMatrix()}}
 \item \href{#method-generateMultistateSurvivalData}{\code{SurvivalProcessingPipeline$generateMultistateSurvivalData()}}
-\item \href{#method-standardModels}{\code{SurvivalProcessingPipeline$standardModels()}}
-\item \href{#method-fitModelsByAge}{\code{SurvivalProcessingPipeline$fitModelsByAge()}}
-\item \href{#method-doPdf}{\code{SurvivalProcessingPipeline$doPdf()}}
-\item \href{#method-doCdf}{\code{SurvivalProcessingPipeline$doCdf()}}
-\item \href{#method-doMedian}{\code{SurvivalProcessingPipeline$doMedian()}}
-\item \href{#method-doEstimate}{\code{SurvivalProcessingPipeline$doEstimate()}}
 \item \href{#method-createSurvivalSurfaces}{\code{SurvivalProcessingPipeline$createSurvivalSurfaces()}}
 \item \href{#method-plotSurvivalSurface}{\code{SurvivalProcessingPipeline$plotSurvivalSurface()}}
 \item \href{#method-plotIncidenceSurface}{\code{SurvivalProcessingPipeline$plotIncidenceSurface()}}
@@ -32,23 +28,21 @@ Survival data procesing
 }
 }
 \if{html}{
-\out{<details ><summary>Inherited methods</summary>}
+\out{<details open ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="initialize">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-initialize}{\code{ukcovidtools::PassthroughFilesystemCache$initialize()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-new"></a>}}
+\subsection{Method \code{new()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$new(providerController, ...)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-generateSurvivalData"></a>}}
@@ -61,13 +55,13 @@ generate survival data and right censored data from
   startDateVar,
   endDateExpr,
   statusExpr = if_else(is.na({     {         endDateExpr     } }), 0, 1),
-  ageVar = "age",
   censoredDateExpr = max({     {         endDateExpr     } }, na.rm = TRUE),
+  ageVar = "age",
   ageBreaks = c(-Inf, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80,
     Inf),
   ageLabels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39",
     "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80+"),
-  ageReferenceCat = NA,
+  ageReferenceCat = NA_character_,
   statusLabels = c("censored", "died")
 )}\if{html}{\out{</div>}}
 }
@@ -82,6 +76,22 @@ generate survival data and right censored data from
 \subsection{Returns}{
 data set in survival format including status, time, left, right, ageCat columns
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-generateNoAgeSurvivalData"></a>}}
+\subsection{Method \code{generateNoAgeSurvivalData()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$generateNoAgeSurvivalData(
+  df,
+  idVar,
+  startDateVar,
+  endDateExpr,
+  statusExpr = if_else(is.na({     {         endDateExpr     } }), 0, 1),
+  censoredDateExpr = max({     {         endDateExpr     } }, na.rm = TRUE),
+  statusLabels = c("censored", "died")
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMaxDate"></a>}}
@@ -126,7 +136,7 @@ generate survival data and right censored data from a multistate model
     Inf),
   ageLabels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39",
     "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80+"),
-  ageReferenceCat = NA,
+  ageReferenceCat = NA_character_,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -141,74 +151,6 @@ generate survival data and right censored data from a multistate model
 \subsection{Returns}{
 data set in survival format including status, time, left, right, ageCat columns
 }
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-standardModels"></a>}}
-\subsection{Method \code{standardModels()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$standardModels(
-  items = c("weibull", "gamma", "lognorm")
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-fitModelsByAge"></a>}}
-\subsection{Method \code{fitModelsByAge()}}{
-for each ageCat fit a set of models and return a data fram with the parameters.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$fitModelsByAge(
-  survivalDf,
-  ageVar = "ageCat",
-  models = self$standardModels(),
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{survivalDf}}{- a data frame containing an ageCat, and a left and right column with min and max times of individual events, If event is censored then right is NA}
-
-\item{\code{models}}{-  a list of models that you want to fit - e.g. lnorm, norm, etc...}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-an datafram of ageCat, model, param(eterName), value, low_ci, high_ci
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-doPdf"></a>}}
-\subsection{Method \code{doPdf()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$doPdf(model, paramNames, params, timepoints, ...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-doCdf"></a>}}
-\subsection{Method \code{doCdf()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$doCdf(model, paramNames, params, timepoints, ...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-doMedian"></a>}}
-\subsection{Method \code{doMedian()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$doMedian(model, paramNames, params, ...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-doEstimate"></a>}}
-\subsection{Method \code{doEstimate()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$doEstimate(d, model1, timepoints, ...)}\if{html}{\out{</div>}}
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-createSurvivalSurfaces"></a>}}

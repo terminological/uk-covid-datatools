@@ -1,0 +1,404 @@
+---
+title: "S-gene positive pillar 2 cases VOC Supplementary"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document:
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/sa-variant/")})
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+
+library(tidyverse)
+library(patchwork)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(patchwork)
+library(sp)
+library(sf)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
+ukcovidtools::setup()
+ukcovidtools::reload()
+```
+
+## Pillar 2 S-gene tests ----
+
+```{r}
+tmp = bind_rows(
+  ll %>% filter(pillar == "Pillar 2") %>% semi_join(sgll, by="FINALID") %>% mutate(sgeneKnown=TRUE),
+  ll %>% filter(pillar == "Pillar 2") %>% anti_join(sgll, by="FINALID") %>% mutate(sgeneKnown=FALSE)
+) %>% filter(specimen_date> "2021-03-01")
+
+tmp2 = tmp %>% group_by(LTLA_code, sgeneKnown) %>% summarise(count = n()) %>%
+  group_by(LTLA_code) %>%
+  mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson"))
+
+tmp2 %>% readr::write_csv("~/Dropbox/covid19/sa-variant/taq-path-coverage-since-2021-03-01-by-ltla.csv" )
+
+map = dpc$geog$getMap("LAD19")
+
+map2 = map %>% inner_join(tmp2, by=c("code"="LTLA_code"))
+
+(ggplot(map2 %>% filter(sgeneKnown==TRUE),aes(fill=mean*100))+geom_sf(size=0.3)+scale_fill_gradient(low="#FFFFFF",high="#0080FF",lim=c(0,100),name="% coverage")) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-taqpath-coverage")
+(ggplot(map2 %>% filter(sgeneKnown==TRUE),aes(fill=n))+geom_sf(size=0.3)+scale_fill_gradient(low="#FFFFFF",high="#FF8000",name="Pillar 2 tests")) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-cumulative-cases")
+
+combinedSpositives$date %>% max()
+```
+
+
+## Age distributions ----
+
+```{r}
+tmp3 = sgllLoc %>% inner_join(aocDf, by=c("LTLA_code"="ltlaCode")) %>% 
+  mutate(ageCat = cut(age,c(0,10,20,30,40,50,60,70,80,Inf))) %>%
+  filter(specimen_date>"2021-03-01" & sGene != "equivocal") %>%
+  group_by(area,sGene,ageCat) %>% summarise(count=n()) %>%
+  group_by(area,sGene) %>% mutate(binom::binom.confint(count,sum(count),methods = "wilson"))
+
+tmp3 %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/age-distributions-all-areas-",Sys.Date(),".csv"))
+aocDf %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/area-definitions-",Sys.Date(),".csv"))
+
+agebars = function(regions) {
+  dodge <- position_dodge(width=0.8)
+  ggplot(tmp3 %>% filter(area %in% regions), aes(x=ageCat,fill=sGene, y=mean,ymin=lower,ymax=upper))+ 
+    geom_bar(stat="identity",position=dodge,width=0.8, size=0.5)+facet_wrap(vars(area))+
+    geom_errorbar(position = dodge, width = 0.2,size=0.5)+
+    standardPrintOutput::narrower()+ylab("density")
+}
+
+clusters2 = list(
+  "CommunityIndia2" = c("NW Cluster","Bedford etc","Sefton & Lpl"),
+  "MixedIndia2" = c("Leicester","Nottingham","West London"),
+  "MixedSA" = c("East London")
+)
+
+lapply(names(clusters2), function(name) {
+  agebars(clusters2[[name]]) %>% standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/AgeDistributions-",name))
+})
+```
+
+```{r}
+## Modelled estaimtes
+
+modelled = readRDS("~/Dropbox/covid19/sa-variant/Inputs/DataForRob1.RDS")
+modelledMean = modelled %>% group_by(date,Modelled_Type) %>% summarise(expected = sum(n)/100) %>% ungroup() %>% tidyr::complete(date,Modelled_Type,fill=list(expected=0))
+
+modelledIncid = modelledMean %>% mutate(
+  source = "INLA model",
+  type = "incidence",
+  statistic = "case",
+  ageCat = NA,
+  gender=NA,
+  subgroup = Modelled_Type,
+  code = "E92000001",
+  name = "England",
+  codeType = "CTRY",
+  value = expected,
+  Implicit = FALSE
+)
+
+modelledGR = modelledIncid %>% filter(date < max(date)-4) %>% tsp$estimateGrowthRate(window = 28)
+
+tmpP = tsp$plotGrowthRate(
+  modelledGR,
+  colour = subgroup,
+                   rlim=c(-0.2,0.2),
+                   growthVar = Growth.windowed.value,
+                   growthSEVar = Growth.windowed.SE.value,
+  ribbons = FALSE
+)+facet_wrap(vars(name))+standardPrintOutput::watermark(lab="provisional")+ylab("r - sliding 4 week window")
+
+tmpP %>% saveHalfPageFigure("~/Dropbox/covid19/sa-variant/SpatioTemporalModelledGREngland")
+```
+
+# Additional figures
+
+
+## Cross validation counts with CLIMB
+
+```{r}
+climb = dpc$datasets$getCLIMB()
+climb = climb %>% mutate(voc = case_when(
+  lineage %>% stringr::str_starts("B.1.1.7") ~ "B.1.1.7",
+  lineage %>% stringr::str_starts("B.1.351") ~ "B.1.351",
+  lineage %>% stringr::str_starts("P.1") ~ "P.1 & P.2",
+  lineage %>% stringr::str_starts("P.2") ~ "P.1 & P.2",
+  lineage %>% stringr::str_starts("B.1.617.1") ~ "B.1.617.1",
+  lineage %>% stringr::str_starts("B.1.617.2") ~ "B.1.617.2",
+  lineage %>% stringr::str_starts("B.1.525") ~ "B.1.525",
+  lineage %>% stringr::str_starts("B.1.1.318") ~ "B.1.1.318",
+  TRUE ~ "other"
+))
+
+tmp1 = climb %>% filter(adm1=="UK-ENG" & sample_date > (combinedSpositives$date %>% min(na.rm=TRUE))) %>% group_by(type = voc) %>% summarise(`climb latest` = max(sample_date,na.rm = TRUE),`climb sequences` = n())
+tmp2 = combinedSpositives %>% 
+  # mutate(type=case_when(
+  #   type %>% stringr::str_starts("B.1.617") ~ "B.1.617",
+  #   TRUE ~ type
+  # )) %>% 
+  group_by(type) %>% summarise(`vam latest` = max(earliest_specimen_date,na.rm = TRUE),`vam sequences` = n())
+
+tmp1 %>% inner_join(tmp2, by="type") %>% saveTable("~/Dropbox/covid19/sa-variant/ClimbVsVAM")
+
+
+climbPheCounts = bind_rows(
+  climb %>% filter(adm1=="UK-ENG" & sample_date >= "2021-02-01" & sample_date < "2021-04-01") %>% group_by(date = sample_date) %>% count() %>% mutate(source = "COGUK"),
+  allVoc %>% filter(specimen_date >= "2021-02-01" & specimen_date < "2021-04-01") %>% group_by(date = specimen_date) %>% count() %>% mutate(source = "PHE")
+)
+
+tmp = climbPheCounts %>% pivot_wider(values_from = n,names_from=source) %>% mutate(diff = COGUK-PHE)
+
+if ( sum(tmp$diff)/sum(tmp$COGUK) > 0.01 ) {
+  stop("more than 1% difference in COG and PHE counts")
+} else {
+  message(sprintf("%1.3%% mismatch between COG UK and PHE counts.",  sum(tmp$diff)/sum(tmp$COGUK)))
+}
+
+
+
+```
+
+# Additional figures
+
+```{r}
+cog = dpc$datasets$getCOGUK()
+
+xmap = cogUKMap %>% sf::st_centroid(cogUKMap) %>% dpc$geog$getContainedIn(outputMapId = "NHSER20",inputIdVar = iso_3166_2_code)
+NHSERmap = dpc$geog$getMap("NHSER20")
+cogNHSER = cog %>% inner_join(xmap,by=c("iso_3166_code"="from")) %>% rename(code=to) %>% dpc$codes$findNamesByCode()
+
+window=14
+cogMaxDate = max(cog$sample_date, na.rm = TRUE)
+
+cogNHSER2 = cogNHSER %>% 
+  mutate(topLineage = case_when(
+    lineage %>% stringr::str_starts(fixed("B.1.177")) ~  "B.1.177",
+    lineage %>% stringr::str_starts(fixed("B.1.1.7")) ~  "B.1.1.7",
+    lineage %>% stringr::str_starts(fixed("P.1")) ~  "P.1 & P.2",
+    lineage %>% stringr::str_starts(fixed("P.2")) ~  "P.1 & P.2",
+    lineage %>% stringr::str_starts(fixed("B.1.351")) ~  "B.1.351",
+    lineage %>% stringr::str_starts(fixed("B.1.525")) ~  "B.1.525",
+    lineage %>% stringr::str_starts(fixed("B.1.1.318")) ~  "B.1.1.318",
+    TRUE ~  "other")) %>%
+  group_by(code,name, topLineage,sample_date) %>% 
+  summarise(count = n()) %>%
+  ungroup() %>% 
+  tidyr::complete(nesting(code,name),sample_date,topLineage, fill=list(count=0)) %>%
+  group_by(code,name,topLineage) %>% 
+  arrange(sample_date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+  filter(!is.na(Roll.count))
+
+cogNHSER3 = cogNHSER2 %>% 
+  group_by(code,name,sample_date) %>% 
+  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+  rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
+  mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
+  select(-x,-n,-method) %>%
+  mutate(topLineage = topLineage %>% forcats::as_factor() %>% forcats::fct_relevel("B.1.1.7"))
+
+p1 = ggplot(cogNHSER3 %>% filter(sample_date>"2020-08-01" & sample_date<(cogMaxDate-14)),aes(x=sample_date,y=Roll.mean,fill=topLineage %>% forcats::fct_rev()))+geom_area()+
+  facet_wrap(vars(name))+scale_fill_viridis_d(option = "viridis", name="lineage")+scale_x_date(date_breaks = "1 month", date_labels = "%m-%y")+geom_vline(xintercept = as.Date("2020-10-21"))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/sa-variant/COGProportions-Now")
+
+
+```
+
+```{r}
+
+sGene = dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",S_CT = 30,ORF1ab_CT = 30,N_CT = 30, equivocal.rm = TRUE) %>%
+  mutate(sGene = sGene %>% forcats::as_factor() %>% forcats::fct_relevel("Negative"))
+
+p1 = ggplot(sGene %>% filter(date>"2020-08-01" & date<(Sys.Date()) & sGene=="Negative"), aes(x=date,y=Roll.mean,ymin=Roll.lower,ymax=Roll.upper))+geom_ribbon(fill="blue",alpha=0.2)+geom_line(colour="blue")+facet_wrap(vars(name)) + 
+  geom_vline(xintercept = as.Date("2020-10-21"))+scale_x_date(date_breaks = "1 month", date_labels = "%m-%y")
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/sa-variant/SgeneProportions-Now")
+
+```
+
+
+# reinfection
+
+
+```{r}
+
+#' Interpret S gene status according to various cut off values
+#' function to help interpret S gene CT values in context of N gene and ORF gene to give S gene status. 
+#' With the defaults this produces the same result as the sgtf_30 column in the source SGTF line list
+#' Defaults are S:30,ORF:30,N:30,Control:Inf
+#'
+#' @param sGeneLineList - a dataframe includeing 
+#' @param S_CT - S gene detected when P2CH3CQ <= this value
+#' @param ORF1ab_CT - ORF1ab gene detected when P2CH1CQ <= this value
+#' @param N_CT - N gene detected when P2CH2CQ <= this value
+#' @param Control_CT - control sample is positive when P2CH4CQ <= this value
+#'
+#' @return - the same dataframe with additional columns including "sGene" and "result"
+#'
+#' @examples coxData = coxData %>% interpretSGene()
+interpretSGene = function(sGeneLineList, S_CT = 40, ORF1ab_CT = 40, N_CT = 40, Control_CT = Inf) {
+  sGeneLineList %>% 
+    mutate(
+      ORF1ab_CT_threshold = ORF1ab_CT,
+      N_CT_threshold = N_CT,
+      S_CT_threshold = S_CT,
+      S_pos = P2CH3CQ > 0 & P2CH3CQ <= S_CT,
+      S_undetect = P2CH3CQ == 0,
+      N_pos = P2CH2CQ > 0 & P2CH2CQ <= N_CT,
+      ORF1ab_pos = P2CH1CQ > 0 & P2CH1CQ <= ORF1ab_CT,
+      Control_pos = P2CH4CQ > 0 & P2CH4CQ <= Control_CT,
+      sGene = case_when(
+        is.na(P2CH1CQ) ~ "Unknown",
+        S_pos & N_pos & ORF1ab_pos & Control_pos ~ "Positive",
+        S_undetect & N_pos & ORF1ab_pos & Control_pos ~ "Negative",
+        TRUE ~ "Equivocal"
+      )
+    ) %>% mutate(
+          result = case_when(
+            is.na(P2CH1CQ) ~ "Unknown",
+            !Control_pos ~ "No control",
+            TRUE ~ paste0(ifelse(S_pos,"S+","S-"),ifelse(N_pos,"N+","N-"),ifelse(ORF1ab_pos,"ORF+","ORF-")))
+    )
+}
+
+
+# sgll - the s gene line list
+# ll2 - the cases line list (which essentially has only the first occurrence of a case)
+
+diff = sgll %>% left_join(ll2 %>% select("FINALID",first_specimen_date = "specimen_date"), by=c("FINALID"))
+diff2 = diff %>% 
+  # look for positive test results in the S gene list which are much later than original cases
+  # these are possible reinfections
+  filter(specimen_date > first_specimen_date + 56) %>% 
+  group_by(FINALID) %>% 
+  # get rid of any further repeat testing etc.
+  filter(specimen_date == min(specimen_date)) %>%
+  ungroup() %>%
+  interpretSGene(40,40,40)
+
+
+
+
+reinfect = sgll %>% 
+  group_by(specimen_date) %>% 
+  # baseline is number of S gene results on a given day.
+  # Is this a good baseline?
+  summarise(baseline = n()) %>%
+  left_join(
+    diff2 %>% 
+      # hold onto sgtf status for sub
+      group_by(specimen_date,sGene) %>% 
+      summarise(cases = n()), 
+    by="specimen_date")
+
+# combine s gene status for initial plot.
+reinfectAll = reinfect %>% 
+  group_by(specimen_date,baseline) %>% 
+  summarise(cases = sum(cases)) %>%
+  filter(!is.na(cases)) %>%
+  mutate(binom::binom.confint(cases, baseline, conf.level = 0.95, methods = "wilson"))
+  
+ggplot(reinfectAll,aes(x=specimen_date, y=mean*100))+geom_errorbar(aes(ymin=lower*100,ymax=upper*100),colour="grey50")+geom_point()+ylab("percent Pillar 2 tests that could be reinfections")+xlab("follow up specimen date")
+
+# repeat keeping the s gene breakdown. Equivocal category is difficult to interpret here but more likey to be S pos.
+reinfect2 = reinfect %>% 
+  filter(!is.na(cases)) %>%
+  mutate(binom::binom.confint(cases, baseline, conf.level = 0.95, methods = "wilson"))
+
+ggplot(reinfect2,aes(x=specimen_date, y=mean*100))+geom_errorbar(aes(ymin=lower*100,ymax=upper*100),colour="grey50")+geom_point()+ylab("percent Pillar 2 tests that could be reinfections")+facet_wrap(vars(sGene))+xlab("follow up specimen date")
+
+# Feel sick. Lie down.
+
+delay = diff2 %>% mutate(delay = as.numeric(specimen_date-first_specimen_date)) %>% group_by(specimen_date) %>% summarise(
+  lower = quantile(delay,0.25),
+  upper = quantile(delay,0.75),
+  median = quantile(delay,0.5)
+  )
+ggplot(delay,aes(x=specimen_date, y=median, ymin=lower, ymax=upper))+geom_errorbar(colour="grey50")+geom_point()+ylab("median delay (+IQR)")+xlab("follow up specimen date")
+
+delayAll = diff2 %>% mutate(delay = as.numeric(specimen_date-first_specimen_date)) %>% group_by(specimen_date,sGene) %>% summarise(
+  lower = quantile(delay,0.25),
+  upper = quantile(delay,0.75),
+  median = quantile(delay,0.5)
+  )
+ggplot(delayAll,aes(x=specimen_date, y=median, ymin=lower, ymax=upper))+geom_errorbar(colour="grey50")+geom_point()+ylab("median delay (+IQR)")+xlab("follow up specimen date")+facet_wrap(vars(sGene))
+
+```
+
+##
+
+```{r}
+
+reinfectLTLA = sgll %>% 
+  inner_join(ll2 %>% select(FINALID,LTLA_code), by="FINALID") %>%
+  # baseline is number of S gene results on a given day.
+  # Is this a good baseline?
+  group_by(LTLA_code,specimen_date) %>% 
+  summarise(baseline = n()) %>%
+  left_join(
+    diff2 %>% 
+      inner_join(ll2 %>% select(FINALID,LTLA_code), by="FINALID") %>%
+      # hold onto sgtf status for sub
+      group_by(LTLA_code,sGene,specimen_date) %>% 
+      summarise(cases = n()), 
+    by=c("LTLA_code","specimen_date"))
+
+reinfectLTLA56 = reinfectLTLA %>% filter(!is.na(sGene) & specimen_date > Sys.Date()-56) %>% ungroup() %>% tidyr::complete(LTLA_code,specimen_date,sGene,fill=list(cases=0,baseline=NA)) %>% mutate(prop = ifelse(cases==0,0,cases/baseline))
+#reinfect56 = reinfectAll %>% filter(specimen_date > Sys.Date()-56) %>% mutate(cases = ifelse(is.na(cases),0,cases), prop = cases/baseline)
+reinfect56 = reinfect %>% filter(specimen_date > Sys.Date()-56) %>% ungroup() %>% tidyr::complete(specimen_date,sGene,fill=list(cases=0,baseline=NA)) %>% mutate(prop = ifelse(cases==0,0,cases/baseline))
+
+reinfectLTLAP = reinfectLTLA56  %>% group_by(LTLA_code,sGene) %>% group_modify(function(d,g,...) {
+
+  if(length(d$baseline) > 1) {
+    tryCatch({
+  tmp = t.test(
+    x = d$prop,
+    y = reinfect56 %>% filter(sGene == g$sGene) %>% pull(prop),
+    paired=FALSE)
+    },error=browser)
+  return(tidy(tmp))
+  } else {return(tibble())}
+  
+})
+  
+
+map = dpc$geog$getMap("LAD19")
+# combine s gene status for initial plot.
+# reinfectLTLA = reinfectLTLA %>% 
+#   mutate(cases = ifelse(is.na(cases),0,cases)) %>%
+#   mutate(binom::binom.confint(cases, baseline, conf.level = 0.95, methods = "wilson"))
+
+map2 = map %>% inner_join(reinfectLTLAP, by=c("code"="LTLA_code"))
+  
+#ggplot(map2,aes(fill=mean*100))+geom_sf()+scale_fill_gradient(limits=c(0,10), oob=scales::squish)
+ggplot()+
+  geom_sf(data = map %>% filter(code %>% stringr::str_starts("E")),fill="black")+
+  geom_sf(data = map2,mapping = aes(fill=estimate*100,alpha=1-p.value))+
+  scale_fill_gradient2(low="blue",mid="white",high="red",midpoint = 0,limits=c(-2,2),oob=scales::squish)+
+  scale_alpha_identity()+facet_wrap(vars(sGene))
+
+```

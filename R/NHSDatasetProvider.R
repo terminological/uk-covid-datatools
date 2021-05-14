@@ -6,16 +6,18 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
       super$initialize(providerController, ...)
     },
     
-    #' @description Load google mobility file
+    #' @description Load google mobility file aligned with LAD codes
     #' @return google mobility 0 custom format
     getGoogleMobility = function(...) {
       self$getDaily("GOOGLE_MOBILITY", ..., orElse = function (...) {
         Global_Mobility_Report <- readr::read_csv(
           "https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv", 
           col_types = cols(
-            sub_region_1 = col_character(), sub_region_2 = col_character(), iso_3166_2_code = col_character(), 
+            sub_region_1 = col_character(), sub_region_2 = col_character(), iso_3166_2_code = col_character(), metro_area = col_character(),
             census_fips_code = col_character(), date = col_date(format = "%Y-%m-%d"))) %>% filter(country_region_code == "GB")
-        return(Global_Mobility_Report %>% dplyr::ungroup())
+        mobility_to_LAD = readr::read_csv("https://raw.githubusercontent.com/datasciencecampus/google-mobility-reports-data/master/geography/google_mobility_lad_lookup_200903.csv")
+        out = Global_Mobility_Report %>% inner_join(mobility_to_LAD, by=c("country_region_code","sub_region_1","sub_region_2"))
+        return(out %>% rename(code = lad19cd, name=la_name) %>% mutate(codeType = ifelse(flag_2018,"LAD18","LAD19")) %>% select(-place_id,-census_fips_code,-metro_area,-country_region_code,-country_region) )
       })
     },
     
@@ -102,7 +104,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     # Wales: http://www2.nphs.wales.nhs.uk:8080/CommunitySurveillanceDocs.nsf/3dc04669c9e1eaa880257062003b246b/77fdb9a33544aee88025855100300cab/$FILE/Rapid%20COVID-19%20surveillance%20data.xlsx
     # Scotland: https://www.opendata.nhs.scot/dataset/covid-19-in-scotland
     
-    getTomWhiteCases = function(...) {
+    getTomWhiteCases = function(truncate=4,...) {
       self$getDaily("TOM-WHITE-CASES", ..., orElse = function (...) covidTimeseriesFormat({
         walesUAtoHealthBoard = self$codes$getMappings() %>% filter(fromCodeType=="UA",toCodeType=="LHB")
         covid_19_cases_uk <- readr::read_csv("https://github.com/geeogi/covid-19-uk-data/raw/master/data/covid-19-cases-uk.csv", 
@@ -140,12 +142,12 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           #tidyr::fill(value) %>%
           self$complete() %>%
           dplyr::ungroup()
-        return(tmp_cases_uk %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+        return(tmp_cases_uk %>% self$fillAbsent() %>% self$fixDatesAndNames(truncate) %>% self$complete())
       }))
     },
       
     #browser()
-    getTomWhiteIndicators = function(...) {
+    getTomWhiteIndicators = function(truncate=4,...) {
       self$getDaily("TOM-WHITE-INDIC", ..., orElse = function (...) covidTimeseriesFormat({
         covid_19_indicators_uk <- readr::read_csv("https://github.com/geeogi/covid-19-uk-data/raw/master/data/covid-19-indicators-uk.csv", 
                                            col_types = readr::cols(Date = readr::col_date(format = "%Y-%m-%d")))
@@ -187,12 +189,12 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           self$complete() %>%
           dplyr::ungroup()
         
-        return(country_totals2 %>% self$fixDatesAndNames(4))
+        return(country_totals2 %>% self$fixDatesAndNames(truncate))
         
       }))
     },
   
-    getNHSDeaths = function(...) {
+    getNHSDeaths = function(truncate = 7,...) {
       self$getDaily("NHS-DEATHS", ..., orElse = function (...) covidTimeseriesFormat({
         # Load landing page
         tmp = xml2::read_html("https://www.england.nhs.uk/statistics/statistical-work-areas/covid-19-daily-deaths/")
@@ -222,15 +224,28 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
             gender=NA_character_,
             ageCat=NA_character_
           )
-        out = out %>%  self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete()
+        out = out %>%  self$fillAbsent() %>% self$fixDatesAndNames(truncate) %>% self$complete()
         return(out)
         
       }))
     },
     
+    
+    # getPHEAdmissions = function(...) {
+    #   csv = "https://api.coronavirus.data.gov.uk/v2/data?areaType=nhsTrust&metric=cumAdmissions&metric=newAdmissions&format=csv"
+    #   # https://coronavirus.data.gov.uk/api/v1/data?filters=areaType=nhstrust;areaName=Alder%2520Hey%2520Children%27s%2520NHS%2520Foundation%2520Trust&structure=%7B%22areaType%22:%22areaType%22,%22areaName%22:%22areaName%22,%22areaCode%22:%22areaCode%22,%22date%22:%22date%22,%22hospitalCases%22:%22hospitalCases%22%7D&format=csv
+    #   tmp = readr::read_csv(csv)
+    #   tmp = tmp %>%
+    #     dplyr::rename(code = areaCode, name = areaName, code) %>%
+    #     dplyr::select(-areaType) %>%
+    #     tidyr::complete(date,tidyr::nesting(code,name,type)) %>% 
+    #     
+    # }
+    
+    
     #' @description Get UK outbreak timeseries data
     #' @return a covidTimeserisFormat data frame with several timeseries in it
-    getPHEDashboard = function(...) {
+    getPHEDashboard = function(truncate = 4,...) {
       self$getDaily("PHE-DASH", ..., orElse = function (...) covidTimeseriesFormat({
         ph_cases = readr::read_csv("https://coronavirus.data.gov.uk/downloads/csv/coronavirus-cases_latest.csv", 
                   col_types = readr::cols(`Specimen date` = readr::col_date(format = "%Y-%m-%d")))
@@ -316,7 +331,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           dplyr::rename(incidence = daily_cases, cumulative=cumulative_cases) %>% 
           tidyr::pivot_longer(cols=c(incidence,cumulative), names_to ="type")
         
-        return(out  %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+        return(out  %>% self$fillAbsent() %>% self$fixDatesAndNames(truncate) %>% self$complete())
       }))
     },
     
@@ -332,6 +347,14 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
       self$getDaily("PHE-API-NHSER", ..., orElse = function (...) covidTimeseriesFormat({
         nhserCodes = dpc$codes$getCodes() %>% filter(codeType=="NHSER" & status=="live") %>% pull(code)
         tmp = bind_rows(lapply(nhserCodes, FUN=function(x) self$getPHEApi(areaType = "nhsRegion", areaCode=x)))
+        return(tmp)
+      }))
+    },
+    
+    getPHEApiNHSTrusts = function(...) {
+      self$getDaily("PHE-API-NHS-TRUST", ..., orElse = function (...) covidTimeseriesFormat({
+        #nhserCodes = dpc$codes$getCodes() %>% filter(codeType=="NHS trust" & status=="live") %>% pull(code)
+        tmp = self$getPHEApi(areaType = "nhsTrust")
         return(tmp)
       }))
     },
@@ -392,7 +415,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     },
     
     
-    getPHEApi = function(areaType = "nation", areaName= NULL, areaCode = NULL, ...) {
+    getPHEApi = function(areaType = "nation", areaName= NULL, areaCode = NULL, truncate=4, ...) {
       
       # Create filters:
       filters = sprintf("areaType=%s", areaType)
@@ -407,19 +430,35 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         code = "areaCode", 
         case = "newCasesBySpecimenDate",
         death = "newDeaths28DaysByDeathDate",
-        admission = "newAdmissions"
+        admission = "newAdmissions",
+        cumAdmission = "cumAdmissions",
+        hospitalCases = "hospitalCases",
+        icuCases = "covidOccupiedMVBeds"
       )
+      
+      ## https://coronavirus.data.gov.uk/api/v1/data?filters=areaType=nhstrust;areaName=Alder%2520Hey%2520Children%27s%2520NHS%2520Foundation%2520Trust&structure=%7B%22areaType%22:%22areaType%22,%22areaName%22:%22areaName%22,%22areaCode%22:%22areaCode%22,%22date%22:%22date%22,%22newAdmissions%22:%22newAdmissions%22,%22cumAdmissions%22:%22cumAdmissions%22%7D&format=csv
+      ## https://coronavirus.data.gov.uk/api/v1/data?filters=areaType=nhstrust;areaName=Alder%2520Hey%2520Children%27s%2520NHS%2520Foundation%2520Trust&structure=%7B%22areaType%22:%22areaType%22,%22areaName%22:%22areaName%22,%22areaCode%22:%22areaCode%22,%22date%22:%22date%22,%22hospitalCases%22:%22hospitalCases%22%7D&format=csv
+      ## https://coronavirus.data.gov.uk/api/v1/data?filters=areaType=nhstrust;areaName=Alder%2520Hey%2520Children%27s%2520NHS%2520Foundation%2520Trust&structure=%7B%22areaType%22:%22areaType%22,%22areaName%22:%22areaName%22,%22areaCode%22:%22areaCode%22,%22date%22:%22date%22,%22covidOccupiedMVBeds%22:%22covidOccupiedMVBeds%22%7D&format=csv
       
       ts = self$getPHEPaginatedData(filters,structure)
       
-      ts = ts %>% pivot_longer(cols=c("case","death","admission"),names_to = "statistic",values_to = "value") %>%
+      ts = ts %>% pivot_longer(cols=c("case","death","admission","cumAdmission","hospitalCases","icuCases"),names_to = "label",values_to = "value") %>%
         mutate(
-          type = "incidence",
+          type = case_when(
+            label == "cumAdmission" ~ "cumulative",
+            label == "hospitalCases" ~ "prevalence",
+            label == "icuCases" ~ "prevalence",
+            TRUE ~ "incidence"
+          ),
           codeType = case_when(
+            codeType == "overview" ~ "UK",
             codeType == "nation" ~ "CTRY",
             codeType == "region" ~ "RGN",
             codeType == "utla" ~ "UTLA",
             codeType == "ltla" ~ "LAD",
+            codeType == "msoa" ~ "MSOA",
+            codeType == "nhsRegion" ~ "NHSER",
+            codeType == "nhsTrust" ~ "NHS trust",
             TRUE ~ NA_character_
           ),
           source = "phe api",
@@ -427,10 +466,25 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
           ageCat = NA_character_,
           gender = NA_character_,
           note = NA_character_,
-          statistic = ifelse(statistic == "admission","hospital admission",statistic),
+          statistic = case_when(
+            label == "admission" ~ "hospital admission",
+            label == "case" ~ "case",
+            label == "death" ~ "death",
+            label == "cumAdmission" ~ "hospital admission",
+            label == "hospitalCases" ~ "hospital admission",
+            label == "icuCases" ~ "icu admission",
+            TRUE ~ NA_character_
+          ),
           date = as.Date(date,"%Y-%m-%d")
-        )
-      return(covidTimeseriesFormat(ts %>% filter(!is.na(value))) %>% self$fillAbsent() %>% self$fixDatesAndNames(4) %>% self$complete())
+        ) %>% select(-label)
+      return(covidTimeseriesFormat(ts %>% filter(!is.na(value) & !is.na(statistic)) %>% self$fillAbsent() %>% self$fixDatesAndNames(truncate) %>% self$complete()))
+    },
+    
+    getCLIMB = function(...) {
+      self$getDaily("CLIMB", ..., orElse = function (...) {
+        tmp = readr::read_csv("https://cog-uk.s3.climb.ac.uk/phylogenetics/latest/cog_metadata.csv")
+        return(tmp)
+      })
     },
     
     getCOGUK = function(...) {
@@ -439,7 +493,15 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         cogData = NULL
         while (identical(cogData,NULL)) {
           tryCatch({
-            cogData = readr::read_csv(paste0("http://cog-uk-microreact.s3.climb.ac.uk/",cogDate,"/cog_metadata_microreact_public.csv"))
+            #cogData = readr::read_csv(paste0("http://cog-uk-microreact.s3.climb.ac.uk/",cogDate,"/cog_metadata_microreact_public.csv"))
+            cogData = readr::read_csv(paste0("http://cog-uk-microreact.s3.climb.ac.uk/",cogDate,"/cog_metadata_microreact_geocodes_only.csv"),col_types = cols(
+              .default = col_character(),
+              sample_date = col_date(format = "%Y-%m-%d"),
+              epi_week = col_double(),
+              pillar_2 = col_logical(),
+              lineage_support = col_double()
+            ))
+            message("Most recent COG microreact build: ",cogDate)
           }, error = function(e) {
             #message(cogDate)
             cogDate <<- cogDate-1

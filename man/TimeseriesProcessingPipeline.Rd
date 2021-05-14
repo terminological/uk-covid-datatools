@@ -9,7 +9,7 @@ General timeseries processing
 General timeseries processing
 }
 \section{Super classes}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{TimeseriesProcessingPipeline}
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{TimeseriesProcessingPipeline}
 }
 \section{Methods}{
 \subsection{Public methods}{
@@ -17,7 +17,7 @@ General timeseries processing
 \item \href{#method-new}{\code{TimeseriesProcessingPipeline$new()}}
 \item \href{#method-incidenceFromCumulative}{\code{TimeseriesProcessingPipeline$incidenceFromCumulative()}}
 \item \href{#method-cumulativeFromIncidence}{\code{TimeseriesProcessingPipeline$cumulativeFromIncidence()}}
-\item \href{#method-standardGrouping}{\code{TimeseriesProcessingPipeline$standardGrouping()}}
+\item \href{#method-aggregateRagged}{\code{TimeseriesProcessingPipeline$aggregateRagged()}}
 \item \href{#method-aggregateAge}{\code{TimeseriesProcessingPipeline$aggregateAge()}}
 \item \href{#method-aggregateGender}{\code{TimeseriesProcessingPipeline$aggregateGender()}}
 \item \href{#method-aggregateSubgroup}{\code{TimeseriesProcessingPipeline$aggregateSubgroup()}}
@@ -30,43 +30,53 @@ General timeseries processing
 \item \href{#method-estimateGrowthRate}{\code{TimeseriesProcessingPipeline$estimateGrowthRate()}}
 \item \href{#method-estimateRtQuick}{\code{TimeseriesProcessingPipeline$estimateRtQuick()}}
 \item \href{#method-estimateRt}{\code{TimeseriesProcessingPipeline$estimateRt()}}
-\item \href{#method-defaultUKAssumptions}{\code{TimeseriesProcessingPipeline$defaultUKAssumptions()}}
+\item \href{#method-defaultOffsetAssumptions}{\code{TimeseriesProcessingPipeline$defaultOffsetAssumptions()}}
+\item \href{#method-defaultCorrectionFactor}{\code{TimeseriesProcessingPipeline$defaultCorrectionFactor()}}
+\item \href{#method-defaultR0Assumptions}{\code{TimeseriesProcessingPipeline$defaultR0Assumptions()}}
+\item \href{#method-adjustRtConfidence}{\code{TimeseriesProcessingPipeline$adjustRtConfidence()}}
+\item \href{#method-adjustRtDates}{\code{TimeseriesProcessingPipeline$adjustRtDates()}}
+\item \href{#method-adjustGrowthRateDates}{\code{TimeseriesProcessingPipeline$adjustGrowthRateDates()}}
+\item \href{#method-adjustRtCorrFac}{\code{TimeseriesProcessingPipeline$adjustRtCorrFac()}}
 \item \href{#method-estimateRtWithAssumptions}{\code{TimeseriesProcessingPipeline$estimateRtWithAssumptions()}}
 \item \href{#method-estimateVolatilty}{\code{TimeseriesProcessingPipeline$estimateVolatilty()}}
 \item \href{#method-plotRt}{\code{TimeseriesProcessingPipeline$plotRt()}}
 \item \href{#method-plotGrowthRate}{\code{TimeseriesProcessingPipeline$plotGrowthRate()}}
 \item \href{#method-plotWindowedGrowthRate}{\code{TimeseriesProcessingPipeline$plotWindowedGrowthRate()}}
+\item \href{#method-plotGrowthIncidence}{\code{TimeseriesProcessingPipeline$plotGrowthIncidence()}}
+\item \href{#method-gogPlot}{\code{TimeseriesProcessingPipeline$gogPlot()}}
+\item \href{#method-plotEvents}{\code{TimeseriesProcessingPipeline$plotEvents()}}
 \item \href{#method-plotDefault}{\code{TimeseriesProcessingPipeline$plotDefault()}}
 \item \href{#method-plotIncidenceQuantiles}{\code{TimeseriesProcessingPipeline$plotIncidenceQuantiles()}}
 \item \href{#method-plotIncidenceRollmean}{\code{TimeseriesProcessingPipeline$plotIncidenceRollmean()}}
-\item \href{#method-setSerialInterval}{\code{TimeseriesProcessingPipeline$setSerialInterval()}}
-\item \href{#method-printSerialInterval}{\code{TimeseriesProcessingPipeline$printSerialInterval()}}
-\item \href{#method-printSerialIntervalSources}{\code{TimeseriesProcessingPipeline$printSerialIntervalSources()}}
-\item \href{#method-defaultSerialInterval}{\code{TimeseriesProcessingPipeline$defaultSerialInterval()}}
-\item \href{#method-resampledSerialInterval}{\code{TimeseriesProcessingPipeline$resampledSerialInterval()}}
-\item \href{#method-midmarketSerialInterval}{\code{TimeseriesProcessingPipeline$midmarketSerialInterval()}}
 \item \href{#method-clone}{\code{TimeseriesProcessingPipeline$clone()}}
 }
 }
 \if{html}{
 \out{<details ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="cutByAge">}\href{../../ukcovidtools/html/DataProvider.html#method-cutByAge}{\code{ukcovidtools::DataProvider$cutByAge()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="download">}\href{../../ukcovidtools/html/DataProvider.html#method-download}{\code{ukcovidtools::DataProvider$download()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUntar">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUntar}{\code{ukcovidtools::DataProvider$downloadAndUntar()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUnzip}{\code{ukcovidtools::DataProvider$downloadAndUnzip()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="describe">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-describe}{\code{ukcovidtools::CovidTimeseriesProvider$describe()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="describeErrors">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-describeErrors}{\code{ukcovidtools::CovidTimeseriesProvider$describeErrors()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="trimNAs">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-trimNAs}{\code{ukcovidtools::CovidTimeseriesProvider$trimNAs()}}\out{</span>}
 }
@@ -97,10 +107,18 @@ General timeseries processing
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-standardGrouping"></a>}}
-\subsection{Method \code{standardGrouping()}}{
+\if{html}{\out{<a id="method-aggregateRagged"></a>}}
+\subsection{Method \code{aggregateRagged()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$standardGrouping(ts, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateRagged(
+  groupedDf,
+  originalVar,
+  aggregateVars,
+  ...,
+  fn = sum,
+  dateVar = "date",
+  valueVars = vars(value)
+)}\if{html}{\out{</div>}}
 }
 
 }
@@ -150,7 +168,6 @@ General timeseries processing
   targetCodeTypes,
   completeness = "source",
   fn = sum,
-  keepOriginal = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -158,7 +175,7 @@ General timeseries processing
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{completeness}}{should the mapping be complete? if the mapping is "source" complete it will only be successfull if all source codes are present when mapping to a higher region. if the mapping is target, then only if all the target codes are represented. Or both if the mapping must be complete at both ends.}
+\item{\code{completeness}}{should the mapping be complete? if the mapping is "source" complete it will only be successful if all source codes are present when mapping to a higher region. if the mapping is target, then only if all the target codes are represented. Or both if the mapping must be complete at both ends.}
 }
 \if{html}{\out{</div>}}
 }
@@ -181,6 +198,7 @@ General timeseries processing
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$completeAndRemoveAnomalies(
   r0Timeseries,
+  outlier_min = 10,
   outlier_sd = 5,
   window = 9,
   valueVar = "value",
@@ -198,8 +216,9 @@ Calculate an estimate of rate of change of Rt using a loess
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$smoothAndSlopeTimeseries(
   r0Timeseries,
   smoothExpr,
+  ...,
   window = 14,
-  ...
+  leftSided = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -219,6 +238,8 @@ Calculate an estimate of rate of change of Rt using a loess
   covidTimeseries,
   valueVar = "value",
   growthRateWindow = 7,
+  smoothingWindow = 14,
+  earliestPossibleDate = "2020-02-01",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -230,7 +251,7 @@ Calculate an estimate of rate of change of Rt using a loess
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate(
   covidTimeseries,
-  window = self$rtWindow,
+  window = 14,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -244,8 +265,7 @@ Calculates a survival R(t) curve on grouped data
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRtQuick(
   covidTimeseries,
   valueVar = "RollMean.value",
-  window = self$rtWindow,
-  config = self$rtConfig,
+  window = 7,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -275,9 +295,11 @@ Calculates a survival R(t) curve on grouped data
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRt(
   covidTimeseries,
   valueVar = "RollMean.value",
-  window = self$rtWindow,
-  config = self$rtConfig,
-  method = self$rtMethod,
+  window = 7,
+  priorR0 = 1,
+  priorR0Sd = 2,
+  quick = FALSE,
+  serialIntervalProvider = self$serial,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -289,7 +311,7 @@ Calculates a survival R(t) curve on grouped data
 
 \item{\code{valueVar}}{- the column to calculate an R(t) for - usually "RollMean.value"}
 
-\item{\code{window}}{- the width of the smoothing function applied (default 2)}
+\item{\code{window}}{- the width of the smoothing function applied (default 7)}
 
 \item{\code{config}}{An object of class estimate_R_config, as returned by function EpiEstim::make_config.}
 
@@ -304,10 +326,77 @@ a dataframe with groupwise Rt estimates
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-defaultUKAssumptions"></a>}}
-\subsection{Method \code{defaultUKAssumptions()}}{
+\if{html}{\out{<a id="method-defaultOffsetAssumptions"></a>}}
+\subsection{Method \code{defaultOffsetAssumptions()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultUKAssumptions()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultOffsetAssumptions()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-defaultCorrectionFactor"></a>}}
+\subsection{Method \code{defaultCorrectionFactor()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultCorrectionFactor()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-defaultR0Assumptions"></a>}}
+\subsection{Method \code{defaultR0Assumptions()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultR0Assumptions()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-adjustRtConfidence"></a>}}
+\subsection{Method \code{adjustRtConfidence()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtConfidence(
+  covidRtResult,
+  sdMultiplier,
+  predicate = NULL
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-adjustRtDates"></a>}}
+\subsection{Method \code{adjustRtDates()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtDates(
+  covidRtResult,
+  window = 0,
+  offsetAssumptions = self$defaultOffsetAssumptions(),
+  extraCols = NULL
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-adjustGrowthRateDates"></a>}}
+\subsection{Method \code{adjustGrowthRateDates()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustGrowthRateDates(
+  covidRtResult,
+  window = 0,
+  offsetAssumptions = self$defaultOffsetAssumptions(),
+  extraCols = NULL
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-adjustRtCorrFac"></a>}}
+\subsection{Method \code{adjustRtCorrFac()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtCorrFac(
+  covidRtResult,
+  window = 7,
+  correctionFactor = self$defaultCorrectionFactor(),
+  extraCols = NULL
+)}\if{html}{\out{</div>}}
 }
 
 }
@@ -318,10 +407,11 @@ a dataframe with groupwise Rt estimates
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRtWithAssumptions(
   covidTimeseries,
   valueVar = "RollMean.value",
-  window = self$rtWindow,
-  config = self$rtConfig,
-  method = self$rtMethod,
-  assumptions = self$defaultUKAssumptions(),
+  window = 7,
+  period = 28,
+  quick = FALSE,
+  r0Assumptions = self$defaultR0Assumptions(),
+  serialIntervalProvider = self$serial,
   dateRange = as.Date(c(min(covidTimeseries$date), max(covidTimeseries$date)),
     "1970-01-01"),
   ...
@@ -337,6 +427,7 @@ calculate a volatility statistic for the timeseries based on previous N days
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateVolatilty(
   covidTimeseries,
   valueVar,
+  outputVar = NULL,
   window = 28
 )}\if{html}{\out{</div>}}
 }
@@ -346,13 +437,15 @@ calculate a volatility statistic for the timeseries based on previous N days
 \describe{
 \item{\code{valueVar}}{- value for which the volatility being calculated}
 
-\item{\code{window}}{- the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)}
+\item{\code{window}}{- The number of time points to consider}
 
 \item{\code{df}}{a df containing a timeseries}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Details}{
+This will not work well for timeseries with NAs
+
 $x+y=z$
 }
 
@@ -367,7 +460,7 @@ Plot the EpiEstim output in a standard way
   colour = NULL,
   events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
   rtlim = c(0.5, 2.5),
-  dates = "2020-03-01",
+  dates = NULL,
   ribbons = ("Quantile.0.025(R)" \%in\% colnames(covidRtTimeseries)),
   ...
 )}\if{html}{\out{</div>}}
@@ -403,8 +496,10 @@ Plot the growth rate
   colour = NULL,
   events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
   rlim = c(-0.25, 0.25),
-  dates = "2020-03-01",
+  dates = NULL,
   ribbons = TRUE,
+  growthVar = "Growth.value",
+  growthSEVar = "Growth.SE.value",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -430,20 +525,14 @@ Plot the growth rate
 \subsection{Method \code{plotWindowedGrowthRate()}}{
 Plot the growth rate
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotWindowedGrowthRate(
-  covidRtTimeseries,
-  colour = NULL,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
-  rlim = c(-0.25, 0.25),
-  dates = "2020-03-01",
-  ribbons = TRUE,
-  ...
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotWindowedGrowthRate(covidRtTimeseries, ...)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{df}}{a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim}
+
 \item{\code{colour}}{- the colour aesthetic}
 
 \item{\code{rlim}}{- the max and min or Rt to display}
@@ -451,11 +540,50 @@ Plot the growth rate
 \item{\code{dates}}{- the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)}
 
 \item{\code{ribbons}}{- display the confidence limit as ribbons}
-
-\item{\code{df}}{a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim}
 }
 \if{html}{\out{</div>}}
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotGrowthIncidence"></a>}}
+\subsection{Method \code{plotGrowthIncidence()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotGrowthIncidence(
+  groupedCovidRtTimeseries,
+  plotDates,
+  timespan = 15,
+  colour = NULL,
+  growthVar = "Growth.windowed.value",
+  incidenceVar = "Est.value",
+  populationExpr = 1e+06,
+  populationPer = 1e+06,
+  maxAlpha = 0.6,
+  rlim = c(-0.15, 0.15),
+  maxSize = 6
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-gogPlot"></a>}}
+\subsection{Method \code{gogPlot()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$gogPlot(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotEvents"></a>}}
+\subsection{Method \code{plotEvents()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotEvents(
+  events,
+  labelSize = 7,
+  labelY = Inf,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDefault"></a>}}
@@ -463,9 +591,11 @@ Plot the growth rate
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotDefault(
   data,
-  events = dpc$datasets$getSignificantDates() \%>\% filter(Significance == 1),
-  dates = "2020-03-01",
-  ylim = NULL
+  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  dates = NULL,
+  ylim = NULL,
+  labelSize = 7,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -476,12 +606,12 @@ Plot the growth rate
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotIncidenceQuantiles(
   covidTimeseries,
-  denominatorExpr = NA,
+  denominatorExpr = NULL,
   colour = NULL,
-  events = dpc$datasets$getSignificantDates() \%>\% filter(Significance == 1),
-  dates = "2020-03-01",
+  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  dates = NULL,
   ribbons = TRUE,
-  ylim = NULL,
+  ylim = c(0, NA),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -493,74 +623,12 @@ Plot the growth rate
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotIncidenceRollmean(
   covidTimeseries,
-  denominatorExpr = NA,
-  events = dpc$datasets$getSignificantDates() \%>\% filter(Significance == 1),
-  dates = "2020-03-01",
-  ylim = NULL,
+  denominatorExpr = NULL,
+  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  dates = NULL,
+  ylim = c(0, NA),
   ...
 )}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-setSerialInterval"></a>}}
-\subsection{Method \code{setSerialInterval()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$setSerialInterval(
-  cfg = self$defaultSerialInterval(),
-  epiEstimConfig = cfg$config,
-  method = cfg$method,
-  window = cfg$window,
-  sources = cfg$sources
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-printSerialInterval"></a>}}
-\subsection{Method \code{printSerialInterval()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$printSerialInterval(
-  si = self$defaultSerialInterval(confint)$config,
-  confint = c(0.1, 0.9)
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-printSerialIntervalSources"></a>}}
-\subsection{Method \code{printSerialIntervalSources()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$printSerialIntervalSources(
-  serialIntervals = self$defaultSerialInterval()$sources
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-defaultSerialInterval"></a>}}
-\subsection{Method \code{defaultSerialInterval()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultSerialInterval(...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-resampledSerialInterval"></a>}}
-\subsection{Method \code{resampledSerialInterval()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$resampledSerialInterval(
-  confint = c(0.025, 0.975),
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-midmarketSerialInterval"></a>}}
-\subsection{Method \code{midmarketSerialInterval()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$midmarketSerialInterval(...)}\if{html}{\out{</div>}}
 }
 
 }

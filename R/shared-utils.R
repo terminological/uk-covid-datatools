@@ -1,10 +1,10 @@
 # Shared functions and definitions
 
 #' SQL like filtering in data tables
-#' 
-#' allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is 
+#'
+#' allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is
 #' based on regex.
-#' 
+#'
 #' %	Represents zero or more characters	bl% finds bl, black, blue, and blob
 #' _	Represents a single character	h_t finds hot, hat, and hit
 #' []	Represents any single character within the brackets	h[oa]t finds hot and hat, but not hit
@@ -24,7 +24,7 @@
   }
 }
 
-# 
+#
 # identifyCovidOutlier = function(incidences) {
 #   surroundingAv = stats::filter(c(1,1,1,0,1,1,1)/6, incidences)
 #   incidences
@@ -32,7 +32,7 @@
 
 
 #' Calculates a standard deviation for a ratio distribution of gaussians
-#' 
+#'
 #' @return a SD
 #' @export
 sdFromRatio = function(mu_x, sig_x, mu_y, sig_y ) {
@@ -43,7 +43,7 @@ sdFromRatio = function(mu_x, sig_x, mu_y, sig_y ) {
 }
 
 #' Calculates a standard deviation for a product distribution of gaussians
-#' 
+#'
 #' @return a SD
 #' @export
 sdFromProduct = function(mu_x, sig_x, mu_y=mu_x, sig_y=sig_x ) {
@@ -52,7 +52,7 @@ sdFromProduct = function(mu_x, sig_x, mu_y=mu_x, sig_y=sig_x ) {
 }
 
 #' Calculates a join list
-#' 
+#'
 #' @param df - a df which may be grouped
 #' @param groupVars - the grouping for which we want to create a label as a list of columns quoted by vars(...)
 #' @param defaultJoin - if there is no grouping we need one column to join by.
@@ -75,7 +75,7 @@ joinList = function(df,groupVars=NULL,defaultJoin=NULL) {
 }
 
 #' #' colApply apply the function to the rows of a dataframe row-wise
-#' #' 
+#' #'
 #' #' @param f - a function which operates on a vector
 #' #' @param ... a list of vectors
 #' colApply = function(f, ...) {
@@ -98,7 +98,7 @@ printDataframeToString <- function(x)
 
 
 #' Add ribbons to times series from mean and SD
-#' 
+#'
 #' @param meanVar the mean
 #' @param sdVar the sd
 #' @export
@@ -196,7 +196,7 @@ geom_quantiles <- function(mapping, ...) {
 NULL
 
 # `%>%`.R6 = function(r6,fn) {
-# 
+#
 # }
 
 
@@ -207,12 +207,12 @@ mode <- function(x) {
 #   ux[which.max(tabulate(match(x, ux)))]
 }
 
-setup = function() {
+setup = function(file = Sys.getenv("R_CONFIG_FILE", "config.yml")) {
   if(!exists("dpc")) ukcovidtools::reload()
 }
 
-reload = function() {
-  paths = config::get()
+reload = function(file = Sys.getenv("R_CONFIG_FILE", "config.yml")) {
+  paths = config::get(file = file)
   #devtools::load_all(paths$librarySource)
   options("ukcovid.config"=paths$secrets)
   options("ukcovid.spim"=paths$spimSource)
@@ -220,7 +220,7 @@ reload = function() {
   assign("dpc", dpc, envir = .GlobalEnv)
   assign("tsp", dpc$timeseriesProcessor(), envir = .GlobalEnv)
 }
-  
+
 describeDataframe = function(df) {
   sapply(colnames(df),function(x) {
     if(all(is.character(tmp[[x]]) | is.factor(tmp[[x]]))) return(unique(tmp[[x]]))

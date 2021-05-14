@@ -8,6 +8,10 @@ output: html_notebook
 library(tidyverse)
 devtools::load_all("~/Git/uk-covid-datatools/")
 ukcovidtools::reload()
+
+devtools::load_all("~/Git/standard-print-output/")
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
 ```
 
 ```{r}
@@ -38,6 +42,14 @@ tmp5 = bind_rows(tmp1,tmp2,tmp3,tmp4) %>% tsp$logIncidenceStats() %>% filter(dat
 tmp5 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forTJ-symptomaticCasesAdmissionsAndDeaths-AgeAndNHSER-GrowthRate-",Sys.Date(),".csv"))
 ```
 
+```{r}
+# This is the metawards data setup.
+sds = dpc$spim$getSPIMextract()
+inHospitalDeaths = sds %>% filter(statistic == "death" & source=="cpns_death_inc_line" & codeType=="NHS trust") %>% glimpse()
+ggplot(inHospitalDeaths %>% filter(!is.na(ageCat)), aes(group=code,x=date, y=value)) + geom_line(alpha=0.1) + facet_wrap(vars(ageCat))
+```
+
+
 ## data for Ellen
 
 ```{r}
@@ -46,6 +58,28 @@ tmp = casesPerSymptomatic %>% filter(codeType %in% c("CTRY","NHSER") & subgroup 
 tmp2 = tmp %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$estimateRt(window = 14)
 tmp2 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forEllen-symptomaticCases-AgeAndRegionStratifiedRtAndGrowthRate-",Sys.Date(),".csv"))
 ```
+
+Asymptomatic and Pillar 1 for type reproduction number.
+
+```{r}
+tmp = dpc$spim$getLineListIncidence(specimenOrReport = "specimen",subgroup = asymptomatic_indicator) %>%
+      filter(codeType %in% c("CTRY","NHSER")) %>%
+      tsp$aggregateAge() %>%
+      tsp$aggregateGender() %>%
+      dpc$demog$findDemographics()
+
+tmp2 = tmp %>% tsp$estimateRtQuick(window = 14)
+
+tmp3 = tmp %>% tsp$aggregateSubgroup() %>% tsp$estimateRtQuick(window = 14)
+tmp4 = bind_rows(tmp2,tmp3)
+
+tsp$plotRt(tmp4,colour = subgroup, dates = "2020-04-01", rtlim=c(0.5,2))+facet_wrap(vars(name))
+
+
+
+tmp4 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forEllen-R_t-with-and-without-asymptomic-indicator-",Sys.Date(),".csv"))
+```
+
 
 ## data for Leon - universities
 
@@ -74,13 +108,58 @@ tmp2 %>% write_csv("~/Dropbox/covid19/exports/WD11toLAD19byArea.csv")
 
 ```{r}
 
-hosp = dpc$capac$getHospitals()
-inputShape = hosp %>% filter(sector == "NHS Sector" & tier1)
-wd19 = dpc$geog$getMap("WD19")
-demogWd19 = dpc$demog$getDemographicsForShape(mapId = "WD19",ageBreaks = c(18),combineGenders = TRUE)
-demogWd19 = demogWd19 %>% filter(ageCat == "18+")
-wd19 = wd19 %>% left_join(demogWd19)
-catch = dpc$geog$createCatchment(supplyShape = hosp  %>% dplyr::group_by(trustId,trustName),supplyIdVar = trustId,supplyVar = acuteBeds,demandId="WD19",demandShape = wd19,demandVar = count,demandIdVar = code)
-dpc$geog$preview(mapId = catch$map, poi = catch$suppliers)
+trustData2 = dpc$spim$getSARISummary()
+trustData2 %>% filter(statistic=="hospital admission" & type=="incidence") %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forTJ-trust-admissions-by-age-",Sys.Date(),".csv"))
+
+
+deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = c(1,5,15,25,45,55,65,75,85), codeTypes = "LAD") #, subgroup = ons_pod)
+deaths = deaths %>% tsp$aggregateGender()
+deaths %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forTJ-lad-deaths-by-age-",Sys.Date(),".csv"))
+
+
+cases = dpc$spim$getLineListIncidence(ageBreaks = c(1,5,15,25,45,55,65,75,85), codeTypes = "LAD",subgroup = NULL,filterExpr = asymptomatic_indicator != "Y") 
+cases = cases %>% tsp$aggregateGender()
+cases %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/forTJ-lad-cases-by-age-",Sys.Date(),".csv"))
+
+
+# trustData2 %>% anti_join(arear::surgecapacity %>% select(trustId), by=c("code"="trustId")) %>% select(code,name) %>% distinct()
+# RPC is specialist burns etc.
+# ROD is only one that matters here
+# arear::surgecapacity %>% dplyr::filter(hduBeds>0 & sector=="NHS Sector") %>% dplyr::group_by(trustId,trustName) %>% anti_join(trustData2, by=c("trustId"="code"))
+
+sup = arear::surgecapacity %>% dplyr::filter(hduBeds>0 & sector=="NHS Sector") %>% dplyr::group_by(trustId,trustName) %>% semi_join(trustData2, by=c("trustId"="code"))
+dem = arear::uk2019demographicsmap %>% filter(code %>% stringr::str_starts("E")) %>% left_join(arear::uk2019adultpopulation %>% select(-name,-codeType), by="code")
+
+catch1 = arear::createCatchment(
+  supplyShape = sup, 
+  supplyIdVar = trustId, 
+  supplyVar = acuteBeds,
+  demandShape = dem,
+  demandIdVar = code, 
+  demandVar = population,
+  outputMap = TRUE
+)
+
+catch1$crossMapping %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/ward-to-trust-catchment-",Sys.Date(),".csv"))
+catch1$map %>% arear::saveShapefile("trust-catchment",dir="~/Dropbox/covid19/exports/")
+
+map = catch1$map
+ggplot(map) + geom_sf()
+
+arear::preview(shape = catch1$map, poi = catch1$suppliers, shapeLabelGlue = "{trustName}",shapePopupGlue = "", poiLabelGlue = "{hospitalName}",poiPopupGlue = "")
 
 ```
+
+## Areas - LSOA variant classifier
+
+```{r}
+
+devtools::load_all("~/Git/arear/")
+lsoa11 = arear::getMap("LSOA11")
+
+nn = arear::createNeighbourNetwork(lsoa11)
+
+nn %>% readr::write_csv("~/Dropbox/covid19/exports/LSOA11RookNeighbours.csv")
+```
+
+

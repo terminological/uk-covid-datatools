@@ -4,7 +4,7 @@
 \alias{plotRibbons}
 \title{Add ribbons to times series from mean and SD}
 \usage{
-plotRibbons(meanVar, sdVar, colourExpr, ...)
+plotRibbons(data = NULL, meanVar, sdVar, colourExpr, ...)
 }
 \arguments{
 \item{meanVar}{the mean}

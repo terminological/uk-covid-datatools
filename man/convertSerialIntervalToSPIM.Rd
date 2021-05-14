@@ -5,18 +5,18 @@
 \title{reformats an EpiEstim config file to SPI-M template}
 \usage{
 convertSerialIntervalToSPIM(
-  cfg,
+  serial,
   modelName,
   groupName = "Exeter",
   version = "0.1"
 )
 }
 \arguments{
-\item{cfg}{- the serial interval object}
-
 \item{modelName}{- the model}
 
 \item{groupName}{- the group submitting the estimate}
+
+\item{cfg}{- the serial interval object}
 }
 \value{
 a tibble of the formatted estimates

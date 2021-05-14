@@ -354,6 +354,8 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
                           "Null 4",  "Null 5",  "Null 6",  "Amended Record Indicator",  "Null 7",  "GOR Code",  "Null 8",  "Null 9",  "Null 10")
       
       # https://digital.nhs.uk/services/organisation-data-service/data-downloads/other-nhs-organisations
+      # https://digital.nhs.uk/services/organisation-data-service/guidance-for-developers/roles-endpoint
+      # https://github.com/publichealthengland/odsR/blob/master/R/getODS.R
       # has all these links plus more
       # particularly wales LHB
       

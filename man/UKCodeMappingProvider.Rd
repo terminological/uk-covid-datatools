@@ -8,12 +8,13 @@ Process UK ONS code maps
 
 Process UK ONS code maps
 }
-\section{Super class}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{UKCodeMappingProvider}
+\section{Super classes}{
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{UKCodeMappingProvider}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
+\item \href{#method-new}{\code{UKCodeMappingProvider$new()}}
 \item \href{#method-getONSMappings}{\code{UKCodeMappingProvider$getONSMappings()}}
 \item \href{#method-getONSRegister}{\code{UKCodeMappingProvider$getONSRegister()}}
 \item \href{#method-getManualMappings}{\code{UKCodeMappingProvider$getManualMappings()}}
@@ -26,27 +27,38 @@ Process UK ONS code maps
 \item \href{#method-getDescriptions}{\code{UKCodeMappingProvider$getDescriptions()}}
 \item \href{#method-findCodesByName}{\code{UKCodeMappingProvider$findCodesByName()}}
 \item \href{#method-findNamesByCode}{\code{UKCodeMappingProvider$findNamesByCode()}}
+\item \href{#method-allPresentAndCorrect}{\code{UKCodeMappingProvider$allPresentAndCorrect()}}
+\item \href{#method-parentCode}{\code{UKCodeMappingProvider$parentCode()}}
 \item \href{#method-clone}{\code{UKCodeMappingProvider$clone()}}
 }
 }
 \if{html}{
 \out{<details ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="initialize">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-initialize}{\code{ukcovidtools::PassthroughFilesystemCache$initialize()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="cutByAge">}\href{../../ukcovidtools/html/DataProvider.html#method-cutByAge}{\code{ukcovidtools::DataProvider$cutByAge()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="download">}\href{../../ukcovidtools/html/DataProvider.html#method-download}{\code{ukcovidtools::DataProvider$download()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUntar">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUntar}{\code{ukcovidtools::DataProvider$downloadAndUntar()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUnzip}{\code{ukcovidtools::DataProvider$downloadAndUnzip()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-new"></a>}}
+\subsection{Method \code{new()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$new(providerController, ...)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getONSMappings"></a>}}
@@ -194,6 +206,30 @@ Get canonical names from code
 \subsection{Returns}{
 a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-allPresentAndCorrect"></a>}}
+\subsection{Method \code{allPresentAndCorrect()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$allPresentAndCorrect(df, codeVar = "code", codeTypes)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-parentCode"></a>}}
+\subsection{Method \code{parentCode()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$parentCode(
+  df,
+  parentCodeTypes,
+  codeVar = "code",
+  codeTypeVar = "codeType",
+  parentCodeVar = "parentCode",
+  parentNameVar = "parentName",
+  parentCodeTypeVar = "parentCodeType"
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

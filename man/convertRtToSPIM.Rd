@@ -8,6 +8,7 @@ convertRtToSPIM(
   df,
   geographyExpr,
   modelExpr,
+  modelTypeExpr,
   dateVar = "date",
   groupName = "Exeter",
   version = "0.1"
@@ -23,6 +24,8 @@ convertRtToSPIM(
 \item{groupName}{- the group submitting the estimate}
 
 \item{modelName}{- the model}
+
+\item{modelTypeExpr:}{ModelType - Multiple, Deaths, Cases, Survey, Emergency, Pillar Two Testing}
 }
 \value{
 a tibble of the formatted estimates

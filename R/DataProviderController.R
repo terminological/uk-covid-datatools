@@ -43,6 +43,16 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     self$directory = wd
   },
   
+  unloadCaches = function() {
+    self$geog$unloadCache()
+    self$demog$unloadCache()
+    self$postcodes$unloadCache()
+    self$codes$unloadCache()
+    self$capac$unloadCache()
+    self$datasets$unloadCache()
+    self$spim$unloadCache()
+  },
+  
   updateCodes = function() {
     self$codes$getManualCodes(nocache=TRUE)
     self$codes$getONSRegister(nocache=TRUE)
@@ -104,8 +114,6 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
   #'
   #' @return
   #' @export
-  #'
-  #' @examples
   fileProvider = function(name, configFile = getOption("ukcovid.config"), nocache=FALSE,...) {
     if (exists(name, where=self$fileProviders) && !nocache) {
       return(self$fileProviders[[name]]) 

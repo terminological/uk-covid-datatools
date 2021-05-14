@@ -227,7 +227,6 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   })},
   
   
-  #' @description get the intersection between to maps with ids. Caches the result in the working directory.
   getIntersection = function( inputMapId, inputShape = self$getMap(inputMapId), outputMapId,  outputShape = self$getMap(outputMapId),...) {
     return(self$getSaved(
       paste0("INTERSECT_",inputMapId,"_",outputMapId),
@@ -245,7 +244,6 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       }))
   },
  
-  #' @description finds shapes that contain the give shape
   getContainedIn = function( inputSf,  outputShape = self$getMap(outputMapId), outputMapId=NA,  inputIdVar = "code", outputIdVar = "code") {
     inputIdVar = ensym(inputIdVar)
     outputIdVar = ensym(outputIdVar)
@@ -421,9 +419,9 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   #' @param demandIdVar - the column name of the unique identifier of the areas,
   #' @param demandVar - the column name of the demand parameter. This could be the population in each region
   #' @param growthRates - a function to calculate 
-  #' @param distanceModifier - 
+  #' @param distanceModifier - distance modifier 
   #' @param tweakNetwork - a named list containing extra linkages beyond those inferred by the demandShape topology. These are used to add in bridges 
-  #' @param outputMap
+  #' @param outputMap - catch
   #' @return a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
   createCatchment = function(
       supplyShape, supplyIdVar = "code", supplyVar, supplyOutputVars = supplyShape %>% dplyr::groups(),

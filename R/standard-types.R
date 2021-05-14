@@ -23,8 +23,8 @@ covidTimeseriesFormat = ensurer::ensures_that(
   is.data.frame(.) ~ "not a data frame",
   all(c("code","name","codeType","statistic","source","ageCat","gender","type","value","subgroup","date") %in% colnames(.)) ~ "missing columns",
   lubridate::is.Date(.$date) ~ "incorrect date format",
-  all(unique(.$statistic) %in% c("case","death","icu admission","hospital admission","symptom","triage","serology","test","information seeking","negative test","ari admission")) ~ "unknown statistic value",
-  all(unique(.$type) %in% c("incidence","prevalence","cumulative","background","bias")) ~ "unknown type value",
+  all(unique(.$statistic) %in% c("case","death","icu admission","hospital admission","discharge","symptom","triage","serology","test","information seeking","negative test","ari admission","immunization")) ~ "unknown statistic value",
+  all(unique(.$type) %in% c("incidence","prevalence","cumulative","background","bias","fraction")) ~ "unknown type value",
   length(unique(.$code)) == length(unique(paste0(.$code,.$name))) ~ "more than one code/name combination per code"
 )
 
@@ -68,16 +68,16 @@ as.CovidTimeseriesFormat = function(
   )) 
 }
 
-covidStandardJoins = function() {
-  return(c("code", "name", "codeType", "statistic",
+covidStandardJoins = function(...) {
+  return(setdiff(c("code", "name", "codeType", "statistic",
   "date", "ageCat", "gender",
-  "type", "subgroup", "source"))
+  "type", "subgroup", "source"),c(...)))
 }
 
-covidStandardSelect = function(df) {
+covidStandardSelect = function(df, ...) {
   return(df %>% dplyr::select(code, name, codeType, statistic,
                             value, date, ageCat, gender,
-                            type, subgroup, source))
+                            type, subgroup, source, ...))
 }
 
 covidStandardGrouping = function(ts, ...) {

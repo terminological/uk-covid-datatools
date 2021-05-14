@@ -145,6 +145,9 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp)
   },
   
+  #' @description Take a set of regional timeseries, finds the full list of regions and the whole timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
+  #' explicitly filling in missing values. This is suitable for use for a incidence derived from a line list where some dates and regions will not be observed
+  #' @return a covidTimeseriesFormat dataframe
   fillAbsentAllRegions = function(covidTimeseries) {
     tmp = covidTimeseriesFormat(covidTimeseries)
     tmp = tmp %>% 
@@ -179,6 +182,10 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp)
   },
   
+  #' @description Take a set of timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
+  #' explicitly filling in zeros for missing values. This is suitable for use for a incidence derived from a line list where some dates will not be
+  #' observed. It does not enforce that something has been observed in all regions.
+  #' @return a covidTimeseriesFormat dataframe
   fillAbsentByRegion = function(covidTimeseries) {
     tmp = covidTimeseriesFormat(covidTimeseries)
     tmp = tmp %>% 
@@ -210,10 +217,10 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp)
   },
   
-  #' @description Take a set of timeseries and fixes any non standard names, trncates time series bu truncate days. 
+  #' @description Take a set of timeseries and fixes any non standard names, truncates time series by truncate days. 
   #' intially Fills all regions to be the same length but with trim trailing NAs
   #' @return a covidTimeseriesFormat dataframe
-  fixDatesAndNames = function(covidTimeseries, truncate=0) {
+  fixDatesAndNames = function(covidTimeseries, truncate=NULL) {
     tmp5 = covidTimeseriesFormat(covidTimeseries)
     if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA_character_)
     
@@ -223,11 +230,12 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     
     tmp5 = tmp5 %>% 
       dplyr::ungroup() %>%
-      dplyr::select(-name) %>%
+      # dplyr::select(-name) %>%
       dplyr::left_join(truncations,by="statistic") %>%
-      dplyr::mutate(tmpTrunc = ifelse(is.na(tmpTrunc),truncate,tmpTrunc)) %>%
+      dplyr::mutate(tmpTrunc = ifelse(is.null(truncate), ifelse(is.na(tmpTrunc),0,tmpTrunc), truncate)) %>%
       self$codes$findNamesByCode( outputCodeTypeVar = "lookupCodeType" ) %>% 
       dplyr::select(-lookupCodeType) %>% 
+      dplyr::mutate(name = ifelse(is.na(name),name.original,name)) %>%
       dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
       dplyr::filter(date <= max(date-tmpTrunc)) %>%
       dplyr::select(-tmpTrunc) %>%

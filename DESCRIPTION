@@ -25,9 +25,8 @@ Imports:
     rgeos,
     ggspatial,
     sf,
-    metR,
-    ssh
-Remotes:  
+    metR
+Remotes: 
     thomasp85/patchwork
 Suggests: 
     knitr,
@@ -35,3 +34,5 @@ Suggests:
     testthat (>= 2.1.0)
 VignetteBuilder: knitr
 RoxygenNote: 7.0.2
+Depends: 
+    R (>= 2.10)

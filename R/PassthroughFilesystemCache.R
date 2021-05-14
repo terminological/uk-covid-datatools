@@ -38,6 +38,11 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
       self$getSaved(id=id, dir=self$tmpWd, params=params, orElse=orElse, object, ...)
     },
     
+    unloadCache = function() {
+      self$cache = list()
+      gc()
+    },
+    
     #' @description a pass through 2 level cache (memory / saved file / orElse function)
     getSaved = function(id, orElse, ..., params = NULL, nocache=NULL, dir=NULL) {
       # dots = rlang::list2(...)

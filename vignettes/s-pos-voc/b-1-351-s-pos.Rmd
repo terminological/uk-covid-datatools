@@ -1,0 +1,486 @@
+---
+title: "B.1.251 sequences and S-gene positive pillar 2 cases"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  pdf_document :
+    fig_caption: yes
+header-includes:
+  \usepackage{float}
+  \floatplacement{figure}{H}
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/sa-variant/")})
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+
+library(tidyverse)
+library(patchwork)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(patchwork)
+library(sp)
+library(sf)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
+ukcovidtools::setup()
+ukcovidtools::reload()
+```
+
+```{r eval=FALSE}
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::reload()
+
+setwd("~/Git/uk-covid-datatools/")
+if (!exists("combinedSpositives")) source("./b-1-351-s-pos-data.R")
+
+
+lastDate = max(combinedSpositives$earliest_specimen_date,na.rm = TRUE)
+earliestDate = lastDate-28
+
+```
+
+# Descriptive stats 
+
+```{r}
+# quick count summary ----
+
+aprilCases = combinedCases %>% filter(earliest_specimen_date > "2021-04-01")
+with(aprilCases, table(sGene,type))
+
+genomics %>% 
+  group_by(variant) %>% 
+  summarise(
+    count = n(), 
+    earliest = min(specimen_date,na.rm = TRUE), 
+    latest = max(specimen_date,na.rm = TRUE)
+  ) %>%
+  mapVOCtoLineage(vocVar = variant) %>% 
+  readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/CTAS-genomics-summary-",Sys.Date(),".csv"))
+
+# TODO - more required here
+```
+
+# LTLA data and plots
+
+```{r}
+
+
+ltlaCounts = combinedSpositives %>% 
+  filter(earliest_specimen_date > earliestDate & earliest_specimen_date < lastDate) %>% mutate(
+    category = case_when(
+      sequenced ~type,
+      !sequenced ~ "unsequenced S+",
+      TRUE ~ "other"
+    ) %>% forcats::as_factor() %>% forcats::fct_relevel("unsequenced S+","B.1.351","B.1.617.2","B.1.617.1","other")
+  ) %>% 
+  group_by(code = LTLA_code, name=LTLA_name, category) %>%
+  summarise(count= n()) %>%
+  ungroup() 
+
+
+ifna = function(x,y) ifelse(is.na(x),y,x)
+
+plotWithLabels = function(ltlaCounts, xlim = c(limits[2],limits[4]), ylim=c(limits[1],limits[3]), limits = c(NA,NA,NA,NA), labelsPerPlot = 4, nrow=2) {
+  
+  ltlaCounts = ltlaCounts %>% filter(category %in% c("unsequenced S+","B.1.351","B.1.617.2"))
+  ladMap = dpc$geog$getMap("LAD19")
+  ltlas = ladMap %>% as_tibble() %>% select(code,name) %>% distinct() %>%
+    mutate(label = code %>% stringr::str_replace("E0(.)0+(.+)","\\1.\\2"))
+  categories = ltlaCounts %>% select(category) %>% distinct() %>% arrange(category)
+
+  ltlaCounts2 = ltlas %>% select(-name) %>% inner_join(categories, by=character()) %>%
+    left_join(ltlaCounts %>% select(-name), by=c("code","category")) %>% 
+    mutate(count = ifelse(is.na(count),0,count))
+  
+  mapVoc = ltlaCounts2 %>% left_join(ladMap, by=c("code"), suffix=c("",".map")) %>% 
+    filter(code %>% stringr::str_starts("E")) %>% sf::st_as_sf()
+  
+  labels = mapVoc %>% 
+    sf::st_centroid() %>%
+    mutate(x=sf::st_coordinates(.)[,"X"], y=sf::st_coordinates(.)[,"Y"]) %>% 
+    filter(x > ifna(xlim[1],-Inf) & x < ifna(xlim[2],Inf) ) %>%
+    filter(y > ifna(ylim[1],-Inf) & y < ifna(ylim[2],Inf) ) %>% 
+    as_tibble() %>%
+    group_by(category) %>% 
+    arrange(desc(count)) %>% 
+    filter(row_number() <= labelsPerPlot) %>%
+    ungroup()
+  
+  p1 = lapply(categories$category, function(cat) {
+    breaks = mapVoc %>% filter(category==cat & count>0) %>% pull(count) %>% quantile(c(0.5,0.75,0.9,0.95,0.975))
+    breaks = sort(unique(round(c(1,unname(breaks[breaks>1])))))
+    plotlabels = c("0",ifelse(c(0,breaks)+1 == c(breaks,Inf), as.character(breaks) , paste0( as.character(c(0,breaks)+1),c(rep("-",length(breaks)),"+"),c(as.character(breaks),""))))
+    tmp = mapVoc %>% filter(category==cat) %>% mutate(count2=cut(count,breaks = c(-Inf,0,breaks,Inf),labels = plotlabels,include.lowest = FALSE))
+    #browser()
+    ggplot()+
+    #geom_sf(data=dpc$geog$getMap("LAD19") ,size=0.05)+
+      geom_sf(data=tmp,mapping=aes(fill=count2),size=0.1,colour="white")+
+      scale_fill_viridis_d(option = "inferno", name="")+
+      standardPrintOutput::defaultMapLayout()+
+      standardPrintOutput::narrower()+
+      standardPrintOutput::smallLegend(textSize = 6)+ #spaceLegend = 0.8)+
+      facet_wrap(vars(category))+
+      coord_sf(xlim = xlim,ylim= ylim)+
+      ggrepel::geom_label_repel(data = labels %>% filter(category==cat), aes(x=x,y=y,label=label),min.segment.length = 0,segment.colour = "cyan",fill="#80808080",colour="cyan",size=1.5)
+  })
+  
+  
+  #print(labs %>% mutate(l = paste0(label,": ",name)) %>% pull(l) %>% paste0(collapse = "; "))
+  p4 = standardPrintOutput::simpleFigureTable(labels %>% as_tibble() %>% select(label,name) %>% distinct() %>% arrange(label),pts = 5,unwrapped = TRUE)
+  #browser()
+  return(patchwork::wrap_plots(c(p1,list(p4)),nrow=nrow)+patchwork::plot_annotation(title = paste0("cases between ",earliestDate," and ",lastDate))) #, widths = c(3,3,3,2)))#+patchwork::plot_layout(ncol = 2))
+}
+```
+
+# VOC England maps
+
+```{r}
+plotWithLabels(
+  ltlaCounts
+) %>% standardPrintOutput::saveTwoThirdPageFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesEngland")
+
+
+plotWithLabels(
+  ltlaCounts,
+  labelsPerPlot = 8
+) %>% standardPrintOutput::saveFullPageFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesEnglandLSCAPE")
+
+
+
+```
+
+
+
+# VOC local maps
+```{r}
+
+# TODO: change to use list of LTLAs rather than coordinates
+regions = dpc$codes$getTransitiveClosure() %>% filter(fromCodeType=="LAD", toCodeType == "NHSER")
+regions = regions %>% select(ltlaCode = fromCode, nhserCode = toCode) %>% distinct() %>% dpc$codes$findNamesByCode(codeVar = nhserCode,outputNameVar = nhserName)
+
+locations = list(
+  `Leicester and Nottingham` = c(52.5,-1.6,53,-0.9),
+  `Bolton, Preston & Blackburn` = c(53.5,-3.2,54,-2),
+  
+  #`Leeds, Bradford, Huddersfield` = c(53.5,-2.1,54,-1),
+  #`Manchester, Liverpool` = c(52.8,-3.2,53.75,-1.8),
+  #`Newcastle, Sunderland` = c(54.5,-2.15,55.4,-0.7),
+  #`Southampton, Portsmouth` = c(50.4,-2,51.4,0.2),
+  `Birmingham` = c(52.1,-2.7,52.9,-1.15),
+  #`M4 corridor` = c(51,-2.8,51.9,-0.8),
+  `London` = c(51.15,-0.8,51.85,0.6)
+  
+)
+
+for(name in names(locations)) {
+  location = locations[[name]]
+  print(name)
+  plotWithLabels(ltlaCounts = ltlaCounts, limits = location, labelsPerPlot = 4) %>% 
+    standardPrintOutput::saveTwoThirdPageFigure(filename=paste0("~/Dropbox/covid19/sa-variant/SPosVsSequences - ",name))
+}
+
+```
+
+# Area of concern epi curves
+# LTLA VOC count table(s)
+
+```{r}
+
+aocDf %>% rename(code =ltlaCode, name = ltlaName) %>% group_by(area) %>% standardPrintOutput::saveTable(filename="~/Dropbox/covid19/sa-variant/areasOfConcernTable")
+
+```
+
+```{r}
+
+tableCutoff = function(cutoff) {
+  table = ltlaCounts %>% 
+    group_by(name,code) %>% 
+    mutate(tmp = sum(count)) %>%
+    mutate(label = code %>% stringr::str_replace("E0(.)0+(.+)","\\1.\\2")) %>%
+    ungroup() %>% 
+    left_join(aocDf, by=c("code"="ltlaCode")) %>%
+    filter(tmp >= cutoff | !is.na(area)) %>%
+    mutate(area = ifelse(is.na(area),"other",as.character(area)) %>% ordered(c(names(areasOfConcern),"other"))) %>% 
+    pivot_wider(names_from = category, values_from=count,values_fill="-",values_fn=function(x) ifelse(x>0 & x<5,"<5",sprintf("%1.0f",x))) %>%
+    arrange(desc(tmp)) %>% select(-tmp) %>% select(area,label,code,name,`unsequenced S+`,`B.1.617.1`,`B.1.617.2`,`B.1.351`,`other VOC/VUI`) %>% as_tibble()
+  return(table)
+}
+
+tableCutoff(13) %>% group_by(area) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/sa-variant/summaryCounts")
+tableCutoff(26) %>% group_by(area) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/sa-variant/summaryCountsShort")
+```
+
+```{r}
+
+
+
+
+# inboundTrav = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/20210427_inbound_positive_cases_by_LTLA.csv")
+# 
+# trav2 = aocDf %>% inner_join(inboundTrav, by=c("ltlaCode"="LTLA_code")) %>% group_by(area,date) %>% summarise(count = sum(imported_cases))
+# 
+# p5 = (ggplot(trav2 %>% filter(date>earliestDate),aes(x=date,y=count))+
+#     geom_bar(stat="identity")+
+#     facet_wrap(vars(area),nrow=1)+
+#     coord_cartesian(xlim=c(earliestDate,lastDate))+
+#     standardPrintOutput::smallLegend()+geom_vline(xintercept = max(trav2$date), colour="blue")) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCImportation")
+
+tmp = combinedSpositives %>% inner_join(aocDf, by=c("LTLA_code"="ltlaCode")) %>% mutate(
+  context = case_when(
+    asymptomatic_indicator == "N" ~ "symptoms",
+    asymptomatic_indicator == "Y" ~ "screening",
+    asymptomatic_indicator == "U" ~ "unknown",
+    TRUE ~ NA_character_
+  ) %>% ordered(c("symptoms","screening","unknown")),
+  ageCat = case_when(
+    age < 6 ~ "<6",
+    age < 19 ~ "6-18",
+    age < 22 ~ "19-21",
+    age < 45 ~ "22-44",
+    age < 65 ~ "45-64",
+    age < 80 ~ "65-79",
+    TRUE ~ "80+"
+  ) %>% ordered(c("<6","6-18","19-21","22-44","45-64","65-79","80+"))
+) %>% rename(date = earliest_specimen_date)
+
+p1 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=type))+
+    geom_histogram(binwidth = 1)+
+    facet_wrap(vars(area),nrow=1)+
+    coord_cartesian(xlim=c(earliestDate,lastDate))+
+    scale_fill_brewer(palette = "Set1",na.value = "grey70",name=NULL)+
+    standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByType")
+
+p3 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=exposure_type))+
+    geom_histogram(binwidth = 1)+
+    facet_wrap(vars(area),nrow=1)+
+    coord_cartesian(xlim=c(earliestDate,lastDate))+
+    scale_fill_brewer(palette = "Paired",na.value = "grey70",name=NULL)+
+    standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByTravel")
+
+# (ggplot(tmp %>% filter(date>earliestDate),aes(x=date,fill=reinfect56))+
+#     geom_histogram(binwidth = 1)+
+#     facet_wrap(vars(area),ncol=1)+
+#     standardPrintOutput::smallLegend()) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByReinfection")
+
+p2 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=context))+
+    geom_histogram(binwidth = 1)+
+    facet_wrap(vars(area),nrow=1)+
+    coord_cartesian(xlim=c(earliestDate,lastDate))+
+    scale_fill_brewer(palette = "Dark2",na.value = "grey70",name=NULL)+
+    standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByAsympInd")
+
+p4 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=ethnicity_final))+
+    geom_histogram(binwidth = 1)+
+    facet_wrap(vars(area),nrow=1)+
+    coord_cartesian(xlim=c(earliestDate,lastDate))+
+    scale_fill_brewer(palette = "Set2",na.value = "grey70",name=NULL)+
+    standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByEthnic")
+
+p5 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=ageCat))+
+    geom_histogram(binwidth = 1)+
+    facet_wrap(vars(area),nrow=1)+
+    coord_cartesian(xlim=c(earliestDate,lastDate))+
+    scale_fill_brewer(palette = "Accent",na.value = "grey70",name=NULL)+
+    standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByEthnic")
+
+
+# (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=isolation_cat))+
+#     geom_histogram(binwidth = 1)+
+#     facet_wrap(vars(area),nrow=1)+
+#     coord_cartesian(xlim=c(earliestDate,lastDate))+
+#     standardPrintOutput::smallLegend()+
+#     scale_fill_brewer(palette = "Dark2",na.value = "grey70"))
+
+  #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByEthnic")
+
+# (ggplot(tmp %>% filter(date>earliestDate),aes(x=date,fill=ctas_status))+
+#     geom_histogram(binwidth = 1)+
+#     facet_wrap(vars(area),ncol=1)+
+#     standardPrintOutput::smallLegend()) %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByCTAS")
+
+(
+(p1+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
+(p2+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
+(p3+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
+(p4+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
+(p5+ylab("S+ counts")+theme(legend.justification='left'))+
+patchwork::plot_layout(ncol=1)) %>% standardPrintOutput::saveFigure("~/Dropbox/covid19/sa-variant/AOCMultiplotLSCPE",maxWidth = 10,maxHeight = 6)
+
+```
+
+
+# Figure 1 - proportions and counts
+
+```{r}
+
+pSposIsVariant = allVoc %>% 
+  #inner_join(sgll %>% select(FINALID, sgtf_under30CT), by=c("finalid"="FINALID")) %>%
+  filter(sGene == "positive") %>%
+  mapVOCtoLineage(vocVar=variant,lineages = c("B.1.617.2","B.1.617.1","B.1.351","P.1 & P.2")) %>%
+  # mutate(
+  #   detected = ifelse(asymptomatic_indicator == "Y","screening & LFT","symptoms")
+  # ) %>%
+  group_by(type, date=specimen_date) %>%
+  summarise(count= n()) %>% 
+  ungroup() %>%
+  tidyr::complete(type,date,fill=list(count=0)) %>%
+  group_by(type) %>% 
+  arrange(date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,14)/14,sides=1)) %>%
+  filter(!is.na(Roll.count)) %>% 
+  group_by(date) %>% 
+  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+  ungroup()
+
+countSposSeqByType = ggplot(pSposIsVariant %>% filter(date > "2021-01-21"), aes(x=date, y=Roll.count,colour=type))+
+  #geom_smooth(se = FALSE)+
+  geom_line()+
+  standardPrintOutput::smallLegend(textSize = 6)+
+  ylab("daily count of sequenced S+")+
+  standardPrintOutput::narrower()+
+  theme(legend.title = element_blank())+
+  scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+
+  scale_colour_brewer(palette = "Set2",aesthetics = c("colour","fill"), name=NULL)+
+  scale_x_date(date_breaks = "2 weeks")
+
+countSposSeqByType %>% standardPrintOutput::saveSixthPageFigure(filename="~/Dropbox/covid19/sa-variant/countSposSeqByType")
+```
+
+```{r}
+pSposPlot = ggplot(pSposIsVariant %>% filter(date > "2021-01-21"), aes(x=date, y=mean, ymin = lower,ymax=upper,colour=type, fill=type))+
+  #geom_ribbon(alpha=0.2,colour=NA)+
+  #geom_line(position="stack")+
+  geom_area(alpha=0.25,outline.type="both")+
+  standardPrintOutput::smallLegend(textSize = 6)+
+  ylab("est proportion of sequenced S+")+
+  standardPrintOutput::narrower()+
+  #theme(legend.title = element_blank())+
+  scale_fill_brewer(palette = "Set2",aesthetics = c("colour","fill"),name=NULL)+
+  scale_x_date(date_breaks = "2 weeks")
+
+pSposPlot %>% standardPrintOutput::saveSixthPageFigure(filename="~/Dropbox/covid19/sa-variant/propSPosIsVOC")
+
+```
+
+```{r}
+seqBySgeneCounts = allVoc %>%
+  group_by(sGene, date=specimen_date) %>%
+  summarise(count= n()) %>% arrange(date) %>%
+  mutate(
+    Roll.count = stats::filter(count,filter=rep(1,14)/14)
+  )
+  
+# seqCountsBySgene = ggplot(seqBySgeneCounts %>% filter(date > "2020-11-01"),aes(x=date,colour=sGene))+
+#   geom_point(mapping=aes(y=count),size=0.5)+
+#   geom_line(mapping=aes(y=Roll.count))+
+#   scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+standardPrintOutput::narrower()+
+#   ylab("count of COG-UK sequencing")
+
+sgeneCounts = allEpisodes %>%
+  #filter(sgtf_under30ct == 0) %>%
+  group_by(sGene,date=earliest_specimen_date) %>%
+  summarise(count= n()) %>% arrange(date) %>%
+  mutate(
+    Roll.count = stats::filter(count,filter=rep(1,14)/14)
+  ) 
+
+countsBySgene = 
+  ggplot(
+    bind_rows(
+      sgeneCounts %>% mutate(source = "Pillar 2"),
+      seqBySgeneCounts %>% mutate(source = "Sequencing")
+    ) %>% filter(sGene %in% c("positive","negative")),
+    aes(x=date,y=count, linetype=sGene, colour=source)
+  )+
+  geom_line(aes(y=Roll.count))+
+  #geom_smooth(aes(y=count))+
+  scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+
+  #standardPrintOutput::narrower()+
+  standardPrintOutput::smallLegend(textSize = 6,spaceLegend = 1)+
+  ylab("count of pillar 2 S+/S-")+
+  scale_x_date(limits = c(as.Date("2020-11-01"),NA), date_breaks = "4 weeks")
+
+countsBySgene %>% standardPrintOutput::saveThirdPageFigure(filename="~/Dropbox/covid19/sa-variant/caseCountsAndSequenceCountsBySgene")
+```
+
+(countsBySgene+countSposSeqByType+pSpos351Plot+patchwork::plot_layout()) %>% standardPrintOutput::saveHalfPageFigure(filename="~/Dropbox/covid19/sa-variant/countsBySgene")
+
+```
+
+
+```{r}
+
+# # Same plots as above stratified by screening
+# 
+# pSposIsVariant = allVoc %>% 
+#   inner_join(sgll %>% select(FINALID, sgtf_under30CT), by=c("finalid"="FINALID")) %>%
+#   filter(sgtf_under30CT == 0) %>%
+#   mutate(
+#     detected = ifelse(asymptomatic_indicator == "Y","screening","symptoms")
+#   ) %>%
+#   group_by(detected, type, date=specimen_date) %>%
+#   summarise(count= n()) %>% 
+#   ungroup() %>%
+#   tidyr::complete(detected, type,date,fill=list(count=0)) %>%
+#   group_by(detected, type) %>% 
+#   arrange(date) %>%
+#   mutate(Roll.count = stats::filter(count,filter=rep(1,14),sides=1)) %>%
+#   filter(!is.na(Roll.count)) %>% 
+#   group_by(detected, date) %>% 
+#   mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+#   ungroup()
+# 
+# 
+# 
+# pSpos351Plot = ggplot(pSposIsVariant %>% filter(date > "2021-01-21" & type %in% c("unclassified","B.1.351","B.1.617.1","B.1.617.2")), aes(x=date, y=mean, ymin = lower,ymax=upper,colour=type, fill=type))+geom_ribbon(alpha=0.2,colour=NA)+geom_line()+standardPrintOutput::smallLegend()+ylab("est proportion of sequenced S+")+coord_cartesian(ylim=c(0,1))+facet_wrap(vars(detected),ncol=1)+standardPrintOutput::narrower()+theme(legend.title = element_blank())
+# 
+# seqCounts = sgll %>%
+#   inner_join(ll2 %>% select(FINALID,asymptomatic_indicator),by="FINALID") %>% 
+#   #filter(sgtf_under30ct == 0) %>%
+#   group_by(sgtf_under30CT,asymptomatic_indicator,date=specimen_date) %>%
+#   summarise(count= n()) %>% arrange(date) %>%
+#   mutate(
+#     Roll.count = stats::filter(count,filter=rep(1,14)/14),
+#     context = ifelse(asymptomatic_indicator == "Y","screening","symptoms"),
+#     sGene = case_when(
+#       is.na(sgtf_under30CT) ~ "equivocal",
+#       sgtf_under30CT == 1 ~ "negative",
+#       sgtf_under30CT == 0 ~ "positive"
+#     )
+#   )
+# 
+# countsBySgeneAndDetection = ggplot(seqCounts %>% filter(date > "2020-11-01" & sGene != "equivocal"),aes(x=date,y=count, colour=context, linetype = sGene))+
+#   geom_line(aes(y=Roll.count))+scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+standardPrintOutput::narrower()+standardPrintOutput::smallLegend(spaceLegend = 0.6)
+# 
+# (countsBySgeneAndDetection+pSpos351Plot+patchwork::plot_layout(ncol=3)) %>% standardPrintOutput::saveHalfPageFigure(filename="~/Dropbox/covid19/sa-variant/countsBySgeneAndPVariantVsDetection")
+```
+
+
+
+
+
+
+
+
+
+
+

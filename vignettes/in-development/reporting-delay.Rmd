@@ -1,31 +1,68 @@
 ---
-title: "Reporting delays in deaths and cases"
+title: "Reporting delays in cases and deaths"
 author: "Rob Challen"
-date: "01/12/2020"
-output: pdf_document
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output:
+  beamer_presentation:
+    slide_level: 2
+    theme: "Singapore"
+    colortheme: "seagull"
+classoption: "aspectratio=169"
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demographics-',Sys.Date(),'.pdf') ) })
+# output: 
+#   ioslides_presentation:
+#     widescreen: true
+#     smaller: true
+#     css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demograpics-',Sys.Date(),'.html') ) })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
 devtools::load_all("~/Git/uk-covid-datatools/")
+
+library(tidyverse)
+library(patchwork)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(patchwork)
+library(sp)
+library(sf)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
 ukcovidtools::setup()
 ```
 
 ## Cases line list data
-
 
 ```{r cars}
 ll = dpc$spim$getLineList()
 ll2 = ll %>% mutate(delay = as.numeric(lab_report_date-specimen_date))
 pdf = ll2 %>% group_by(pillar,NHSER_name,delay) %>% summarise(count = n()) %>% group_by(pillar,NHSER_name) %>% mutate(prob = count/sum(count)) %>% mutate(surv = 1-cumsum(prob))
 
-
-
-
 ```
 
 ```{r}
-ggplot(pdf,aes(x=delay,y = prob,fill=surv<0.05))+geom_bar(stat="identity")+xlim(c(-2,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))
+p = ggplot(pdf,aes(x=delay,y = prob,fill=surv<0.05))+geom_bar(stat="identity")+xlim(c(-2,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))
+
+p %>% stand
 ```
 ```{r}
 ggplot(pdf,aes(x=delay,y = surv,fill=surv<0.05))+geom_bar(stat="identity")+coord_cartesian(xlim=c(0,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))

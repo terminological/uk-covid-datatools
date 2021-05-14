@@ -66,14 +66,43 @@ source("./new-variant-mortality-2.R")
 if(!exists("coxData")) 
   coxData = loadData()
 
-ggplot(coxData,aes(x=time,fill=as.factor(status)))+geom_histogram(binwidth=1)+scale_y_log10()
+p1 = ggplot(coxData %>% interpretSGene(S_CT=30),aes(x=time,colour=sGene,linetype=deathStatus))+geom_line(stat="count")+scale_y_log10()
+p2 = ggplot(coxData %>% interpretSGene(S_CT=30) %>% filter(status==0),aes(x=time,colour=sGene))+ stat_ecdf(geom = "step")+ylab("P(censored before t|censored)")
+p3 = ggplot(coxData %>% interpretSGene(S_CT=30) %>% filter(status==1),aes(x=time,colour=sGene))+ stat_ecdf(geom = "step")+ylab("P(died before t|died)")
+
+p1+p2+p3+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides="collect")
 ```
 
 ## Main analysis
 
 ```{r}
 if(!exists("run30")) 
-  run30 = runAnalysis(coxData, sGeneCtThreshold = 30, ctThreshold = 30,bootstraps = 100,ageTolerance = 3,specimenDateTolerance=5,includeMatched = TRUE)
+  run30 = runAnalysis(coxData, sGeneCtThreshold = 30, ctThreshold = 30,bootstraps = 100,ageTolerance = 3,specimenDateTolerance=5,includeRaw=TRUE,includeMatched = TRUE)
+```
+
+### Estimate HR using paired matches approach
+
+```{r}
+# https://ete-online.biomedcentral.com/articles/10.1186/s12982-017-0060-8
+PLME_HR = run30$pairedMatchedData %>% group_by(boot) %>% group_modify(function(d,g,...) {
+  tibble(
+    G=d %>% filter(time.neg < time.pos & status.neg==1) %>% nrow(),
+    H=d %>% filter(time.pos < time.neg & status.pos==1) %>% nrow()
+  ) %>% mutate(
+    HR = G/H,
+    estimate = log(G/H),
+    std.error = sqrt(1/G + 1/H),
+    HR.lower = exp(estimate-1.96*std.error),
+    HR.upper = exp(estimate+1.96*std.error),
+    HR.pValue = pnorm(0,estimate,std.error),
+    model = "PLME HR",
+    term = "sGeneNegative"
+  )
+})
+
+PLME_HR.summary = PLME_HR %>% group_by(model,term) %>% summarise(across(.cols = c(estimate,std.error,HR,HR.lower,HR.upper,HR.pValue), .fns = c(mean=mean,sd=sd), .names="{.fn}.{.col}"))
+
+PLME_HR.summary %>% prettyPrintSummary()
 
 ```
 
@@ -137,29 +166,44 @@ if(spo) {
 # There is a mean age difference of `r sprintf("%1.1f",deltas$ageDifference)` years.
 # There is a mean specimen date difference of `r sprintf("%1.1f",deltas$specimenDateDifference)` years.
 
-p1 = ggplot(coxFinal,aes(fill=sGene,x=admissionDelay))+
+p1 = ggplot(run30$rawMatchedData,aes(fill=sGene,x=admissionDelay))+
   geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
   ylab("probability")+
-  coord_cartesian(xlim=c(0,15))+facet_wrap(~sGene, scales = "free_y", ncol=1)
+  xlab("Days to admission")+
+  coord_cartesian(xlim=c(0,15))+
+  facet_wrap(~sGene, scales = "free_y", ncol=1)+
+  scale_fill_brewer(palette="Set1",guide="none")
 
-p2 = ggplot(coxFinal,aes(x=sGene,colour=diedWithin28days,y=CT_N))+geom_boxplot()+ylab("N Gene CT value")
+p2 = ggplot(run30$rawMatchedData,aes(x=sGene,colour=deathStatus,y=CT_N))+geom_boxplot()+ylab("N Gene CT value")+
+  scale_color_brewer(palette="Set2")+
+  xlab("S gene status")+theme(legend.position = "bottom")
 
-p3 = ggplot(coxFinal,aes(fill=sGene,x=specimen_date.sgene))+
+p3 = ggplot(run30$rawMatchedData,aes(fill=sGene,x=specimen_date))+
   geom_bar(stat="count",position=position_dodge(width=0.7), width = 0.6)+
   ylab("count")+
-  facet_wrap(~sGene, scales = "free_y", ncol=1)
+  xlab("Date")+
+  facet_wrap(~sGene, scales = "free_y", ncol=1)+scale_fill_brewer(palette="Set1",guide="none")+xlab("date")
 
-fig1 = p1+p2+p3+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=3,guides="collect")
+fig2 = p1+p3+p2+patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(ncol=3)
+
+if(spo) {
+  (fig2+standardPrintOutput::defaultFigureLayout())  %>% 
+    standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/ResidualBiases")
+} else {
+  fig2
+}
 ```
 
 ## Sensitivity analysis
 
 ```{r}
 
-summaryCT = NULL
-for(ct in seq(20,35,1)) {
-  run = runAnalysis(coxData, ctThreshold = ct,bootstraps = 25,max=Inf)
-  summaryCT = summaryCT %>% bind_rows(summariseAnalysisRun(run))
+if (!exists("summaryCT")) {
+  summaryCT = NULL
+  for(ct in seq(20,35,1)) {
+    run = runAnalysis(coxData, ctThreshold = ct,bootstraps = 25,max=Inf)
+    summaryCT = summaryCT %>% bind_rows(summariseAnalysisRun(run))
+  }
 }
 p1 = ggplot(summaryCT %>% filter(model=="S gene only"), aes(x=ctThreshold, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("CT threshold")+ylab("Hazard rate")#+
   #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
@@ -168,15 +212,18 @@ p1 = ggplot(summaryCT %>% filter(model=="S gene only"), aes(x=ctThreshold, y=mea
 ```
 
 ```{r}
-summaryDateTol = NULL
-for(dateTol in c(0:14)) {
-  run = runAnalysis(coxData, specimenDateTolerance = dateTol,bootstraps = 25)
-  summaryDateTol = summaryDateTol %>% bind_rows(summariseAnalysisRun(run))
+if (!exists("summaryDateTol")) {
+  summaryDateTol = NULL
+  for(dateTol in c(0:14)) {
+    run = runAnalysis(coxData, specimenDateTolerance = dateTol,bootstraps = 25)
+    summaryDateTol = summaryDateTol %>% bind_rows(summariseAnalysisRun(run))
+  }
 }
 
 p2 = ggplot(summaryDateTol %>% filter(model=="S gene only"), aes(x=specimenDateTolerance, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("Mismatch tolerance - sample date (days)")+ylab("Hazard rate")+
   #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
-  geom_smooth(method = "lm",se=TRUE,alpha=0.5)+scale_x_continuous(breaks = c(0,7,14))
+  #geom_smooth(method = "lm",se=TRUE,alpha=0.5)+
+  scale_x_continuous(breaks = c(0,7,14))
 
 p4 = ggplot(summaryDateTol %>% filter(model=="S gene only"),aes(x=specimenDateTolerance,y=mean.specimenDateDifference))+geom_bar(stat="identity", width=0.7, fill="steelblue") + 
   xlab("Mismatch tolerance - sample date (days)")+ylab("Pairwise bias (days)")+scale_x_continuous(breaks = c(0,7,14))
@@ -184,16 +231,18 @@ p4 = ggplot(summaryDateTol %>% filter(model=="S gene only"),aes(x=specimenDateTo
 ```
 
 ```{r}
-
-summaryAgeTol = NULL
-for(ageTol in c(0,1,2,3,4,5,6,7,8,9)) {
-  run = runAnalysis(coxData, ageTolerance = ageTol,bootstraps = 25)
-  summaryAgeTol = summaryAgeTol %>% bind_rows(summariseAnalysisRun(run))
+if (!exists("summaryAgeTol")) {
+  summaryAgeTol = NULL
+  for(ageTol in c(0,1,2,3,4,5,6,7,8,9)) {
+    run = runAnalysis(coxData, ageTolerance = ageTol,bootstraps = 25)
+    summaryAgeTol = summaryAgeTol %>% bind_rows(summariseAnalysisRun(run))
+  }
 }
 
 p3 = ggplot(summaryAgeTol %>% filter(model=="S gene only"), aes(x=ageTolerance, y=mean.HR,ymin=mean.HR.lower,ymax=mean.HR.upper))+geom_point()+geom_errorbar()+xlab("Mismatch tolerance - age (years)")+ylab("Hazard rate")+
   #geom_smooth(method = "lm",formula = y ~ poly(x, 2),se=TRUE,alpha=0.5)
-  geom_smooth(method = "lm",se=TRUE,alpha=0.5)+scale_x_continuous(breaks = c(0,3,6,9))
+  #geom_smooth(method = "lm",se=TRUE,alpha=0.5)+
+  scale_x_continuous(breaks = c(0,3,6,9))
 ```
 
 ```{r}
@@ -206,65 +255,40 @@ if(spo) {
 }
 ```
 
-
+# Supplementary materials
 
 ```{r}
-# Supplementary materials
-## Summary of full unmatched dataset
-# combinedSummary = summaryTable(coxData3) %>% rename_with(~paste0("All ",.x),.cols=c(N,`%age`,`mean (SD)`)) %>%
-#   left_join(summaryTable(coxData3 %>% filter(!is.na(sGene))) %>% rename_with(~paste0("Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
-#   left_join(summaryTable(coxData3 %>% filter(diedWithin28days)) %>% rename_with(~paste0("Died ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value")) %>%
-#   left_join(summaryTable(coxData3 %>% filter(diedWithin28days & !is.na(sGene))) %>% rename_with(~paste0("Died + Tested ",.x),.cols=c(N,`%age`,`mean (SD)`)),by=c("category","value"))
 
-
-## Outputs ----
-# View(table1Data)
-# fig1
-# summary(survModel)
-# summary(survModel2)
-
-# Prep the data set.
-# source("./new-variant-mortality.R")
-
+# devtools::load_all("~/Git/uk-covid-datatools/")
+# ukcovidtools::reload()
 # # grab some ethnicity data. Not going to be used at this point.
 # tmp2 = dpc$demog$getDemographicsWithEstimatedEthnicity()
 # tmp3 = tmp2 %>% filter(is.finite(count)) %>% inner_join(dpc$codes$getTransitiveClosure() %>% filter(fromCodeType=="LSOA",toCodeType=="NHSER"),by=c("code"="fromCode")) %>% group_by(toCode,ethnicity_final) %>% summarise(count=sum(count))
 # popByRegion = tmp3 %>% rename(code = toCode, population = count) #%>% dpc$codes$findNamesByCode()
-# coxData3 = coxData3 %>% left_join(popByRegion, by=c("NHSER_code"="code","ethnicity_final"))
+# popByRegion %>% write_csv("~/Git/vui-202012-1/popDataByEthnicity.csv")
 # 
-# # get overall population by region
+# # 
+# # # get overall population by region
 # tmp = dpc$demog$getDetailedDemographics()
 # popData = tmp %>% semi_join(dpc$codes$getTransitiveClosure() %>% filter(toCode=="E92000001"),by=c("code"="fromCode")) %>% group_by(age) %>% summarise(count = sum(count)) %>% mutate(percent = count/sum(count))
-# 
-# rm(coxData,coxData2)
+# popData %>% write_csv("~/Git/vui-202012-1/popData.csv")
 
-# combinedSummary2 %>% group_by(category) %>% standardPrintOutput::saveTable("~/Dropbox/covid19/new-variant/CaseMatchedSummaryTable",defaultFontSize = 8)
-# 
-# km = survminer::surv_fit(Surv(time,status) ~ sGene, coxFinal)
-# tmp = survminer::ggsurvplot(km,conf.int = TRUE,risk.table = "absolute")
-# (tmp$plot + coord_cartesian(ylim=c(0.9925,1))) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/KMCurve")
-
+popByRegion = readr::read_csv("~/Git/vui-202012-1/popDataByEthnicity.csv")
+popData = readr::read_csv("~/Git/vui-202012-1/popData.csv")
 
 ```
-
-# Results
-
-Biases in data set need describing.
-
-* Pillar 2 tests younger
-* S Gene negativity proxy for B.1.1.7. Equivocal results
-* Rationale for case matching approach.
 
 ## Age distributions of cases by sGene status
 
 ```{r}
 
-
+coxData3 = run30$rawData
+coxData3 = coxData3 %>% left_join(popByRegion, by=c("NHSER_code"="code","ethnicity_final"))
 
 fig1 = ggplot(coxData3,aes(fill=sGeneEra,x=age))+
   geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
   geom_line(data=popData,aes(x=age,y=percent),colour="grey60",inherit.aes = FALSE)+
-  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)+coord_cartesian(xlim=c(30,NA))
   
 
 fig1 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/new-variant/ProportionByAgeGroup")
@@ -276,39 +300,12 @@ fig1 %>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/new-variant/
 ```{r}
 fig2 = ggplot(coxData3 %>% filter(diedWithin28days),aes(fill=sGeneEra,x=age))+
   geom_bar(aes(y = ..prop..), stat="count",position=position_dodge(width=0.7), width = 0.6)+
-  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)
+  ylab("probability")+facet_wrap(~sGeneEra, scales = "free_y", ncol=1)+coord_cartesian(xlim=c(30,NA))
   
 
 fig2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/new-variant/ProportionDeathsByAgeGroup")
 ```
 
-
-
-
-
-
-There is a mean age difference of `r sprintf("%1.1f",deltas$ageDifference)` years.
-
-There is a mean specimen date difference of `r sprintf("%1.1f",deltas$specimenDateDifference)` years.
-
-## Survival models
-
-* Basic model
-* Adjusted for age to check for residual biases due to non exact matching on age
-* Adjusted for N gene CT values
-
-
-
-
-# Discussion
-
-Its bad.
-
-# Conclusion
-
-Sigh.
-
-# Supplementary materials
 
 
 ## Summary of full unmatched dataset

@@ -8,6 +8,7 @@ convertGrowthRateToSPIM(
   df,
   geographyExpr,
   modelExpr,
+  modelTypeExpr,
   growthVar = "Growth.windowed.value",
   growthSEVar = "Growth.windowed.SE.value",
   dateVar = "date",

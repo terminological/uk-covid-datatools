@@ -257,9 +257,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     self$getHashCached(object = covidTimeseries, operation="IMPUTE", ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       tmp = ts %>%
         covidStandardGrouping() %>%
+        self$completeAndRemoveAnomalies(valueVar = value, originalValueVar = value.original) %>%
         dplyr::mutate(
           logValue1 = log(value+1)) %>%
-        self$completeAndRemoveAnomalies(valueVar = logValue1, originalValueVar = logValue1.original) %>%
         covidStandardGrouping() %>%
         dplyr::group_modify(function(d,g,...) {
           d = d %>% arrange(date)
@@ -277,14 +277,24 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           RollMean.value = ifelse(logValue2 < 0,0,exp(logValue2)-1),
           Window.RollMean.value = window
         ) %>%
-        dplyr::select(-logValue1.original, -logValue1, -logValue2) %>%
+        dplyr::select(-logValue1, -logValue2) %>%
         dplyr::ungroup() 
       #browser(expr = self$debug)
       return(tmp)
     }})
   },
   
-  completeAndRemoveAnomalies = function(r0Timeseries, outlier_min = 10, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001) {covidTimeseriesFormat %def% {
+  removeZeroDays = function(r0Timeseries, valueVar = "value") {
+    valueVar = ensym(valueVar)
+    r0Timeseries %>% 
+      group_by(date) %>% 
+      mutate(.anyNonZero = any(!!valueVar!=0)) %>% 
+      mutate(!!valueVar := ifelse(.anyNonZero,!!valueVar,NA_real_)) %>%
+      select(-.anyNonZero) %>%
+      return()
+  },
+  
+  completeAndRemoveAnomalies = function(r0Timeseries, outlier_min = 10, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001, allowZeroDays=FALSE) {covidTimeseriesFormat %def% {
     valueVar = ensym(valueVar)
     originalValueVar = ensym(originalValueVar)
     if (as_label(originalValueVar) %in% colnames(r0Timeseries)) {
@@ -293,6 +303,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }
     # trim tailing NAs
     tmp = self$trimNAs(r0Timeseries)
+    if (!allowZeroDays) tmp = tmp %>% self$removeZeroDays()
     
     tmp = tmp %>%
       dplyr::ungroup() %>%
@@ -301,7 +312,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       covidStandardGrouping() %>%
       dplyr::group_modify(function(d,g,...) {
         
-        tmp_ts = d %>% dplyr::mutate(tmp_y = !!valueVar)
+        tmp_ts = d %>% dplyr::mutate(tmp_y = log(!!valueVar+1))
         # #TODO: make this a more generic way of doing windowing & tidyify it
         i = 1:(nrow(tmp_ts))
         w2 = floor(window/2)
@@ -323,7 +334,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           m_high = m_high,
           tmp_y = ifelse(
               (tmp_y > m_low & tmp_y < m_high) |
-              (tmp_y < outlier_min & m_high < outlier_min)
+              (tmp_y > 0 & tmp_y < log(outlier_min+1))# & m_high < log(outlier_min+1))
             , tmp_y, NA), # Do not remove any values unless > outlier_min
         ) %>% dplyr::mutate(
           Anomaly = is.na(tmp_y)
@@ -331,8 +342,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         
         #TODO: repeat the anomaly removal stage to detect anything ?
         
-        tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::rename(!!valueVar := tmp_y) 
-        #browser()
+        tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::mutate(!!valueVar := exp(tmp_y)-1)
+        # browser()
         return(tmp_ts)
       }) %>% 
       dplyr::ungroup()
@@ -343,7 +354,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' 
   #' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
   
-  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, ..., window = 14, leftSided = FALSE) {covidTimeseriesFormat %def% {
+  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, ..., window = 14, leftSided = TRUE) {covidTimeseriesFormat %def% {
     smoothExpr = enexpr(smoothExpr)
     smoothLabel = as_label(smoothExpr)
     if (smoothLabel == "value") warning("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
@@ -479,6 +490,26 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             !!lblV("Growth.windowed.SE") := stats::filter(x = tmp_gv.se, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1) / sqrt(growthRateWindow),
             !!lblV("Growth.windowed.Window") := growthRateWindow
         ) %>% 
+        # TODO: this is a good idea but should be done earlier.
+        # mutate(
+        #   make sure zero growth rates have no SD.
+        #   !!lblV("Growth.windowed.SE") := ifelse(!!lblV("Growth.windowed") == 0 , NA_real_, !!lblV("Growth.windowed.SE") )
+        # ) %>%
+        # This is a rolling geometric mean
+        # dplyr::group_modify(function(d,g,...) {
+        #   tmp_ts = d %>% dplyr::mutate(tmp_y = tmp_gv)
+        #   i = 1:(nrow(tmp_ts))
+        #   w2 = floor(growthRateWindow/2)
+        #   v = c(rep(NA,w2),tmp_ts$tmp_y, rep(NA,w2))
+        #   # turn time series into matrix with columns for each window
+        #   m = sapply(i,function(j) {v[j:(j+w2*2+1)]})
+        #   m = log(1+m)
+        #   # geometric mean of r is  mean of exp(mean(log(1+r)))-1
+        #   # this is like a normalised compound interest rate
+        #   m_mean = exp(apply(m, 2, mean, na.rm=TRUE))-1 #2 here means apply mean col-wise
+        #   tmp_ts = tmp_ts %>% dplyr::mutate(!!lblV("Growth.windowed") :=  m_mean) %>% select(-tmp_y)
+        #   return(tmp_ts)
+        # }) %>%
         dplyr::select(-tmp_gv, -tmp_gv.se)
       
       tmp$doublingTime.windowed = log(2)/tmp[[lblV("Growth.windowed")]]
@@ -493,20 +524,22 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }})
   },
   
-  estimateGrowthRate = function(covidTimeseries, window = self$rtWindow, ...) {
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(window), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+  estimateGrowthRate = function(covidTimeseries, window = 14, growthRateWindow = 7, ...) {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(window,growthRateWindow), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
 
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
         dplyr::filter(type == "incidence") %>%
         self$completeAndRemoveAnomalies() %>%
-        dplyr::mutate(I = value, errors="") %>%
+        dplyr::mutate(I = value, errors=NA_character_)
          
 
       groupedDf = groupedDf %>% covidStandardGrouping()
 
       groupedDf = groupedDf %>% group_modify(function(d,g,...) {
-        if (nrow(d) < 2+window) errors = paste0(ifelse(is.na(errors),"",paste0(errors,"; ")),"Not enough data to calculate growth rates")
+        #browser()
+        message(".",appendLF = FALSE)
+        if (nrow(d) < 2+window) d$errors = paste0(ifelse(is.na(d$errors),"",paste0(d$errors,"; ")),"Not enough data to calculate growth rates")
         if (any(!is.na(d$errors))) {return(d)}
         
         result = NULL
@@ -514,19 +547,56 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         # https://rdrr.io/cran/tsibble/man/slide.html
         for(i in window:nrow(d)) {
           sample = d %>% dplyr::filter(row_number() > i-window & row_number() <= i) %>% mutate(time=row_number())
+          # if no values > 1 return a non answer 
+          if(sum(sample$I>0,na.rm = TRUE) == 0) {
+            result = result %>% bind_rows(tibble::tibble(
+              date = d$date[i],
+              `Growth.poisson` = 0,
+              `Growth.SE.poisson` = NA_real_,
+              `Growth.Fit.poisson` = NA_real_
+            ))
+          } else {
           # browser()
-          model <- glm(I ~ time, family = quasipoisson(), data = sample)
-          model_sum <- summary(model)
-          result = result %>% bind_rows(tibble::tibble(
-            date = d$date[i],
-            `Growth.poisson` = model_sum$coefficients[2, 1],
-            `Growth.SE.poisson` = model_sum$coefficients[2, 2],
-            `Growth.Fit.poisson` = (model$null.deviance - model$deviance) / (model$null.deviance)
-          ))
+            
+            tmp = tryCatch({
+              model <- suppressWarnings(glm(I ~ time, family = quasipoisson(), data = sample))
+              model_sum <- summary(model)
+              tmp = tibble::tibble(
+                date = d$date[i],
+                `Growth.poisson` = model_sum$coefficients[2, 1],
+                `Growth.SE.poisson` = model_sum$coefficients[2, 2],
+                `Growth.Fit.poisson` = (model$null.deviance - model$deviance) / (model$null.deviance)
+              )
+            }, error = browser)
+      
+            result = result %>% bind_rows(tmp)
+            
+          }
         }
         return(d %>% dplyr::left_join(result, by="date"))
       })
-
+      
+      groupedDf = groupedDf %>%
+        covidStandardGrouping() %>% 
+        dplyr::mutate(
+          Growth.windowed.poisson = stats::filter(x =  Growth.poisson, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1),
+          Growth.windowed.SE.poisson = stats::filter(x = Growth.SE.poisson, filter=rep(1/growthRateWindow,growthRateWindow), sides = 1) / sqrt(growthRateWindow),
+          Growth.windowed.Window.poisson = growthRateWindow
+        ) # %>% 
+        # dplyr::group_modify(function(d,g,...) {
+        #   tmp_ts = d %>% dplyr::mutate(tmp_y = Growth.poisson)
+        #   i = 1:(nrow(tmp_ts))
+        #   w2 = floor(growthRateWindow/2)
+        #   v = c(rep(NA,w2),tmp_ts$tmp_y, rep(NA,w2))
+        #   # turn time series into matrix with columns for each window
+        #   m = sapply(i,function(j) {v[j:(j+w2*2+1)]})
+        #   m = log(1+m)
+        #   # geometric mean of r is  mean of exp(mean(log(1+r)))-1
+        #   # this is like a normalised compound interest rate
+        #   m_mean = exp(apply(m, 2, mean, na.rm=TRUE))-1 #2 here means apply mean col-wise
+        #   tmp_ts = tmp_ts %>% dplyr::mutate(Growth.windowed.poisson = m_mean) %>% select(-tmp_y)
+        #   return(tmp_ts)
+        # })
       return(groupedDf %>% dplyr::select(-I) %>% mutate(`Window.Growth.poisson` = window))
 
     }})
@@ -581,6 +651,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       # tmp starts on first non zero value of I in group
       tmp2 = groupedDf %>% group_modify(function(d,g,...) {
         
+        message(".",appendLF = FALSE)
         config = serialIntervalProvider$getBasicConfig(quick=quick, priorR0=priorR0, priorR0Sd=priorR0Sd) #, statistic = g$statistic)
         siConfig = config$cfg
         method = config$method
@@ -724,7 +795,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         cols = colnames(d2)[colnames(d2) %in% adjustable]
         for (col in cols) {
           col = as.symbol(col)
-          d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+          if(offset < 0) {
+            d2 = d2 %>% mutate(!!col := lag(!!col,n = -offset))
+          } else {
+            d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+          }
         }
         return(d2)
         
@@ -733,7 +808,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
     })
     
-    return(tmp7)
+    return(tmp7 %>% ungroup())
   },
   
   adjustGrowthRateDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
@@ -755,7 +830,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         cols = colnames(d2)[colnames(d2) %in% adjustable]
         for (col in cols) {
           col = as.symbol(col)
-          d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+          if(offset < 0) {
+            d2 = d2 %>% mutate(!!col := lag(!!col,n = -offset))
+          } else {
+            d2 = d2 %>% mutate(!!col := lead(!!col,n = offset))
+          }
         }
         return(d2)
         
@@ -764,7 +843,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
     })
     
-    return(tmp7)
+    return(tmp7 %>% ungroup())
   },
   
   adjustRtCorrFac = function(covidRtResult, window=7, correctionFactor = self$defaultCorrectionFactor(), extraCols=NULL) {
@@ -1029,7 +1108,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       self$logIncidenceStats(...)
     colour = enexpr(colour)
     
-    p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$"))
+    p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$")) + scale_y_continuous(
+      sec.axis = dup_axis( breaks = log(2)/c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), labels = c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), name="doubling time")
+    )
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
@@ -1120,16 +1201,20 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dates = as.Date(dates)
       if (length(dates) == 1) dates = c(dates,max(data$date))
     }
-    rects = events %>% filter(!is.na(`End date`) & `End date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`) # %>% mutate(labelDate = as.Date(`Start date`+floor((`End date`-`Start date`)/2),"1970-01-01"))
-    p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
-    lines = events %>% filter(is.na(`End date`) & `Start date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`)
-    p = p + geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE) 
-    labels = bind_rows(rects,lines)
-    p = p +
-      ggrepel::geom_text_repel(
-        aes(x=labelDate, y=Inf, label=`Label`),data=labels, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
-        size=(labelSize/ggplot2:::.pt/(96/72)))+
-      scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")
+    events = events %>% filter(!is.na(`End date`) & `End date` < max(dates) & `Start date` > min(dates))
+    if (nrow(events) > 1) {
+      rects = events %>% mutate(labelDate = `Start date`) # %>% mutate(labelDate = as.Date(`Start date`+floor((`End date`-`Start date`)/2),"1970-01-01"))
+      p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
+      lines = events %>% filter(is.na(`End date`) & `Start date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`)
+      p = p + geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE) 
+      labels = bind_rows(rects,lines)
+      p = p +
+        ggrepel::geom_text_repel(
+          aes(x=labelDate, y=Inf, label=`Label`),data=labels, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+          size=(labelSize/ggplot2:::.pt/(96/72)))
+    }
+    p = p + scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")
+    
     if (!identical(ylim,NULL)) {
       p =p+coord_cartesian(xlim=dates, ylim=ylim)
     } else {

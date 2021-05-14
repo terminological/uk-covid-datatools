@@ -8,8 +8,8 @@ Process metawards output
 
 Process metawards output
 }
-\section{Super class}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{MetawardProcessingPipeline}
+\section{Super classes}{
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{MetawardProcessingPipeline}
 }
 \section{Methods}{
 \subsection{Public methods}{
@@ -19,29 +19,26 @@ Process metawards output
 \item \href{#method-loadAgeTimeMatrix}{\code{MetawardProcessingPipeline$loadAgeTimeMatrix()}}
 \item \href{#method-applyAgeTimeMatrix}{\code{MetawardProcessingPipeline$applyAgeTimeMatrix()}}
 \item \href{#method-loadDefaultAgeTimeMatrices}{\code{MetawardProcessingPipeline$loadDefaultAgeTimeMatrices()}}
-\item \href{#method-tsParameterizedConvolution}{\code{MetawardProcessingPipeline$tsParameterizedConvolution()}}
-\item \href{#method-tsDiscreteConvolution}{\code{MetawardProcessingPipeline$tsDiscreteConvolution()}}
-\item \href{#method-bootstrapDistributions}{\code{MetawardProcessingPipeline$bootstrapDistributions()}}
-\item \href{#method-tsBootstrapConvolution}{\code{MetawardProcessingPipeline$tsBootstrapConvolution()}}
-\item \href{#method-summariseBootstrap}{\code{MetawardProcessingPipeline$summariseBootstrap()}}
 \item \href{#method-clone}{\code{MetawardProcessingPipeline$clone()}}
 }
 }
 \if{html}{
 \out{<details ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="cutByAge">}\href{../../ukcovidtools/html/DataProvider.html#method-cutByAge}{\code{ukcovidtools::DataProvider$cutByAge()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="download">}\href{../../ukcovidtools/html/DataProvider.html#method-download}{\code{ukcovidtools::DataProvider$download()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUntar">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUntar}{\code{ukcovidtools::DataProvider$downloadAndUntar()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUnzip}{\code{ukcovidtools::DataProvider$downloadAndUnzip()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
@@ -145,162 +142,6 @@ loads a ventilator demand matrices
 
 \subsection{Returns}{
 a list of matrices
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-tsParameterizedConvolution"></a>}}
-\subsection{Method \code{tsParameterizedConvolution()}}{
-applies a set of parameterised convolution functions groupwise to input data
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$tsParameterizedConvolution(
-  groupedDf,
-  distributionsDf,
-  outputVar = "output",
-  valueVar = "value",
-  dateVar = "date",
-  days = 30,
-  timepoints = 0:days,
-  padLeft = NA,
-  padRight = NA
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{groupedDf}}{- an optionally grouped dataframe, containing at dateVar, and a valueVar to be colvolved}
-
-\item{\code{distributionsDf}}{- a dataframe containing the same grouping columns as groupedDf plus "distribution", and relevant distribution parameter columns}
-
-\item{\code{dateVar}}{-}
-
-\item{\code{days}}{-}
-
-\item{\code{timepoints}}{- the times to}
-
-\item{\code{padLeft}}{- what can we assume about the run in to the current values? default NA.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a list of matrices
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-tsDiscreteConvolution"></a>}}
-\subsection{Method \code{tsDiscreteConvolution()}}{
-applies a set of parameterised convolution functions groupwise to input data
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$tsDiscreteConvolution(
-  groupedDf,
-  discreteDistDf,
-  outputVar = "output",
-  valueVar = "value",
-  dateVar = "date",
-  pExpr = "prob",
-  padLeft = NA,
-  padRight = NA
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{groupedDf}}{- an optionally grouped dataframe, containing at dateVar, and a valueVar to be colvolved}
-
-\item{\code{discreteDistDf}}{- a dataframe containing the same grouping columns as groupedDf plus "start", "end" and "prob" columns}
-
-\item{\code{dateVar}}{-}
-
-\item{\code{padLeft}}{- what can we assume about the run in to the current values? default NA.}
-
-\item{\code{padRight}}{- what can we assume about the run in to the current values? default NA.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a list of matrices
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-bootstrapDistributions"></a>}}
-\subsection{Method \code{bootstrapDistributions()}}{
-calculates a set of bootstrap parameter distributions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$bootstrapDistributions(
-  distributionDistDf,
-  bootstraps = 100
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{distributionDistDf}}{- a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max}
-
-\item{\code{bootstraps}}{- number of bootstrap iterations}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a list of randomly selected bootstraps conforming to the specifications.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-tsBootstrapConvolution"></a>}}
-\subsection{Method \code{tsBootstrapConvolution()}}{
-executes a convolution using bootstrapped parameterized distributions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$tsBootstrapConvolution(
-  groupedDf,
-  distributionDistDf,
-  bootstraps = 100,
-  outputVar = "output",
-  valueVar = "value",
-  dateVar = "date",
-  days = 30,
-  timepoints = 0:days,
-  padLeft = NA,
-  padRight = NA
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{distributionDistDf}}{- a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and  columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max}
-
-\item{\code{bootstraps}}{- number of bootstrap iterations}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-the full bootstrap result (i.e. not summarized) which can be futher convoluted (asd long as the number of bootstrap iterations are kept the same).
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-summariseBootstrap"></a>}}
-\subsection{Method \code{summariseBootstrap()}}{
-summarise the result of a bootstrapped convolution using parameterized distributions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$summariseBootstrap(
-  groupedDf,
-  outputVars = vars(output),
-  dateVar = "date"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{distributionDistDf}}{- a grouped data frame containing the same columns as those grouped in groupedDf, plus "distribution" and  columns for "<parameter>_mean","<parameter>_sd","<parameter>_min","<parameter>_max" e.g. shape_mean, shape_sd, shape_min, shape_max, rate_mean, rate_sd, rate_min, rate_max}
-
-\item{\code{bootstraps}}{- number of bootstrap iterations}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-the full bootstrap result (i.e. not summarized) which can be futher convoluted (asd long as the number of bootstrap iterations are kept the same).
 }
 }
 \if{html}{\out{<hr>}}

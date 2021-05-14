@@ -1,0 +1,562 @@
+---
+title: "COVID-19 age breakdown"
+author: "Rob Challen"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output:
+  beamer_presentation:
+    slide_level: 2
+    theme: "Singapore"
+    colortheme: "seagull"
+classoption: "aspectratio=169"
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demographics-',Sys.Date(),'.pdf') ) })
+# output: 
+#   ioslides_presentation:
+#     widescreen: true
+#     smaller: true
+#     css: ~/Git/uk-covid-datatools/vignettes/ioslides.css
+# knit: (function(inputFile, encoding,...) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "~/Dropbox/covid19/by-age", output_file=paste0('covid-demograpics-',Sys.Date(),'.html') ) })
+fig_width: 7
+fig_height: 5
+out.width: "100%"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+
+devtools::load_all("~/Git/standard-print-output/")
+devtools::load_all("~/Git/uk-covid-datatools/")
+
+library(tidyverse)
+library(patchwork)
+library(rgdal)
+library(ggplot2)
+library(ggspatial)
+library(rgeos)
+library(maptools)
+library(patchwork)
+library(sp)
+library(sf)
+
+ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
+standardPrintOutput::setDefaults()
+ukcovidtools::setup()
+```
+
+```{r eval=FALSE}
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::reload()
+```
+
+# COG UK
+
+```{r}
+
+cases = dpc$spim$getLineListIncidence(ageBreaks = c(5,18,75),filter=asymptomatic_indicator!="Y",codeTypes = "NHSER")
+cases = cases %>% tsp$aggregateGender() %>% tsp$aggregateSubgroup() %>% filter(date<"2020-11-21") 
+
+p1 = (cases %>% tsp$estimateRtQuick() %>% filter(ageCat != "unknown" & name != "Unknown (England)") %>% tsp$plotRt(colour=ageCat,dates = "2020-10-01",rtlim=c(0.75,1.75)))+facet_wrap(vars(name))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/Rt-2020-11-21")
+
+```
+
+
+
+```{r}
+cog = dpc$datasets$getCOGUK(nocache=TRUE)
+top5lineage = cog %>% filter(sample_date > "2021-02-01") %>% group_by(lineage) %>% count() %>% arrange(desc(n)) %>% pull(lineage) %>% head(5)
+
+
+
+
+
+xmap = cogUKMap %>% sf::st_centroid(cogUKMap) %>% dpc$geog$getContainedIn(outputMapId = "NHSER20",inputIdVar = iso_3166_2_code)
+NHSERmap = dpc$geog$getMap("NHSER20")
+cogNHSER = cog %>% inner_join(xmap,by=c("iso_3166_code"="from")) %>% rename(code=to) %>% dpc$codes$findNamesByCode()
+
+ggplot(cogNHSER %>% filter(lineage %>% stringr::str_starts("B.1.1.7")),aes(x=sample_date))+geom_histogram(binwidth = 1)
+
+window=14
+
+
+
+cogNHSER2 = cogNHSER %>% 
+  mutate(topLineage = ifelse(lineage %in% top5lineage, lineage, "other")) %>%
+  group_by(code,name, topLineage,sample_date) %>% 
+  summarise(count = n()) %>%
+  ungroup() %>% 
+  tidyr::complete(nesting(code,name),sample_date,topLineage, fill=list(count=0)) %>%
+  group_by(code,name,topLineage) %>% 
+  arrange(sample_date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+  filter(!is.na(Roll.count))
+
+cogNHSER3 = cogNHSER2 %>% 
+  group_by(code,name,sample_date) %>% 
+  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+  rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
+  mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
+  select(-x,-n,-method) %>%
+  mutate(topLineage = topLineage %>% forcats::as_factor() %>% forcats::fct_relevel("B.1.1.7"))
+
+p1 = ggplot(cogNHSER3 %>% filter(sample_date>"2020-10-01" & sample_date<(Sys.Date()-14)),aes(x=sample_date,y=Roll.mean,fill=topLineage %>% forcats::fct_rev()))+geom_area()+
+  facet_wrap(vars(name))+scale_fill_brewer(palette="Set2", name="lineage")+
+  geom_vline(xintercept = as.Date("2020-10-21"))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/COGProportions-Now")
+```
+
+
+
+
+```{r}
+p2 = ggplot(cogNHSER3 %>% filter(sample_date>"2020-10-01" & sample_date<"2020-11-21"),aes(x=sample_date,y=Roll.mean,fill=topLineage %>% forcats::fct_rev()))+geom_area()+
+  facet_wrap(vars(name))+scale_fill_brewer(palette="Dark2", name="lineage")+
+  geom_vline(xintercept = as.Date("2020-10-21"))
+
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/COGProportions-2020-11-21")
+
+```
+
+
+```{r}
+
+voc351 = dpc$spim$getVoc351LineList()
+ll = dpc$spim$getLineList()
+
+lastDate = max(voc351$earliest_specimen_date,na.rm = TRUE)
+
+voc2 = voc351 %>% inner_join(ll, by=c("finalid"="FINALID"))
+
+voc3 = voc2 %>% 
+  group_by(LTLA_code,LTLA_name,earliest_specimen_date) %>% 
+  summarise(count= n()) %>%
+  ungroup() %>% 
+  tidyr::complete(nesting(LTLA_code,LTLA_name),earliest_specimen_date=full_seq(earliest_specimen_date,1), fill=list(count=0)) %>%
+  group_by(LTLA_code,LTLA_name) %>% 
+  arrange(earliest_specimen_date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+  filter(!is.na(Roll.count))
+
+map = dpc$geog$getMap("LAD19") %>% inner_join(voc3,by=c("code"="LTLA_code"))
+
+p1 = ggplot()+
+  geom_sf(data=dpc$geog$getMap("LAD19") %>% filter(code %>% stringr::str_starts("E")),size=0.05)+
+  geom_sf(data=map %>% filter(earliest_specimen_date==lastDate & Roll.count > 0),mapping=aes(fill=(Roll.count)),size=0.05)+
+  scale_fill_viridis_b(guide = guide_colorbar(title="B.1.351 last 14 days"))+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
+
+```
+
+```{r}
+
+sgll = dpc$spim$getSGeneLineList()
+spos = sgll %>% filter(sgtf_under30CT == 0)
+
+spos2 = spos %>% inner_join(ll, by=c("FINALID"),suffix= c("",".ll"))
+spos3 = spos2 %>% group_by(LTLA_code,LTLA_name,specimen_date) %>% 
+  summarise(count= n()) %>%
+  ungroup() %>% 
+  tidyr::complete(nesting(LTLA_code,LTLA_name),specimen_date=full_seq(specimen_date,1), fill=list(count=0)) %>%
+  group_by(LTLA_code,LTLA_name) %>% 
+  arrange(specimen_date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+  filter(!is.na(Roll.count))
+
+mapSpos = dpc$geog$getMap("LAD19") %>% inner_join(spos3,by=c("code"="LTLA_code"))
+
+p2 = ggplot()+
+  geom_sf(data=dpc$geog$getMap("LAD19") %>% filter(code %>% stringr::str_starts("E")),size=0.05)+
+  geom_sf(data=mapSpos %>% filter(specimen_date==lastDate & Roll.count > 0),mapping=aes(fill=(Roll.count)),size=0.05)+
+  scale_fill_viridis_b(guide = guide_colorbar(title="S+ last 14 days"),option = "magma")+standardPrintOutput::defaultMapLayout()+standardPrintOutput::narrower()
+```
+
+```{r}
+(p1+p2) %>% standardPrintOutput::saveFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesEngland",maxWidth = 10,maxHeight = 5)
+
+```
+
+```{r}
+(p1+guides(fill="none")+coord_sf(xlim = c(-0.8,0.6),ylim=c(51.15,51.85))+(p2+guides(fill="none")+coord_sf(xlim = c(-0.8,0.6),ylim=c(51.15,51.85)))) %>% 
+  standardPrintOutput::saveFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesLondon",maxWidth = 5,maxHeight = 2.5)
+
+```
+```{r}
+(p1+guides(fill="none")+coord_sf(xlim = c(-2.25,-1.25),ylim=c(52.1,52.9))+(p2+guides(fill="none")+coord_sf(xlim = c(-2.25,-1.25),ylim=c(52.1,52.9)))) %>% 
+  standardPrintOutput::saveFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesBirmingham",maxWidth = 5,maxHeight = 2.5)
+
+```
+
+```{r}
+(p1+guides(fill="none")+coord_sf(xlim = c(-3.2,-1.25),ylim=c(52.8,54))+(p2+guides(fill="none")+coord_sf(xlim = c(-3.2,-1.25),ylim=c(52.8,54)))) %>% 
+  standardPrintOutput::saveFigure(filename="~/Dropbox/covid19/sa-variant/SPosVsSequencesManchPool",maxWidth = 5,maxHeight = 2.5)
+
+```
+
+
+```{r}
+
+
+
+
+window2 = 28
+
+cog2 = cog %>% 
+  semi_join(cogUKMap,by=c("iso_3166_code"="iso_3166_2_code")) %>% 
+  mutate(topLineage = case_when(
+    lineage %>% stringr::str_starts("B.1.1.7") ~  "B.1.1.7",
+    lineage %>% stringr::str_starts("P.1") ~  "P.1",
+    lineage %>% stringr::str_starts("B.1.351") ~  "B.1.351",
+     lineage %>% stringr::str_starts("B.1.525") ~  "B.1.525",
+    TRUE ~  "other")) %>%
+  group_by(iso_3166_code, topLineage,sample_date) %>% 
+  summarise(count = n()) %>%
+  ungroup() %>% 
+  tidyr::complete(iso_3166_code,sample_date,topLineage, fill=list(count=0)) %>%
+  group_by(iso_3166_code,topLineage) %>% 
+  arrange(sample_date) %>%
+  mutate(Roll.count = stats::filter(count,filter=rep(1,window2),sides=1)) %>%
+  filter(!is.na(Roll.count))
+
+cog3 = cog2 %>% 
+  ungroup() %>%
+  group_by(iso_3166_code,sample_date) %>% 
+  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+  rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
+  mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
+  select(-x,-n,-method) %>%
+  mutate(topLineage = topLineage %>% forcats::as_factor() %>% forcats::fct_relevel("B.1.1.7")) %>%
+  ungroup()
+
+
+
+cog3Map = cogUKMap %>% left_join(cog3 %>% filter(sample_date==max(sample_date)),by=c("iso_3166_2_code"="iso_3166_code"))
+
+patchwork::wrap_plots(lapply(c(voc,"other"), function(lin) {
+  ggplot() +
+    geom_sf(data = cogUKMap)+
+    geom_sf(data = cog3Map %>% filter(topLineage==lin) %>% mutate(percent=Roll.mean*100) %>% sf::st_as_sf() %>% ungroup(),mapping=aes(fill=percent))+facet_wrap(vars(topLineage))+scale_fill_viridis_c()+standardPrintOutput::narrower()
+}), ncol=5)
+
+```
+
+```{r}
+tmp = dpc$spim$getSGeneLineList()
+ll = dpc$spim$getLineList() 
+tmp3 = ll %>% left_join(tmp, by="FINALID", suffix=c("",".sgene"))
+
+sGene = dpc$spim$getSDropoutFreqency(codeTypes = "NHSER",S_CT = 30,ORF1ab_CT = 30,N_CT = 30, equivocal.rm = TRUE) %>%
+  mutate(sGene = sGene %>% forcats::as_factor() %>% forcats::fct_relevel("Negative"))
+
+p1 = ggplot(sGene %>% filter(date>"2020-10-01"), aes(x=date,y=Roll.mean,fill = sGene %>% forcats::fct_rev()))+geom_area()+facet_wrap(vars(name)) + scale_fill_brewer(palette = "Set3", name = "S gene status")+
+  geom_vline(xintercept = as.Date("2020-10-21"))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/SgeneProportions-Now")
+
+p2 = ggplot(sGene %>% filter(date>"2020-10-01" & date<"2020-11-21"), aes(x=date,y=Roll.mean,fill = sGene %>% forcats::fct_rev()))+geom_area()+facet_wrap(vars(name)) + scale_fill_brewer(palette = "Set3", name = "S gene status")+
+  geom_vline(xintercept = as.Date("2020-10-21"))
+
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/SgeneProportions-2020-11-21")
+
+# tmp3 = tmp3 %>% group_by(FINALID) %>% arrange(specimen_date.sgene) %>% mutate(est.testNumber = row_number())
+# 
+# # How many do we have CT values for? & how many of those were repeat tests?
+# sGeneTestStatus = tmp3 %>% group_by(specimen_date,age,FINALID,NHSER_code,NHSER_name,LTLA_code,LTLA_name) %>% summarise(
+#   sGeneTested = all(!is.na(sgtf)),
+#   sGeneRepeats = n()
+# ) %>% mutate(sGeneRepeats = sGeneRepeats-ifelse(sGeneTested,0,1))
+# 
+# sGeneTestStatus %>% group_by(NHSER_name,sGeneTested) %>% summarise(count = n()) %>% 
+#   mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sGeneTested, "CT known", "CT unknown")) %>% ungroup() %>% 
+#   select(NHSER_name,col,percent) %>% pivot_wider(names_from=col,values_from=percent) %>% clipr::write_clip()
+# 
+# tmp3 %>% filter(!is.na(sgtf)) %>% group_by(est.testNumber,sgtf) %>% summarise(count=n()) %>% 
+#   mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sgtf==1, "S-", "S+")) %>% ungroup() %>% 
+#   select(est.testNumber,col,percent) %>% pivot_wider(names_from=col,values_from=percent)
+# 
+# # pillar 2 testing kit changes don't affect
+# tmp6 = tmp3 %>% filter(!is.na(sgtf) & specimen_date > "2020-11-01")
+# tmp6 = tmp6 %>% mutate(pillar_2_testingkit = tolower(pillar_2_testingkit)) 
+# tmp6 %>% filter(specimen_date > as.Date("2020-12-15") & specimen_date < as.Date("2020-12-21")) %>% group_by(pillar_2_testingkit,sgtf) %>% summarise(count=n()) %>% 
+#   mutate(percent = sprintf("%1.2f%%",count/sum(count)*100), col = ifelse(sgtf==1, "S-", "S+"), N=sum(count)) %>% ungroup() %>% 
+#   select(pillar_2_testingkit,col,percent,N) %>% pivot_wider(names_from=col,values_from=percent)
+
+
+
+```
+
+```{r}
+
+p1 = ggplot()+
+  geom_ribbon(data=sGene %>% filter(sGene=="Negative"), aes(x=date,ymin=Roll.lower,ymax=Roll.upper,fill="S negative"),alpha=0.4)+
+  geom_line(data=sGene %>% filter(sGene=="Negative"), aes(x=date,y=Roll.mean,colour="S negative"))+
+  geom_ribbon(data=cogNHSER3 %>% filter(topLineage=="B.1.1.7"), aes(x=sample_date,ymin=Roll.lower,ymax=Roll.upper,fill="B.1.1.7"), alpha=0.4)+
+  geom_line(data=cogNHSER3 %>% filter(topLineage=="B.1.1.7"), aes(x=sample_date,y=Roll.mean,colour="B.1.1.7"))+
+  facet_wrap(vars(name))+coord_cartesian(xlim = as.Date(c("2020-09-01",NA)))+
+  geom_vline(xintercept = as.Date("2020-10-21"))+
+  scale_colour_brewer(palette="Accent",aesthetics=c("fill","colour"), name="")
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/SgeneAndB117Relationship")
+```
+
+```{r}
+tmp3 %>% dpc$spim$interpretSGene() %>% group_by(result) %>% count() %>% arrange(desc(n)) %>% ungroup() %>% standardPrintOutput::saveTable("~/Dropbox/covid19/cog-analysis/SgeneStatusCounts")
+```
+
+```{r}
+tmp2 = bind_rows(
+  lapply(seq(20,34,2),
+    function(cutOff) dpc$spim$getSDropoutFreqency(codeTypes = "CTRY",S_CT = cutOff,ORF1ab_CT = cutOff,N_CT = cutOff, equivocal.rm = FALSE) %>% mutate(cutOff = cutOff)
+  ))
+
+p1 = ggplot(tmp2,aes(x=date,y=Roll.mean*100,ymin=Roll.lower*100,ymax=Roll.upper*100))+
+  geom_ribbon(alpha=0.4,mapping=aes(fill=as.factor(cutOff)))+
+  geom_line(mapping=aes(colour=as.factor(cutOff)))+facet_wrap(vars(sGene), ncol=1)+scale_color_brewer(aesthetics = c("fill","colour"),palette = "Dark2",name="CT cutoff")+
+  ylab("percent")
+
+tmp2 = bind_rows(
+  lapply(seq(20,34,2),
+    function(cutOff) dpc$spim$getSDropoutFreqency(codeTypes = "CTRY",S_CT = cutOff,ORF1ab_CT = cutOff,N_CT = cutOff, equivocal.rm = TRUE) %>% mutate(cutOff = cutOff)
+  ))
+
+p2 = ggplot(tmp2,aes(x=date,y=Roll.mean*100,ymin=Roll.lower*100,ymax=Roll.upper*100))+
+  geom_ribbon(alpha=0.4,mapping=aes(fill=as.factor(cutOff)))+
+  geom_line(mapping=aes(colour=as.factor(cutOff)))+facet_wrap(vars(sGene), ncol=1)+scale_color_brewer(aesthetics = c("fill","colour"),palette = "Dark2",name="CT cutoff")+
+  ylab("percent")
+
+p3 = p1+p2+patchwork::plot_layout(ncol=2,guides = "collect")
+
+p3 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/SgeneAndCTValues")
+```
+
+```{r}
+ctsByTime = tmp3 %>% group_by(name = NHSER_name,date = specimen_date) %>% summarise(
+  mean.S = mean(P2CH3CQ,na.rm = TRUE),
+  mean.N = mean(P2CH1CQ,na.rm = TRUE),
+  mean.ORF = mean(P2CH2CQ,na.rm = TRUE),
+  mean.Control = mean(P2CH4CQ,na.rm = TRUE)
+) %>% pivot_longer(cols=starts_with("mean"),names_to="gene",values_to="CT") %>% mutate(gene = gene %>% stringr::str_remove("mean."))
+
+p1 = ggplot(ctsByTime %>% filter(!is.na(name)),aes(x=date,y=CT,colour=gene))+geom_line()+facet_wrap(vars(name))+coord_cartesian(xlim = as.Date(c("2020-09-01",NA)))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/MeanCTValues")
+
+```
+
+```{r}
+p1 = ggplot(ctsByTime %>% filter(!is.na(name) & gene!="S"),aes(x=date,y=CT,colour=gene))+geom_line()+facet_wrap(vars(name))+coord_cartesian(xlim = as.Date(c("2020-09-01",NA)), ylim=c(15,25))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/MeanCTValuesNandORFonly")
+```
+
+## line list
+
+```{r}
+
+sGeneIncid = tmp3 %>% dpc$spim$interpretSGene(S_CT = 30,ORF1ab_CT = 30,Control_CT = 30) %>% dpc$spim$getLineListIncidence(subgroup = sGene,filterExpr = asymptomatic_indicator != "Y", codeTypes = "NHSER")
+sGeneIncid = sGeneIncid %>% tsp$aggregateGender() %>% filter(name!="Unknown (England)")
+
+(sGeneIncid %>% filter(subgroup %in% c("Positive","Negative","Unknown")) %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% tsp$plotWindowedGrowthRate(colour = subgroup,rlim=c(-0.2,0.2),dates="2020-10-21"))+facet_wrap(vars(name))
+
+diffR = (sGeneIncid %>% filter(subgroup %in% c("Positive","Negative","Unknown")) %>% tsp$estimateRt(window = 14)) 
+```
+   
+   
+```{r}      
+p1 = tsp$plotIncidenceQuantiles(diffR, colour = subgroup,dates="2020-10-01")+facet_wrap(vars(name))+scale_y_continuous(trans = "log1p",breaks = c(2,5,20,50,200,500,2000,5000))
+
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/IncidenceBySgeneStatus")
+```
+
+```{r}
+p1 = tsp$plotRt(diffR, colour = subgroup,dates="2020-10-01")+facet_wrap(vars(name))
+p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/RtBySgeneStatus-Now")
+
+p2 = tsp$plotRt(diffR %>% filter(date<"2020-11-21" & subgroup != "Unknown"), colour = subgroup,dates="2020-10-01")+facet_wrap(vars(name))
+p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/cog-analysis/RtBySgeneStatus-2020-11-21")
+```
+
+
+## Reinfection
+
+```{r}
+
+
+
+if(nrow(llp2) != nrow(tmp3)) {
+  warning("duplicates in ")
+  byPatient = tmp3 %>% filter(!is.na(sgtf)) %>% group_by(FINALID) %>% summarise(sgtfResults = n_distinct(sgtf), sgtf=mean(sgtf), sgtfTests = n()) 
+  duplicates = byPatient %>% filter(sgtfTests > 1)
+  # of all patients most have had only one test sequenced. A small number have had a lot.
+  byPatient %>% group_by(sgtfTests) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+  duplicates %>% group_by(sgtfResults) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+  
+  # excluding patients with inconsistent results 20% are S-
+  # in the subgroup that have repeat tests fewer - 9% are S-. If repeat tests is a function of time and S- are more recent then this is explainable by right censoring.
+  byPatient %>% filter(sgtfResults == 1) %>% group_by(sgtf) %>% count() %>% ungroup() %>% mutate(percent = sprintf("%1.2f%%",n/sum(n)*100))
+  duplicates %>% filter(sgtfResults == 1) %>% group_by(sgtf) %>% count() %>% ungroup() %>% mutate(percent  = sprintf("%1.2f%%",n/sum(n)*100))
+  
+  
+  # Find patients that swtich from S+ to S-
+  tmp4 = tmp3 %>% arrange(FINALID,specimen_date.sgene) %>% mutate(
+    lead.FINALID = lead(FINALID),
+    lead.P2CH3CQ = lead(P2CH3CQ),
+    lead.P2CH1CQ = lead(P2CH1CQ),
+    lead.P2CH2CQ = lead(P2CH2CQ),
+    lead.sgtf = lead(sgtf),
+    lead.specimen_date.sgene = lead(specimen_date.sgene),
+    lead.CDR_Specimen_Request_SK = lead(CDR_Specimen_Request_SK)
+  ) %>% filter(lead.FINALID == FINALID)
+  
+  transitions = tmp4 %>% filter(P2CH3CQ > 0 & lead.P2CH3CQ == 0)
+  
+  reinfections = transitions %>% 
+    filter((P2CH3CQ > 0 & P2CH3CQ < 29) & (P2CH1CQ > 0 & P2CH1CQ < 29) & (P2CH2CQ > 0 & P2CH2CQ < 29)) %>% # was it definitely a previous S+ infection
+    filter((lead.P2CH1CQ > 0 & lead.P2CH1CQ < 29) & (lead.P2CH2CQ > 0 & lead.P2CH2CQ < 29)) %>%  # was it definitely a previous S+ infection
+    filter(as.numeric(lead.specimen_date.sgene-specimen_date.sgene)>12) #%>% # was it > 12 days later
+  #View()
+  
+  reinfections %>% readr::write_csv("~/tmp/reinfections.csv")
+  
+  revTransitions = tmp4 %>% filter(P2CH3CQ == 0 & lead.P2CH3CQ > 0)
+  
+  revReinfections = transitions %>% 
+    filter((P2CH1CQ > 0 & P2CH1CQ < 29) & (P2CH2CQ > 0 & P2CH2CQ < 29)) %>% # was it definitely a previous S- infection
+    filter((lead.P2CH3CQ > 0 & lead.P2CH3CQ < 29) & (lead.P2CH1CQ > 0 & lead.P2CH1CQ < 29) & (lead.P2CH2CQ > 0 & lead.P2CH2CQ < 29)) %>%  # was it definitely a subsequent S+ infection
+    filter(as.numeric(lead.specimen_date.sgene-specimen_date.sgene)>12) %>% # was it > 12 days later
+    View()
+  
+  
+  repeats = tmp4 %>% mutate(transition = paste0(sgtf,"-",lead.sgtf), interval=as.numeric(lead.specimen_date.sgene-specimen_date.sgene))
+  repeats %>% filter(interval < 10) %>% group_by(transition) %>% count() %>% readr::write_csv("~/tmp/transitions.csv")
+  ggplot(repeats,aes(x=transition,y=interval))+geom_violin()
+}
+```
+
+```{r}
+tmp3 = tmp3 %>% mutate(SgeneResult = ifelse(is.na(sgtf),"Unknown",SgeneResult))
+
+summary = tmp3 %>% group_by(pillar,NHSER_name,SgeneResult) %>% summarise(n=n(),maxDate=max(specimen_date))
+#summary %>% View()
+truncate = min(summary$maxDate)
+
+tmp3 = tmp3 %>% filter(specimen_date < truncate)
+
+# Some difference between Aystmptomatic and symptomatic
+tmp3 %>% filter(asymptomatic_indicator != "U") %>% 
+  group_by(asymptomatic_indicator,SgeneResult) %>% count() %>% 
+  pivot_wider(names_from = SgeneResult, values_from = n) %>% mutate(percentSNeg = Negative/(Negative+Positive)*100) %>% clipr::write_clip()
+
+mutationIncidence = tsp$spim$getLineListIncidence(ll=tmp3,ageBreaks = c(5,17,23,60,75), subgroup = SgeneResult,nocache=TRUE) %>% tsp$aggregateGender()
+
+if(mutationIncidence %>% filter(codeType=="NHSER") %>% pull(value) %>% sum() != nrow(tmp3)) stop("incidence error")
+
+mutationIncidence2 = mutationIncidence %>% mutate(value) %>% pivot_wider(names_from = subgroup,values_from=value)  %>%
+  mutate(
+    Positive = ifelse(is.na(Positive),0,Positive),
+    Negative = ifelse(is.na(Negative),0,Negative),
+    Unknown = ifelse(is.na(Unknown),0,Unknown)
+  )
+
+mutationIncidence2 = mutationIncidence2 %>% covidStandardGrouping() %>% arrange(date) %>% mutate(
+  Roll.Negative = stats::filter(Negative,filter=rep(1,7),sides=1),
+  Roll.Positive = stats::filter(Positive,filter=rep(1,7),sides=1),
+  Roll.Unknown = stats::filter(Unknown,filter=rep(1,7),sides=1)
+)
+
+mutationIncidence2 = mutationIncidence2 %>% mutate(
+  sequenced = 1-Roll.Unknown/(Roll.Unknown+Roll.Positive+Roll.Negative)
+  #sequenced.CI.0.025 = binom.confint(Roll.Unknown, Roll.Unknown+Roll.Positive+Roll.Negative, )
+  #sequenced.CI.0.975
+)
+
+ggplot(mutationIncidence2 %>% filter(name !="Unknown (England)" & ageCat != "unknown" & date > "2020-09-01"), aes(x=date,y=sequenced,colour=ageCat))+geom_line()+facet_wrap(vars(name))+ylab("P(S gene status reported)")
+
+```
+
+```{r}
+
+
+
+guestimateIncidenceAge = mutationIncidence2 %>% mutate(
+  Positive.estimate = (Roll.Negative+Roll.Positive+Roll.Unknown) * Roll.Positive/(Roll.Negative+Roll.Positive),
+  Negative.estimate = (Roll.Negative+Roll.Positive+Roll.Unknown) * Roll.Negative/(Roll.Negative+Roll.Positive)
+) %>% pivot_longer(cols=c(Positive.estimate, Negative.estimate),names_to = "subgroup", values_to="value") %>% select(-Negative, -Positive, -Unknown, -Roll.Negative, -Roll.Positive, -Roll.Unknown, sequenced) %>%
+  mutate(value=ifelse(is.nan(value),NA,value))
+
+guestimateIncidenceAgeCTRY = guestimateIncidenceAge %>% filter(codeType=="CTRY" & ageCat != "unknown")
+```
+
+```{r}
+(guestimateIncidenceAgeCTRY %>% dpc$demog$findDemographics() %>% tsp$plotIncidenceQuantiles(colour = subgroup,denominatorExpr = population/1000000))+facet_wrap(vars(ageCat))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+```
+
+```{r}
+(guestimateIncidenceAgeCTRY %>% dpc$demog$findDemographics() %>% tsp$plotGrowthRate(colour = subgroup,denominatorExpr = population/1000000))+facet_wrap(vars(ageCat))
+```
+
+```{r}
+
+mutationIncidence3 = tsp$spim$getLineListIncidence(ll=tmp3,subgroup = SgeneResult,nocache=TRUE) %>% tsp$aggregateGender()
+
+if(mutationIncidence %>% filter(codeType=="NHSER") %>% pull(value) %>% sum() != nrow(tmp3)) stop("incidence error")
+
+mutationIncidence4 = mutationIncidence3 %>% mutate(value) %>% pivot_wider(names_from = subgroup,values_from=value)  %>%
+  mutate(
+    Positive = ifelse(is.na(Positive),0,Positive),
+    Negative = ifelse(is.na(Negative),0,Negative),
+    Unknown = ifelse(is.na(Unknown),0,Unknown)
+  )
+
+mutationIncidence4 = mutationIncidence4 %>% filter(date < "2020-12-07") %>% covidStandardGrouping() %>% arrange(date) %>% mutate(
+  Roll.Negative = stats::filter(Negative,filter=rep(1,7),sides=1),
+  Roll.Positive = stats::filter(Positive,filter=rep(1,7),sides=1),
+  Roll.Unknown = stats::filter(Unknown,filter=rep(1,7),sides=1)
+)
+
+mutationIncidence4 = mutationIncidence4 %>% mutate(
+  sequenced = 1-Roll.Unknown/(Roll.Unknown+Roll.Positive+Roll.Negative)
+  #sequenced.CI.0.025 = binom.confint(Roll.Unknown, Roll.Unknown+Roll.Positive+Roll.Negative, )
+  #sequenced.CI.0.975
+)
+guestimateIncidence = mutationIncidence4 %>% mutate(
+  Positive.estimate = (Roll.Negative+Roll.Positive+Roll.Unknown) * Roll.Positive/(Roll.Negative+Roll.Positive),
+  Negative.estimate = (Roll.Negative+Roll.Positive+Roll.Unknown) * Roll.Negative/(Roll.Negative+Roll.Positive)
+) %>% pivot_longer(cols=c(Positive.estimate, Negative.estimate),names_to = "subgroup", values_to="value") %>% select(-Negative, -Positive, -Unknown, -Roll.Negative, -Roll.Positive, -Roll.Unknown, sequenced) %>%
+  mutate(value=ifelse(is.nan(value),NA,value))
+```
+
+```{r}
+(guestimateIncidence %>% dpc$demog$findDemographics() %>% tsp$plotIncidenceQuantiles(colour = subgroup,denominatorExpr = population/1000000))+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = c(0,2,5,20,50,200,500,2000,5000))
+```
+
+
+```{r}
+(guestimateIncidence %>% filter(name != "Unknown (England)") %>% tsp$plotGrowthRate(colour = subgroup))+facet_wrap(vars(name))
+```
+
+
+## COG Data
+
+```{r}
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+  
+  ```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

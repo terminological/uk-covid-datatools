@@ -62,9 +62,9 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
      return(onsZip)
    },
    
-   normaliseGender = function(gender) {
+   normaliseGender = function(gender, na.value=NA_character_) {
      case_when(
-       is.na(gender) ~ NA_character_,
+       is.na(gender) ~ na.value,
        gender %>% stringr::str_detect("f|F") ~ "female",
        gender %>% stringr::str_detect("m|M") ~ "male",
        gender %>% stringr::str_detect("u|U") ~ "unknown",
@@ -87,7 +87,7 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
    #TODO: is this the right place for this?
    cutByAge = function(age, ageBreaks = NULL) {
       # if no break specified return a column of NAs
-     if(identical(ageBreaks,NULL)) return(rep(NA_character_, length(age)))
+     if(identical(ageBreaks,NULL) | length(ageBreaks)==0) return(rep(NA_character_, length(age)))
      ageLabels = self$labelsFromBreaks(ageBreaks)
      ageBreaks2 = c(-Inf,ageBreaks,Inf)
      ageCat = forcats::fct_explicit_na(

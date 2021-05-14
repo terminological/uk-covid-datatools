@@ -7,7 +7,7 @@
 vector \%like\% like
 }
 \description{
-allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is 
+allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is
 based on regex.
 }
 \details{

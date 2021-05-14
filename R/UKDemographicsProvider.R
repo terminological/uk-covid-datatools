@@ -117,6 +117,13 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
     })
   },
   
+  getIMDData = function(...) {
+    self$getSaved("IMD",..., orElse=function(...) {
+      readr::read_csv("https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/845345/File_7_-_All_IoD2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv")
+    })
+  },
+  
+  
   #' @description LSOA & Scottish Data Zones
   getDemographicsMap = function(...) {
     tmp = self$getDetailedDemographics()

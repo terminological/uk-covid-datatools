@@ -80,17 +80,21 @@ test_that("geog_aggregation",{
 
 test_that("anomaly detection",{
   
+  # sequence of 100,100,100...,2,100,100
+  # if not anomaly because
   anomaly1 = testDf2(c(rep(100,10),2,rep(100,10)))
   anomaly1res = anomaly1 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)
-  testthat::expect_equal(anomaly1$value %in% c(2),anomaly1res)
+  testthat::expect_true(all(anomaly1res==FALSE))
   
-  anomaly2 = testDf2(c(rep(0,5),8,rep(0,10),15))
+  anomaly2 = testDf2(c(rep(0,5),8,rep(0,10),100))
   anomaly2res = anomaly2 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)
-  testthat::expect_equal(anomaly2$value %in% c(15),anomaly2res)
+  testthat::expect_equal(anomaly2$value %in% c(100),anomaly2res)
   
   anomaly3 = testDf2(c(0,0,0,2,4,8,16,32,64,128))
   testthat::expect_false(all(anomaly3 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)))
   
+  anomaly4 = testDf2(c(0,0,0,2,4,8,16,32,64,128,256,512,1024,0))
+  testthat::expect_true(any(anomaly4 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)))
   
 })
 

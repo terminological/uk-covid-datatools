@@ -74,6 +74,7 @@ interpretSGene = function(sGeneLineList, S_CT = 40, ORF1ab_CT = 30, N_CT = 30, C
     ORF1ab_pos = P2CH1CQ > 0 & P2CH1CQ <= ORF1ab_CT,
     Control_pos = P2CH4CQ > 0 & P2CH4CQ <= Control_CT,
     sGene = case_when(
+      is.na(P2CH1CQ) ~ "Unknown",
       S_pos & N_pos & ORF1ab_pos & Control_pos ~ "Positive",
       S_undetect & N_pos & ORF1ab_pos & Control_pos ~ "Negative",
       TRUE ~ "Equivocal"
@@ -116,10 +117,16 @@ getLineList = function(path,...) {
 
 loadData = function(dir="~/Data/new-variant",date="20210118", censorLength = 28, B117Date = as.Date("2020-10-01") ,latestDate = NULL) {
   ll = getLineList(path=paste0(dir,"/Anonymised Combined Line List ",date,".csv"))
+  message("Loaded cases line list ",date,":",nrow(ll))
   dll = getDeathsLineList(path = paste0(dir,"/",date," COVID19 Deaths.xlsx"))
+  message("Loaded deaths line list ",date,":",nrow(dll))
   sgll = getSGeneLineList(path = paste0(dir,"/SGTF_linelist_",date,".csv"))
+  message("Loaded sgene line list ",date,":",nrow(sgll)," entries, ",n_distinct(sgll$FINALID)," patients")
   sgllUniq = sgll %>% filter(!is.na(FINALID)) %>% group_by(FINALID) %>% mutate(sGeneResultCount = n()) %>% filter(sGeneResultCount == 1) %>% ungroup()
+  message("Selected patients with single s gene results ",nrow(sgllUniq))
   #sgllUniq = sgll %>% filter(!is.na(FINALID)) %>% group_by(FINALID) %>% arrange(desc(specimen_date)) %>% mutate(sGeneResultCount = n()) %>% filter(row_number() == 1) %>% ungroup()
+  
+  
   if (identical(latestDate,NULL)) latestDate = max(dll$dod,na.rm=TRUE)
   
   # Is this a potential source of bias?
@@ -140,7 +147,12 @@ loadData = function(dir="~/Data/new-variant",date="20210118", censorLength = 28,
   coxData = ll %>% 
     left_join(sgllUniq, by="FINALID", suffix=c("",".sgene")) %>% 
     left_join(dll %>% mutate(FINALID=as.numeric(finalid)), by=c("FINALID"),suffix=c("",".death")) %>% 
-    filter(is.na(specimen_date.sgene) | specimen_date.sgene <= latestDate) # make sure we are not including tests for which we could not have death info.
+    filter(specimen_date > B117Date & specimen_date <= latestDate) # make sure we are not including tests for which we could not have death info.
+  
+  message("celect cases with specimen_date >",B117Date," & <=",latestDate," :",nrow(coxData))
+  
+  coxData %>% filter(is.na(specimen_date.sgene)) %>% nrow() %>% message(" patients with missing sGene result included")
+  coxData %>% filter(is.na(dod)) %>% nrow() %>% message(" patients who have no date of death (and are presumed alive)")
   
   coxData2 = coxData %>% 
     select(
@@ -176,6 +188,15 @@ loadData = function(dir="~/Data/new-variant",date="20210118", censorLength = 28,
       ageCat = cut(age, breaks = c(-Inf,30,60,70,80,Inf), labels = c("<30","30-59","60-69","70-79","80+"), right=FALSE)
     )
   
+  coxData2 %>% filter(is.na(imd_decile)) %>% nrow() %>% message(" patients with missing IMD")
+  coxData2 %>% filter(is.na(sex) | sex=="Unknown") %>% nrow() %>% message(" patients with missing or unknown gender")
+  coxData2 %>% filter(is.na(age)) %>% nrow() %>% message(" patients with unknown age")
+  coxData2 %>% filter(is.na(ethnicity_final)) %>% nrow() %>% message(" patients with unknown ethnicity")
+  coxData2 %>% filter(admissionDelay < 0) %>% nrow() %>% message(" patients admitted before pillar 2 test taken")
+  coxData2 %>% filter(reportingDelay < 0 | reportingDelay>=20) %>% nrow() %>% message(" patients whose tests are reported before specimen taken or >19 days after specimen taken")
+  coxData2 %>% filter(sGeneDelay < 0 | sGeneDelay>=20) %>% nrow() %>% message(" patients whose sGene tests are >19 days after original positive test")
+  coxData2 %>% filter(time<=0) %>% nrow() %>% message(" patients whose time from test to event (death) is 0 or less (e.g. postmortem tests)")
+  
   coxData2 = coxData2 %>%
     filter(!is.na(imd_decile)) %>%
     filter(!is.na(sex) & sex != "Unknown") %>% mutate() %>%
@@ -193,26 +214,9 @@ loadData = function(dir="~/Data/new-variant",date="20210118", censorLength = 28,
       deathStatus = ifelse(diedWithin28days,"Dead <28 days","Other")
     ) 
   
-  # coxData3 %>% ,
-  # sGeneEra = case_when(
-  #   is.na(sGene) ~ "Unknown (and P1)",
-  #   sGene == "Negative" & specimen_date.sgene >= B117Date ~ "Neg Post B.1.1.7",
-  #   sGene == "Negative" & specimen_date.sgene < B117Date ~ "Neg Pre B.1.1.7",
-  #   TRUE ~ as.character(sGene))
-  # sGene = sGene %>% forcats::fct_relevel("Positive"),
-  # sGeneEra = sGeneEra %>% forcats::as_factor() %>% forcats::fct_relevel("Positive"),
-  # relativeCopyNumber = 2^(median(CT_N,na.rm=TRUE)-CT_N),
-  
   ## quality control ----
   if (any(is.na(coxData2$LTLA_name))) stop("unknowns for LTLA")
   # if (any(is.na(coxData3$LTLA_name))) stop("unknowns for LTLA")
-  
-  ## case matching ----
-  # match cases by "sex","imd_decile","LTLA_name","ethnicity_final","ageCat"
-  # exclude people < 30 as mortality so low
-  # then ensure age difference < 2 years & specimen date < 4 days
-  # select S negatives and match to S positives
-  # randomly select a single match out of possible matches
   return(coxData2)
 }
 
@@ -226,9 +230,10 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
     specimenDateTolerance = specimenDateTolerance
     ))
   
-  message("Interpreting data with CT threshold of S<",sGeneCtThreshold,":N<",ctThreshold,":ORF<",ctThreshold)
+  message("Interpreting data with CT threshold of S<",sGeneCtThreshold,":N<",ctThreshold,":ORF<",ctThreshold,"; tolerances - age=",ageTolerance,":specimen_date=",specimenDateTolerance)
   
-  coxData3 = coxData %>% 
+  # exclude people < 30 as mortality so low
+  coxData3 = coxData %>% filter(age >= 30) %>% 
     interpretSGene(S_CT = sGeneCtThreshold,N_CT = ctThreshold,ORF1ab_CT = ctThreshold) %>% 
     mutate(
       sGeneEra = case_when(
@@ -243,8 +248,6 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
       LTLA_name =  as.factor(LTLA_name)
     )
   
-  coxData3 = coxData3 %>% filter(specimen_date > B117Date & age >= 30)
-  
   if (includeRaw) result$rawData = coxData3
   
   posSgene = coxData3 %>% filter(sGene=="Positive")
@@ -257,15 +260,20 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
   if(as.numeric(nrow(negSgene)) * as.numeric(nrow(posSgene)) > max) stop("this would try and create a very large cross join of ",nrow(posSgene),"x",nrow(negSgene))
   
   # pairwise matching
+  ## case matching ----
+  # match cases by "sex","imd_decile","LTLA_name","ethnicity_final","ageCat"
+  # then ensure age difference < 2 years & specimen date < 4 days
+  # select S negatives and match to S positives
+  # randomly select a single match out of possible matches
   matches = 
     negSgene %>% 
-    select(FINALID,sex,imd_decile,LTLA_name,ethnicity_final,ageCat,age,specimen_date) %>% 
+    select(FINALID,sex,imd_decile,LTLA_name,ethnicity_final,ageCat,age,specimen_date,time,status) %>% 
     inner_join(
-      posSgene %>% select(FINALID,sex,imd_decile,LTLA_name,ethnicity_final,ageCat,age,specimen_date), 
-      by=c("sex","imd_decile","LTLA_name","ethnicity_final","ageCat"),suffix=c("",".match")) %>% 
+      posSgene %>% select(FINALID,sex,imd_decile,LTLA_name,ethnicity_final,ageCat,age,specimen_date,time,status), 
+      by=c("sex","imd_decile","LTLA_name","ethnicity_final","ageCat"),suffix=c(".neg",".pos")) %>% 
     filter(
-      abs(age-age.match) <= ageTolerance & 
-      abs(as.numeric(specimen_date-specimen_date.match)) <= specimenDateTolerance
+      abs(age.neg-age.pos) <= ageTolerance & 
+      abs(as.numeric(specimen_date.neg-specimen_date.pos)) <= specimenDateTolerance
     )
   
   rm(coxData3)
@@ -279,15 +287,15 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
     tmp = matches %>% 
       mutate(rnd = runif(nrow(matches))) %>%
       arrange(rnd) %>% 
-      group_by(FINALID) %>% filter(row_number()==1) %>% # filter out a single matching at random from pos to neg
-      group_by(FINALID.match) %>% filter(row_number()==1) %>%  # filter out a single matching at random from neg to pos
+      group_by(FINALID.neg) %>% filter(row_number()==1) %>% # filter out a single matching at random from pos to neg
+      group_by(FINALID.pos) %>% filter(row_number()==1) %>%  # filter out a single matching at random from neg to pos
       ungroup() %>% mutate(boot = i)
     matchesSelected = bind_rows(matchesSelected,tmp)
   }
   message("..finished")
   
-  negMatched = matchesSelected %>% select(FINALID, boot) %>% inner_join(negSgene, by="FINALID")
-  posMatched = matchesSelected %>% select(FINALID = FINALID.match, boot) %>% inner_join(posSgene, by="FINALID")
+  negMatched = matchesSelected %>% select(FINALID = FINALID.neg, boot) %>% inner_join(negSgene, by="FINALID")
+  posMatched = matchesSelected %>% select(FINALID = FINALID.pos, boot) %>% inner_join(posSgene, by="FINALID")
   
   # check for some systematic bias as a result of matching process
   # This is biased by censoring - TODO visualise and explain.
@@ -303,7 +311,10 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
   coxFinal = bind_rows(posMatched,negMatched) %>% 
     mutate(sGene = sGene %>% forcats::fct_drop()) # equivocal category is dropped
   
-  if (includeMatched) result$rawMatchedData = coxFinal
+  if (includeMatched) {
+    result$pairedMatchedData = matchesSelected
+    result$rawMatchedData = coxFinal
+  }
   
   combinedSummary1 = coxFinal %>% group_by(sGene,boot) %>% summarise(pairs = n()) %>% left_join(
     coxFinal %>% filter(diedWithin28days) %>% group_by(sGene,boot) %>% summarise(deaths = n()),
@@ -320,8 +331,8 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
 
 
   deltas = matchesSelected %>% group_by(boot) %>% summarise(
-    ageDifference = mean(age-age.match),
-    specimenDateDifference = mean(as.numeric(specimen_date-specimen_date.match))
+    ageDifference = mean(age.neg-age.pos),
+    specimenDateDifference = mean(as.numeric(specimen_date.neg-specimen_date.pos))
   )
   
   result$table3Data = deltas
@@ -364,7 +375,12 @@ runAnalysis = function(coxData, sGeneCtThreshold = ctThreshold, ctThreshold=30, 
 }
 
 summariseAnalysisRun = function(run) {
-  tmp = run$table1Data %>% pivot_wider(names_from = sGene, values_from = deaths, names_prefix="deaths.")
+  if(is.data.frame(run)) {
+    tmp = run
+  } else {
+    tmp = run$table1Data
+  }
+  tmp = tmp %>% pivot_wider(names_from = sGene, values_from = deaths, names_prefix="deaths.")
   tmp = tmp %>% summarise(mean.matchedPairs = mean(pairs), mean.matchedDeaths.Positive = mean(deaths.Positive), mean.matchedDeaths.Negative = mean(deaths.Negative))
   tmp = tmp %>% bind_cols(
     run$table3Data %>% summarise(mean.ageDifference = mean(ageDifference), mean.specimenDateDifference = mean(specimenDateDifference)),

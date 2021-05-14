@@ -8,18 +8,41 @@ Control data sources
 
 Control data sources
 }
+\section{Super class}{
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{DataProviderController}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
+\item \href{#method-new}{\code{DataProviderController$new()}}
 \item \href{#method-updateCodes}{\code{DataProviderController$updateCodes()}}
 \item \href{#method-updateSPIMDatasets}{\code{DataProviderController$updateSPIMDatasets()}}
 \item \href{#method-updateDatasets}{\code{DataProviderController$updateDatasets()}}
 \item \href{#method-timeseriesProcessor}{\code{DataProviderController$timeseriesProcessor()}}
 \item \href{#method-chessProcessor}{\code{DataProviderController$chessProcessor()}}
 \item \href{#method-survivalProcessor}{\code{DataProviderController$survivalProcessor()}}
+\item \href{#method-metawardProcessor}{\code{DataProviderController$metawardProcessor()}}
 \item \href{#method-loadSpimSources}{\code{DataProviderController$loadSpimSources()}}
+\item \href{#method-fileProvider}{\code{DataProviderController$fileProvider()}}
 \item \href{#method-clone}{\code{DataProviderController$clone()}}
 }
+}
+\if{html}{
+\out{<details open ><summary>Inherited methods</summary>}
+\itemize{
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+}
+\out{</details>}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-new"></a>}}
+\subsection{Method \code{new()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$new(wd)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-updateCodes"></a>}}
@@ -70,12 +93,45 @@ Control data sources
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-metawardProcessor"></a>}}
+\subsection{Method \code{metawardProcessor()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$metawardProcessor(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-loadSpimSources"></a>}}
 \subsection{Method \code{loadSpimSources()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$loadSpimSources(path, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$loadSpimSources(fileProvider, ...)}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-fileProvider"></a>}}
+\subsection{Method \code{fileProvider()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$fileProvider(
+  name,
+  configFile = getOption("ukcovid.config"),
+  nocache = FALSE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{}
+
+\item{\code{configFile}}{}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

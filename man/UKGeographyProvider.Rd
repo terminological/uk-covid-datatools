@@ -8,12 +8,14 @@ UK Geography
 
 UK Geography
 }
-\section{Super class}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{UKGeographyProvider}
+\section{Super classes}{
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{UKGeographyProvider}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
+\item \href{#method-new}{\code{UKGeographyProvider$new()}}
+\item \href{#method-getMapList}{\code{UKGeographyProvider$getMapList()}}
 \item \href{#method-getMap}{\code{UKGeographyProvider$getMap()}}
 \item \href{#method-getPHEDashboardMap}{\code{UKGeographyProvider$getPHEDashboardMap()}}
 \item \href{#method-getIntersection}{\code{UKGeographyProvider$getIntersection()}}
@@ -32,21 +34,38 @@ UK Geography
 \if{html}{
 \out{<details ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="initialize">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-initialize}{\code{ukcovidtools::PassthroughFilesystemCache$initialize()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="cutByAge">}\href{../../ukcovidtools/html/DataProvider.html#method-cutByAge}{\code{ukcovidtools::DataProvider$cutByAge()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="download">}\href{../../ukcovidtools/html/DataProvider.html#method-download}{\code{ukcovidtools::DataProvider$download()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUntar">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUntar}{\code{ukcovidtools::DataProvider$downloadAndUntar()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUnzip}{\code{ukcovidtools::DataProvider$downloadAndUnzip()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-new"></a>}}
+\subsection{Method \code{new()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$new(providerController, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getMapList"></a>}}
+\subsection{Method \code{getMapList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getMapList()}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMap"></a>}}
@@ -67,7 +86,7 @@ get a map as an sf object
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEDashboardMap"></a>}}
 \subsection{Method \code{getPHEDashboardMap()}}{
-England LADs, Scotland Health Board, Wales Health Board
+
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getPHEDashboardMap(...)}\if{html}{\out{</div>}}
 }
@@ -76,7 +95,6 @@ England LADs, Scotland Health Board, Wales Health Board
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getIntersection"></a>}}
 \subsection{Method \code{getIntersection()}}{
-get the intersection between to maps with ids. Caches the result in the working directory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getIntersection(
   inputMapId,
@@ -91,7 +109,6 @@ get the intersection between to maps with ids. Caches the result in the working 
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getContainedIn"></a>}}
 \subsection{Method \code{getContainedIn()}}{
-
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getContainedIn(
   inputSf,
@@ -214,6 +231,7 @@ warm up caches
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-createCatchment"></a>}}
 \subsection{Method \code{createCatchment()}}{
+create a catchment area map from
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$createCatchment(
   supplyShape,
@@ -233,6 +251,36 @@ warm up caches
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{supplyShape}}{- a sf object containing a list of the locations of supply points, with a column containing supply capacity, for example NHS hospital sites, with a bed}
+
+\item{\code{supplyIdVar}}{- the variable name of the identifier of the supplier or group of suppliers. For example this could be an NHS trust (multiple sites)}
+
+\item{\code{supplyVar}}{- the column name of the supply parameter. This could be number of beds in a hospital.}
+
+\item{\code{supplyOutputVars}}{- the columns from the input that are to be retained in the output}
+
+\item{\code{demandShape}}{- the sf object with the geographical map of the demand surface. For example the geographical distribution of the population served,}
+
+\item{\code{demandIdVar}}{- the column name of the unique identifier of the areas,}
+
+\item{\code{demandVar}}{- the column name of the demand parameter. This could be the population in each region}
+
+\item{\code{growthRates}}{- a function to calculate}
+
+\item{\code{distanceModifier}}{- distance modifier}
+
+\item{\code{tweakNetwork}}{- a named list containing extra linkages beyond those inferred by the demandShape topology. These are used to add in bridges}
+
+\item{\code{outputMap}}{- catch}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-preview"></a>}}

@@ -1,4 +1,4 @@
-#' Survival data procesing
+#' Survival data proccesing
 #' @export
 DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCache, public = list(
 
@@ -191,7 +191,6 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     
   },
   
-  #' @param fittedModels a dataframe of fitted models with columns dist, param, value plus other columns if desired
   fromBootstrappedDistributions = function(fittedDistributions, confint=c(0.025,0.975), ...) {
     self$setModels(unique(fittedDistributions$dist))
     cols = colnames(fittedDistributions)

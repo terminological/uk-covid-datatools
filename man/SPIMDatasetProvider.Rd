@@ -8,26 +8,52 @@ SPIM private data
 
 SPIM private data
 }
+\examples{
+
+## ------------------------------------------------
+## Method `SPIMDatasetProvider$interpretSGene`
+## ------------------------------------------------
+
+coxData = coxData \%>\% interpretSGene()
+}
 \section{Super classes}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{SPIMDatasetProvider}
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{SPIMDatasetProvider}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{SPIMDatasetProvider$new()}}
 \item \href{#method-getPaths}{\code{SPIMDatasetProvider$getPaths()}}
+\item \href{#method-getLatest}{\code{SPIMDatasetProvider$getLatest()}}
+\item \href{#method-getNewerThan}{\code{SPIMDatasetProvider$getNewerThan()}}
+\item \href{#method-getSpecificDates}{\code{SPIMDatasetProvider$getSpecificDates()}}
+\item \href{#method-getOneOneOne}{\code{SPIMDatasetProvider$getOneOneOne()}}
+\item \href{#method-getOneOneOneLineList}{\code{SPIMDatasetProvider$getOneOneOneLineList()}}
 \item \href{#method-getDeathsLineList}{\code{SPIMDatasetProvider$getDeathsLineList()}}
+\item \href{#method-getVoc351LineList}{\code{SPIMDatasetProvider$getVoc351LineList()}}
+\item \href{#method-getImmunizationLineList}{\code{SPIMDatasetProvider$getImmunizationLineList()}}
+\item \href{#method-augmentLineListWithLSOA}{\code{SPIMDatasetProvider$augmentLineListWithLSOA()}}
+\item \href{#method-getCTASLineList}{\code{SPIMDatasetProvider$getCTASLineList()}}
+\item \href{#method-getImmunizationLineListIncidence}{\code{SPIMDatasetProvider$getImmunizationLineListIncidence()}}
+\item \href{#method-getImmunizationFraction}{\code{SPIMDatasetProvider$getImmunizationFraction()}}
+\item \href{#method-getSGeneLineList}{\code{SPIMDatasetProvider$getSGeneLineList()}}
+\item \href{#method-interpretSGene}{\code{SPIMDatasetProvider$interpretSGene()}}
+\item \href{#method-getSDropoutFreqency}{\code{SPIMDatasetProvider$getSDropoutFreqency()}}
 \item \href{#method-getLineList}{\code{SPIMDatasetProvider$getLineList()}}
+\item \href{#method-getNegatives}{\code{SPIMDatasetProvider$getNegatives()}}
 \item \href{#method-getSeroprevalence}{\code{SPIMDatasetProvider$getSeroprevalence()}}
 \item \href{#method-getFF100}{\code{SPIMDatasetProvider$getFF100()}}
 \item \href{#method-getBristolData}{\code{SPIMDatasetProvider$getBristolData()}}
 \item \href{#method-getCHESS}{\code{SPIMDatasetProvider$getCHESS()}}
+\item \href{#method-getSARI}{\code{SPIMDatasetProvider$getSARI()}}
 \item \href{#method-getCHESSSummary}{\code{SPIMDatasetProvider$getCHESSSummary()}}
+\item \href{#method-getSARISummary}{\code{SPIMDatasetProvider$getSARISummary()}}
 \item \href{#method-bristolSurvivalSubset}{\code{SPIMDatasetProvider$bristolSurvivalSubset()}}
+\item \href{#method-getOneOneOneIncidence}{\code{SPIMDatasetProvider$getOneOneOneIncidence()}}
 \item \href{#method-getLineListIncidence}{\code{SPIMDatasetProvider$getLineListIncidence()}}
 \item \href{#method-getDeathsLineListIncidence}{\code{SPIMDatasetProvider$getDeathsLineListIncidence()}}
 \item \href{#method-getSeroprevalenceTestIncidence}{\code{SPIMDatasetProvider$getSeroprevalenceTestIncidence()}}
-\item \href{#method-getOneOneOne}{\code{SPIMDatasetProvider$getOneOneOne()}}
+\item \href{#method-getFourNationsCases}{\code{SPIMDatasetProvider$getFourNationsCases()}}
 \item \href{#method-getSPIMextract}{\code{SPIMDatasetProvider$getSPIMextract()}}
 \item \href{#method-getTheSPIMFireHose}{\code{SPIMDatasetProvider$getTheSPIMFireHose()}}
 \item \href{#method-clone}{\code{SPIMDatasetProvider$clone()}}
@@ -36,22 +62,29 @@ SPIM private data
 \if{html}{
 \out{<details ><summary>Inherited methods</summary>}
 \itemize{
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageCatToFactor}{\code{ukcovidtools::PassthroughFilesystemCache$ageCatToFactor()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-ageToAgeCat}{\code{ukcovidtools::PassthroughFilesystemCache$ageToAgeCat()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="breakFromCats">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-breakFromCats}{\code{ukcovidtools::PassthroughFilesystemCache$breakFromCats()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="cutByAge">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-cutByAge}{\code{ukcovidtools::PassthroughFilesystemCache$cutByAge()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="download">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-download}{\code{ukcovidtools::PassthroughFilesystemCache$download()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadAndUnzip}{\code{ukcovidtools::PassthroughFilesystemCache$downloadAndUnzip()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="downloadDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-downloadDaily}{\code{ukcovidtools::PassthroughFilesystemCache$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="importTimeseries">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-importTimeseries}{\code{ukcovidtools::PassthroughFilesystemCache$importTimeseries()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="normaliseGender">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-normaliseGender}{\code{ukcovidtools::PassthroughFilesystemCache$normaliseGender()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="cutByAge">}\href{../../ukcovidtools/html/DataProvider.html#method-cutByAge}{\code{ukcovidtools::DataProvider$cutByAge()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="download">}\href{../../ukcovidtools/html/DataProvider.html#method-download}{\code{ukcovidtools::DataProvider$download()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUntar">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUntar}{\code{ukcovidtools::DataProvider$downloadAndUntar()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadAndUnzip">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadAndUnzip}{\code{ukcovidtools::DataProvider$downloadAndUnzip()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="describe">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-describe}{\code{ukcovidtools::CovidTimeseriesProvider$describe()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="describeErrors">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-describeErrors}{\code{ukcovidtools::CovidTimeseriesProvider$describeErrors()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="trimNAs">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-trimNAs}{\code{ukcovidtools::CovidTimeseriesProvider$trimNAs()}}\out{</span>}
 }
@@ -61,7 +94,7 @@ SPIM private data
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$new(providerController, path, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$new(providerController, fileProvider, ...)}\if{html}{\out{</div>}}
 }
 
 }
@@ -85,6 +118,50 @@ raw line list data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLatest"></a>}}
+\subsection{Method \code{getLatest()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLatest(search)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getNewerThan"></a>}}
+\subsection{Method \code{getNewerThan()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getNewerThan(search, date = as.Date("2020-01-01"))}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSpecificDates"></a>}}
+\subsection{Method \code{getSpecificDates()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSpecificDates(search, dates)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOne"></a>}}
+\subsection{Method \code{getOneOneOne()}}{
+Load 111 data
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOne(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOneLineList"></a>}}
+\subsection{Method \code{getOneOneOneLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneLineList(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDeathsLineList"></a>}}
 \subsection{Method \code{getDeathsLineList()}}{
 Load line list
@@ -104,6 +181,153 @@ raw line list data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getVoc351LineList"></a>}}
+\subsection{Method \code{getVoc351LineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVoc351LineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getImmunizationLineList"></a>}}
+\subsection{Method \code{getImmunizationLineList()}}{
+Load immunizations line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationLineList(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+raw line list data set
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-augmentLineListWithLSOA"></a>}}
+\subsection{Method \code{augmentLineListWithLSOA()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$augmentLineListWithLSOA(
+  ll,
+  ltlaCodeCol = "LTLA_code",
+  imdRankCol = "imd_rank"
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getCTASLineList"></a>}}
+\subsection{Method \code{getCTASLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCTASLineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getImmunizationLineListIncidence"></a>}}
+\subsection{Method \code{getImmunizationLineListIncidence()}}{
+Load incidence from line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationLineListIncidence(
+  ll = NULL,
+  ageBreaks = NULL,
+  filterExpr = NULL,
+  subgroup = "string_dose_number",
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getImmunizationFraction"></a>}}
+\subsection{Method \code{getImmunizationFraction()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationFraction(ageBreaks = NULL, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSGeneLineList"></a>}}
+\subsection{Method \code{getSGeneLineList()}}{
+Load line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSGeneLineList(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+raw line list data set
+Interpret S gene status according to various cut off values
+function to help interpret S gene CT values in context of N gene and ORF gene to give S gene status. 
+With the defaults this produces the same result as the sgtf_30 column in the source SGTF line list
+Defaults are S:30,ORF:30,N:30,Control:Inf
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-interpretSGene"></a>}}
+\subsection{Method \code{interpretSGene()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$interpretSGene(
+  sGeneLineList,
+  S_CT = 30,
+  ORF1ab_CT = 30,
+  N_CT = 30,
+  Control_CT = Inf
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sGeneLineList}}{- a dataframe includeing}
+
+\item{\code{S_CT}}{- S gene detected when P2CH3CQ <= this value}
+
+\item{\code{ORF1ab_CT}}{- ORF1ab gene detected when P2CH1CQ <= this value}
+
+\item{\code{N_CT}}{- N gene detected when P2CH2CQ <= this value}
+
+\item{\code{Control_CT}}{- control sample is positive when P2CH4CQ <= this value}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+- the same dataframe with additional columns including "sGene" and "result"
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{coxData = coxData \%>\% interpretSGene()
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSDropoutFreqency"></a>}}
+\subsection{Method \code{getSDropoutFreqency()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSDropoutFreqency(
+  codeTypes = c("NHSER"),
+  ageBreaks = NULL,
+  S_CT = 30,
+  ORF1ab_CT = 30,
+  N_CT = 30,
+  equivocal.rm = TRUE,
+  window = 7,
+  ll = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getLineList"></a>}}
 \subsection{Method \code{getLineList()}}{
 Load line list
@@ -114,6 +338,18 @@ Load line list
 \subsection{Returns}{
 raw line list data set
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getNegatives"></a>}}
+\subsection{Method \code{getNegatives()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getNegatives(
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSeroprevalence"></a>}}
@@ -178,6 +414,25 @@ raw CHESS data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSARI"></a>}}
+\subsection{Method \code{getSARI()}}{
+Load the CHESS dataset from a path
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSARI()}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{path}}{- a path to the chess csv file}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+raw CHESS data set
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCHESSSummary"></a>}}
 \subsection{Method \code{getCHESSSummary()}}{
 Load Chess summary file
@@ -195,6 +450,14 @@ Load Chess summary file
 \subsection{Returns}{
 raw FF100 data set
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSARISummary"></a>}}
+\subsection{Method \code{getSARISummary()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSARISummary(truncate = NULL, ...)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-bristolSurvivalSubset"></a>}}
@@ -216,13 +479,26 @@ Bristol survival subset
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOneIncidence"></a>}}
+\subsection{Method \code{getOneOneOneIncidence()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneIncidence(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getLineListIncidence"></a>}}
 \subsection{Method \code{getLineListIncidence()}}{
 Load incidence from line list
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListIncidence(
+  ll = NULL,
   ageBreaks = NULL,
   specimenOrReport = "specimen",
+  subgroup = "pillar",
+  filterExpr = NULL,
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -246,6 +522,11 @@ Load deaths data from linelist - does not preserve ethnicity
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getDeathsLineListIncidence(
   ageBreaks = NULL,
   deathOrReport = "death",
+  cutoff = 28,
+  subgroup = NULL,
+  filterExpr = !(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)),
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -281,23 +562,19 @@ a covidTimeseriesFormat dataframe
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getOneOneOne"></a>}}
-\subsection{Method \code{getOneOneOne()}}{
-Load 111 data
+\if{html}{\out{<a id="method-getFourNationsCases"></a>}}
+\subsection{Method \code{getFourNationsCases()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOne(...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getFourNationsCases(truncate = NULL, ...)}\if{html}{\out{</div>}}
 }
 
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSPIMextract"></a>}}
 \subsection{Method \code{getSPIMextract()}}{
 Load the SPI-M aggregated data spreadsheet
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSPIMextract(...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSPIMextract(truncate = NULL, ...)}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
