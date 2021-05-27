@@ -44,64 +44,59 @@ ukcovidtools::setup()
 ukcovidtools::reload()
 ```
 
-## Pillar 2 S-gene tests ----
+# Regional map
 
 ```{r}
-tmp = bind_rows(
-  ll %>% filter(pillar == "Pillar 2") %>% semi_join(sgll, by="FINALID") %>% mutate(sgeneKnown=TRUE),
-  ll %>% filter(pillar == "Pillar 2") %>% anti_join(sgll, by="FINALID") %>% mutate(sgeneKnown=FALSE)
-) %>% filter(specimen_date> "2021-03-01")
 
-tmp2 = tmp %>% group_by(LTLA_code, sgeneKnown) %>% summarise(count = n()) %>%
-  group_by(LTLA_code) %>%
-  mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson"))
+aocNames = c(aocMap %>% filter(areaName != "other") %>% pull(areaName),"other")
+aocColours = c(scales::hue_pal()(length(aocNames)-1),"#808080")
+names(aocColours)=aocNames
 
-tmp2 %>% readr::write_csv("~/Dropbox/covid19/sa-variant/taq-path-coverage-since-2021-03-01-by-ltla.csv" )
+p1 = ggplot(aocMap %>% sf::st_buffer(-0.02))+
+  geom_sf(aes(colour=areaName),fill=NA,size=1)+
+  scale_colour_manual(values = aocColours)
 
-map = dpc$geog$getMap("LAD19")
-
-map2 = map %>% inner_join(tmp2, by=c("code"="LTLA_code"))
-
-(ggplot(map2 %>% filter(sgeneKnown==TRUE),aes(fill=mean*100))+geom_sf(size=0.3)+scale_fill_gradient(low="#FFFFFF",high="#0080FF",lim=c(0,100),name="% coverage")) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-taqpath-coverage")
-(ggplot(map2 %>% filter(sgeneKnown==TRUE),aes(fill=n))+geom_sf(size=0.3)+scale_fill_gradient(low="#FFFFFF",high="#FF8000",name="Pillar 2 tests")) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-cumulative-cases")
-
-combinedSpositives$date %>% max()
+p1 %>% standardPrintOutput::saveFullPageFigure("~/Dropbox/covid19/sa-variant/RegionalMap")
 ```
 
 
-## Age distributions ----
-
-```{r}
-tmp3 = sgllLoc %>% inner_join(aocDf, by=c("LTLA_code"="ltlaCode")) %>% 
-  mutate(ageCat = cut(age,c(0,10,20,30,40,50,60,70,80,Inf))) %>%
-  filter(specimen_date>"2021-03-01" & sGene != "equivocal") %>%
-  group_by(area,sGene,ageCat) %>% summarise(count=n()) %>%
-  group_by(area,sGene) %>% mutate(binom::binom.confint(count,sum(count),methods = "wilson"))
-
-tmp3 %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/age-distributions-all-areas-",Sys.Date(),".csv"))
-aocDf %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/area-definitions-",Sys.Date(),".csv"))
-
-agebars = function(regions) {
-  dodge <- position_dodge(width=0.8)
-  ggplot(tmp3 %>% filter(area %in% regions), aes(x=ageCat,fill=sGene, y=mean,ymin=lower,ymax=upper))+ 
-    geom_bar(stat="identity",position=dodge,width=0.8, size=0.5)+facet_wrap(vars(area))+
-    geom_errorbar(position = dodge, width = 0.2,size=0.5)+
-    standardPrintOutput::narrower()+ylab("density")
-}
-
-clusters2 = list(
-  "CommunityIndia2" = c("NW Cluster","Bedford etc","Sefton & Lpl"),
-  "MixedIndia2" = c("Leicester","Nottingham","West London"),
-  "MixedSA" = c("East London")
-)
-
-lapply(names(clusters2), function(name) {
-  agebars(clusters2[[name]]) %>% standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/AgeDistributions-",name))
-})
-```
 
 ```{r}
 ## Modelled estaimtes
+
+# lsoaCentroid = dpc$geog$getMap("LSOA11")
+# lsoaCentroid = lsoaCentroid %>% sf::st_centroid()
+# mapping = dpc$geog$getContainedIn(inputSf = lsoaCentroid,outputShape = aocMap,outputIdVar = areaName)
+# 
+# mapping %>% readr::write_csv("~/Dropbox/covid19/sa-variant/LSOA2AOC.csv")
+# 
+# mapping = readr::read_csv("~/Dropbox/covid19/sa-variant/LSOA2AOC.csv")
+# modelled = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/ByLSOAVariantRateswDGP.csv/ByLSOAVariantRateswDGP.csv")
+# modelledAoc = modelled %>% inner_join(mapping, by=c("LSOA_code"="from")) %>% group_by(area = to, week, type) %>% summarise(variantGR = sum(VariantRate))
+# estGR = modelledAoc %>% group_by(area,type) %>% arrange(week) %>% mutate(diffGR = (log(variantGR)-log(lag(variantGR)))/7, date = week+as.numeric(week-lag(week))/2) 
+# ggplot(estGR,aes(x=date,y=diffGR,colour=type))+ geom_point()+facet_wrap(vars(area))
+# 
+# modelledEng = modelled %>% filter(LSOA_code %>% stringr::str_starts("E")) %>% group_by(week, type) %>% summarise(variantGR = sum(VariantRate,na.rm = TRUE)) %>% mutate(area="England")
+# 
+# 
+# modelledAll = bind_rows(modelledEng,modelledAoc) %>% group_by(area,type) %>%
+#   group_modify(function(d,g,...) {
+#     tmp_intercept_model = locfit::locfit(variantGR ~ locfit::lp(week, deg=1,nn = 1), d)#, family="qgamma")
+#     tmp_slope_model = locfit::locfit(variantGR ~ locfit::lp(week, deg=1,nn = 1), d, deriv=1)
+#     dates = min(d$week):max(d$week)
+#     rate = predict(tmp_intercept_model, dates, band="local")
+#     growth = predict(tmp_slope_model, dates, band="local")
+#     return(tibble(date=dates,rate=rate$fit,growth=growth$fit))
+#   })
+# 
+# modelledAll = bind_rows(modelledEng,modelledAoc) %>% group_by(area,type) %>%
+#   arrange(week) %>%
+# 
+# ggplot(modelledEng,aes(x=week,y=variantGR/7,colour=type))+geom_line()+facet_wrap(vars(area),scales = "free")+scale_y_continuous(trans="log1p")
+# 
+# ggplot(modelledAoc,aes(x=week,y=variantGR,colour=type))+geom_line()+facet_wrap(vars(area),scales = "free")
+# 
+# ggplot(modelledAll,aes(x=date,y=growth,colour=type))+geom_line()+facet_wrap(vars(area),scales = "free")
 
 modelled = readRDS("~/Dropbox/covid19/sa-variant/Inputs/DataForRob1.RDS")
 modelledMean = modelled %>% group_by(date,Modelled_Type) %>% summarise(expected = sum(n)/100) %>% ungroup() %>% tidyr::complete(date,Modelled_Type,fill=list(expected=0))
@@ -153,7 +148,7 @@ climb = climb %>% mutate(voc = case_when(
   TRUE ~ "other"
 ))
 
-tmp1 = climb %>% filter(adm1=="UK-ENG" & sample_date > (combinedSpositives$date %>% min(na.rm=TRUE))) %>% group_by(type = voc) %>% summarise(`climb latest` = max(sample_date,na.rm = TRUE),`climb sequences` = n())
+tmp1 = climb %>% filter(adm1=="UK-ENG" & sample_date > (combinedSpositives$earliest_specimen_date %>% min(na.rm=TRUE))) %>% group_by(type = voc) %>% summarise(`climb latest` = max(sample_date,na.rm = TRUE),`climb sequences` = n())
 tmp2 = combinedSpositives %>% 
   # mutate(type=case_when(
   #   type %>% stringr::str_starts("B.1.617") ~ "B.1.617",
@@ -174,7 +169,7 @@ tmp = climbPheCounts %>% pivot_wider(values_from = n,names_from=source) %>% muta
 if ( sum(tmp$diff)/sum(tmp$COGUK) > 0.01 ) {
   stop("more than 1% difference in COG and PHE counts")
 } else {
-  message(sprintf("%1.3%% mismatch between COG UK and PHE counts.",  sum(tmp$diff)/sum(tmp$COGUK)))
+  message(sprintf("%1.3f%% mismatch between COG UK and PHE counts.",  sum(tmp$diff)/sum(tmp$COGUK)))
 }
 
 

@@ -342,7 +342,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         
         #TODO: repeat the anomaly removal stage to detect anything ?
         
-        tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::mutate(!!valueVar := exp(tmp_y)-1)
+        tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::mutate(!!valueVar := exp(tmp_y)-1) %>% select(-tmp_y)
         # browser()
         return(tmp_ts)
       }) %>% 
@@ -374,6 +374,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       covidStandardGrouping() %>%
       dplyr::group_modify(function(d,g,...) {
         tmp_alpha = min(window/nrow(d),1)
+        tmp_alpha_2 = min(window*2/nrow(d),1)
         tmp_ts = d %>% 
           dplyr::mutate(
             y = forecast::na.interp(y),
@@ -388,11 +389,15 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         # calculate derivative using a loess method
         # tmp = locfit::locfit(log(value+1) ~ day,loessTest,deg = 2,alpha=0.25,deriv=1)
         if (leftSided) {
-          tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts)#, family="qgamma")
-          tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha*2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+          tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts)#, family="qgamma")
+          tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+          #tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts)#, family="qgamma")
+          #tmp_slope_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts, deriv=1)#, family="qgamma")
         } else {
-          tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha, deg=1), tmp_ts)#, family="qgamma")
-          tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+          tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha_2, deg=1), tmp_ts)#, family="qgamma")
+          tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha_2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+          #tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, h=window/2, deg=1), tmp_ts)#, family="qgamma")
+          #tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, h=window/2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
         }
         #tmp_intercept_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha)
         #tmp_slope_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha, deriv=1)
@@ -400,8 +405,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         tmp_slope = predict(tmp_slope_model, tmp_ts$x, band="local")
         tmp_ts[[paste0("Est.",smoothLabel)]] = ifelse(tmp_intercept$fit < 0, 0, tmp_intercept$fit) # prevent negative smoothing.
         tmp_ts[[paste0("Est.SE.",smoothLabel)]] = tmp_intercept$se.fit
+        #tmp_ts[[paste0("Est.RMSE.",smoothLabel)]] = sqrt(mean(residuals(tmp_intercept_model,tmp_ts)^2))
         tmp_ts[[paste0("Slope.",smoothLabel)]] = tmp_slope$fit
         tmp_ts[[paste0("Slope.SE.",smoothLabel)]] = tmp_slope$se.fit
+        # browser()
+        # tmp_ts[[paste0("Slope.RMSE.",smoothLabel)]] = sqrt(mean(residuals(tmp_slope_model,tmp_ts)^2))
         
         # # https://en.wikipedia.org/wiki/Ratio_distribution#Uncorrelated_noncentral_normal_ratio
         mu_x = tmp_slope$fit
@@ -443,7 +451,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must have incidence totals") %>%
         dplyr::filter(type=="incidence")
       
-      logExpr = expr(log(!!valueVar+1))
+      logExpr = expr(log(!!valueVar+exp(-1)))
       
       lbl = function(pref) return(paste0(pref,".",as_label(logExpr)))
       lblV = function(pref) return(paste0(pref,".",as_label(valueVar)))
@@ -457,6 +465,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
       tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
       tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
+      tmp[[lblV("Growth.RMSE")]] =  tmp[[lbl("Slope.RMSE")]]
       tmp[[lblV("Growth.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]])
       
       tmp$interceptDate = as.Date(tmp$date - tmp[[lbl("Est")]]/tmp[[lbl("Slope")]])
@@ -471,9 +480,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       meanLbl = lbl("Est")
       sdLbl = lbl("Est.SE")
       q = qnorm(c(0.025,0.25,0.5,0.75,0.975))
-      fn = function(i) return(exp(tmp[[meanLbl]]+q[i]*tmp[[sdLbl]])-1)
+      fn = function(i) return(exp(tmp[[meanLbl]]+q[i]*tmp[[sdLbl]])-exp(-1))
       
-      tmp[[lblV("Est")]] = exp(tmp[[meanLbl]])-1
+      tmp[[lblV("Est")]] = exp(tmp[[meanLbl]])-exp(-1)
       tmp[[lblV("Est.Quantile.0.025")]] = fn(1)
       tmp[[lblV("Est.Quantile.0.25")]] = fn(2)
       tmp[[lblV("Est.Quantile.0.5")]] = fn(3)
@@ -524,8 +533,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }})
   },
   
-  estimateGrowthRate = function(covidTimeseries, window = 14, growthRateWindow = 7, ...) {
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(window,growthRateWindow), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+  estimateGrowthRate = function(covidTimeseries, window = 14, growthRateWindow = 7, leftSided=TRUE, ...) {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(leftSided,window,growthRateWindow), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
 
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
@@ -546,7 +555,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         # https://cran.rstudio.com/web/packages/tibbletime/vignettes/TT-03-rollify-for-rolling-analysis.html
         # https://rdrr.io/cran/tsibble/man/slide.html
         for(i in window:nrow(d)) {
-          sample = d %>% dplyr::filter(row_number() > i-window & row_number() <= i) %>% mutate(time=row_number())
+          if(leftSided) {
+            sample = d %>% dplyr::filter(row_number() > i-window & row_number() <= i) %>% mutate(time=row_number())
+          } else {
+            sample = d %>% dplyr::filter(row_number() > i-window/2 & row_number() <= i+window/2) %>% mutate(time=row_number())
+          }
           # if no values > 1 return a non answer 
           if(sum(sample$I>0,na.rm = TRUE) == 0) {
             result = result %>% bind_rows(tibble::tibble(

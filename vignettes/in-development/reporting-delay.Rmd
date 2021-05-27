@@ -61,8 +61,8 @@ pdf = ll2 %>% group_by(pillar,NHSER_name,delay) %>% summarise(count = n()) %>% g
 
 ```{r}
 p = ggplot(pdf,aes(x=delay,y = prob,fill=surv<0.05))+geom_bar(stat="identity")+xlim(c(-2,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))
-
-p %>% stand
+p
+#p %>% stand
 ```
 ```{r}
 ggplot(pdf,aes(x=delay,y = surv,fill=surv<0.05))+geom_bar(stat="identity")+coord_cartesian(xlim=c(0,10))+facet_grid(rows = vars(NHSER_name), cols=vars(pillar))

@@ -1,0 +1,143 @@
+---
+title: An R Markdown document converted from "~/tmp/measuring_distance_ages.ipynb"
+output: html_document
+---
+
+```{python}
+### Import packages
+
+import numpy as np
+import pandas as pd
+from scipy import integrate
+from scipy import stats as sp
+import matplotlib.pyplot as plt
+import math
+from scipy.optimize import minimize
+from scipy.stats import weibull_min
+from scipy.special import gamma
+#### load required packages end
+from tqdm.notebook import tqdm
+from datetime import datetime, date
+from datetime import timedelta
+from statsmodels.distributions.empirical_distribution import ECDF
+```
+
+```{python}
+## Function 1: Process data S+ and S-
+def generate_data(df2,region_cur): 
+    if region_cur == "England":
+        df = df2
+    else:
+        df = df2[df2["area"] == region_cur]
+
+    df_Spos = df[df["sGene"] == "positive"]
+    df_Sneg = df[df["sGene"] == "negative"]
+
+    df_Spos = df_Spos[["date","area","age"]]
+    df_Sneg = df_Sneg[["date","area","age"]]
+
+    df_Spos["date"] = pd.to_datetime(df_Spos["date"])
+    df_Sneg["date"] = pd.to_datetime(df_Sneg["date"])
+    return(df_Spos,df_Sneg)
+```
+
+```{python}
+## Function 2: Calculate distributions and distances
+def distance_calculator(df_Spos,df_Sneg,region,method,nboot,start_date,end_date):
+
+
+       
+    start_num = (start_date-pd.to_datetime('2021-01-01')).days
+    end_num = (end_date - pd.to_datetime('2021-01-01')).days
+    
+    if method == "KS":
+        output = np.zeros((end_num,8))
+    elif method == "W":
+        output = np.zeros((end_num,7)) 
+        
+        
+    for t in tqdm(range(start_num,end_num)):
+    #     dat1 = np.sort(np.random.randint(100, size=1000))
+    #     dat2 = np.sort(np.random.randint(100, size = 1000))*np.exp(0.1**(0.02*t))
+#         dat1 = df_Spos[(df_Spos["date"] == 2*t) | (df_Spos["date"] == 2*t+1)]
+#         dat2 = df_Sneg[(df_Sneg["date"] == 2*t) | (df_Sneg["date"] == 2*t+1)]
+        dat1 = df_Spos[(df_Spos["date"] > pd.to_datetime('2021-01-01') + timedelta(t)) & 
+                       (df_Spos["date"] < pd.to_datetime('2021-01-01') + timedelta(t+window_length))]
+        dat2 = df_Sneg[(df_Sneg["date"] > pd.to_datetime('2021-01-01') + timedelta(t)) & 
+                       (df_Sneg["date"] > pd.to_datetime('2021-01-01') + timedelta(t+window_length))]
+        dat1 = dat1["age"]
+        dat2 = dat2["age"]
+        if min(len(dat1),len(dat2)) != 0:
+            if method == 'KS':
+                stat = sp.stats.ks_2samp(dat1,dat2)
+            elif method == 'W':
+                stat = sp.stats.wasserstein_distance(dat1,dat2)
+            else:
+                print("What method?")
+
+            n = len(dat1)
+            m = len(dat2)
+            dat_comb = np.concatenate((dat1,dat2))
+            stat_boot = np.zeros(nboot)
+
+            for i in (range(0,nboot)):
+                dat_perm = np.random.choice(dat_comb,n+m,False)
+                dat1_temp = dat_perm[0:n]
+                dat2_temp = dat_perm[n:n+m]
+                if method == 'KS':
+                    stat_boot[i] = sp.stats.ks_2samp(dat1_temp,dat2_temp)[0]
+                elif method == 'W':
+                    stat_boot[i] = sp.stats.wasserstein_distance(dat1_temp,dat2_temp)
+                else:
+                    print("What method?")
+
+            lower_2_5 = np.nanpercentile(stat_boot,2.5)
+            lower_5 = np.nanpercentile(stat_boot,5)
+            lower_25 = np.nanpercentile(stat_boot,25)
+            upper_75 = np.nanpercentile(stat_boot,75)
+            upper_95 = np.nanpercentile(stat_boot,95)
+            upper_97_5 = np.nanpercentile(stat_boot,97.5)
+
+
+            if method == 'KS':
+                #print(stat[0],lower_2_5,upper_97_5,n,m)
+                output[t] = np.array((stat[0],lower_2_5,lower_5,lower_25,upper_75,upper_95,upper_97_5,stat[1]))
+            elif method == 'W':
+                #print(stat,lower_2_5,upper_97_5,n,m)
+                output[t] = np.array((stat,lower_2_5,lower_5,lower_25,upper_75,upper_95,upper_97_5))
+            else:
+                print("What method?")
+        else:
+            output[t] = float('nan')
+    output = output[start_num:]
+    output = pd.DataFrame(output)
+    return(output)
+```
+
+```{python}
+### Run me: Specify parameters and call functions
+
+### Specify input parameters
+window_length = 7 ### Length of rolling window
+nboot = 400 ### Number of monte-carlo samples for the permutation test
+method = 'KS' ### Specify method, either KS or W
+start_date = pd.to_datetime('2021-04-01') ### must be after 01/01/2021
+
+
+### Load data
+df2 = pd.read_csv("raw-demographics-line-list-by-area-of-concern-2021-05-14.csv") # Load input data file
+end_date = pd.to_datetime(df2["date"].max()) - timedelta(window_length) # Extract last day, and subtract window length
+
+
+### What regions are we interested in?
+regions = np.array(("Bedford etc","East London","Leicester","Nottingham","NW Cluster","Sefton & Lpl","West London","England"))
+
+
+### Call functions 1 and 2 and loop over regions
+for i in tqdm(range(0,len(regions))):
+    region = regions[i]
+    df_Spos, df_Sneg = generate_data(df2,region)
+    output_temp = distance_calculator(df_Spos,df_Sneg,region,method,nboot,start_date,end_date)
+    output_temp.to_csv("timeseries_distance_measures_"+region+method+".csv")
+```
+

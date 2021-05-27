@@ -50,62 +50,598 @@ devtools::load_all("~/Git/uk-covid-datatools/")
 ukcovidtools::reload()
 
 setwd("~/Git/uk-covid-datatools/")
-if (!exists("combinedSpositives")) source("./vignettes/b-1-351-s-pos-data.R")
+if (!exists("combinedSpositives")) source("./vignettes/s-pos-voc/s-pos-data.R")
 ```
 
 # Data set for S-gene growth rates
 
+* How do we construct the case count of S-positive and S-negative cases by area of concern & other & England?
+* problem in that sgene line list is test level and contains >1 test per person
+* scale of this problem
+* sgll %>% filter(specimen_date>"2021-03-01") %>% group_by(FINALID,sgtf_under30CT) %>% summarise(count=n()) %>% group_by(sgtf_under30CT,count) %>% summarise(freq = n())
+
+1) line list left join s-gene line list by final id and specimen_date. filter on S-gene status defined (pos,neg,equivocal).
+* this is most naive approach and will give you the subset of Pillar 2 first infections that have a s-gene status.
+* will lose people who have a first infection that does not have a taqpath result
+* can make this a bit flexible in terms of date matching (s-gene date within 4 days line list date...) 
+* either way still need to deduplicate by finalid, in case there was >1 test for that finalid on that day.  in which case must also de-duplicate. 
+* cannot tell you about re-infections.
+* Will lose people that have long infection episode with a later test being done at TaqPath
+* can tell you about Pillar 1 & 2 tests where taqpath results not available.
+* FIRST_INFECTION
+
+2) s-gene line list left-join demographics from line list, - order by date and get first occurrence for each finalid. Filter by S-positive (sgtf_under30CT == 0).
+* probably gives you similar to 1) but removes need for S-gene to be first ever test for an individual. 
+* Instead gives first ever taqpath test for patient, which might not be the first test in an infection episode.
+* Will ensure uniqueness - only one test per patient.
+* Nothing for re-infections
+* FIRST_TAQPATH
+
+3) s-gene line list left-join demographics from line list, - order by reverse date and get last occurrence for each finalid. Filter by S-positive.
+* Last ever taqpath test for patient.
+* Dates for patients with >1 test shifted backwards.
+* if test represents 2 infection episodes will give you most recent episode
+* LAST_TAQPATH
+
+4) combined ll & sgll line-list with infection episodes defined as per s-pos-data allEpisodes
+* Date as per earliest_specimen_date
+* Episodes are unique finalid+eraIndex but not finalid alone
+* Potential re-infection detected.
+* May potentially shift people much earlier than other methods if they have had a few S-gene unknown P1 & P2 tests followed by TaqPath test.
+* INFECTION_EPISODES
+
+
+
+# 1) FIRST_INFECTION
+
 ```{r}
-ll2 = ll %>% dpc$spim$augmentLineListWithLSOA()
-## Generate the s-gene line list with S-gene status and location
 
-sgllLoc = sgllEra %>% select(FINALID, specimen_date = earliest_specimen_date, latest_specimen_date, sgtf_under30CT, infection=eraIndex) %>%
-  inner_join(ll2, by=c("FINALID"), suffix=c("",".ll")) %>% mutate(
-    asymptomatic_indicator = ifelse(specimen_date==specimen_date.ll,asymptomatic_indicator,NA_character_),
-    pillar_2_testingkit = ifelse(specimen_date==specimen_date.ll,pillar_2_testingkit,NA_character_)
-      #ifelse(specimen_date<=specimen_date.ll & latest_specimen_date>=specimen_date.ll, asymptomatic_indicator,NA_character_),
-  ) %>% select(-cat,-pillar_2_testingkit, -testcentreid, -case_category) %>%
-  mutate(sGene = case_when(
-    sgtf_under30CT == 0 ~ "S+",
-    sgtf_under30CT == 1 ~ "S-",
-    TRUE ~ "equivocal",
-  ))
+firstInfection = ll %>% left_join(sgll, by="FINALID", suffix=c("",".sgene")) %>% 
+  filter(is.na(specimen_date.sgene) | (specimen_date <= specimen_date.sgene & specimen_date+4 > specimen_date.sgene)) %>% 
+  arrange(FINALID) %>% filter(FINALID != lag(FINALID)) %>% mutate(
+    sGene = case_when(
+      sgtf_under30CT == 1 ~ "negative",
+      sgtf_under30CT == 0 ~ "positive",
+      is.na(sgtf) ~ "unknown",
+      is.na(sgtf_under30CT) ~ "equivocal",
+      TRUE ~ NA_character_
+    )
+  ) %>% select(all_of(colnames(ll)),sGene)
 
-ltlaSgeneCounts = sgllLoc %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "LAD", filterExpr = asymptomatic_indicator=="N",subgroup = sGene)
+if(any(duplicated(firstInfection$FINALID))) stop("duplicates detected")
 
-symptomaticPillar2CtrySgeneCounts = sgllLoc %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY", filterExpr = asymptomatic_indicator=="N",subgroup = sGene)
-allPillar2CtrySgeneCounts = sgllLoc %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY",subgroup = sGene)
+firstInfection %>% with(table(asymptomatic_indicator,sGene))
 
-allPillar2CtrySgeneCounts %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/eng-case-counts-by-sgene-",Sys.Date(),".csv")) 
-symptomaticPillar2CtrySgeneCounts %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/eng-symptomatic-case-counts-by-sgene-",Sys.Date(),".csv"))
+```
+
+# 2) FIRST_TAQPATH
+
+```{r}
+
+firstTaqpath = sgll %>% left_join(llDemog, by="FINALID") %>%
+  left_join(llTest, by=c("FINALID","specimen_date")) %>% 
+  filter(!is.na(specimen_date)) %>% 
+  arrange(FINALID,specimen_date) %>% 
+  filter(FINALID != lag(FINALID)) %>% 
+  mutate(
+    pillar="Pillar 2",
+    sGene = case_when(
+      sgtf_under30CT == 1 ~ "negative",
+      sgtf_under30CT == 0 ~ "positive",
+      is.na(sgtf) ~ "unknown",
+      is.na(sgtf_under30CT) ~ "equivocal",
+      TRUE ~ NA_character_
+    ),
+    asymptomatic_indicator = ifelse(is.na(asymptomatic_indicator),"U",asymptomatic_indicator)
+  )
+
+if(any(duplicated(firstTaqpath$FINALID))) stop("duplicates detected")
+
+firstTaqpath %>% with(table(asymptomatic_indicator,sGene))
+
+```
+
+# 3) LAST_TAQPATH
+
+```{r}
+
+lastTaqpath = sgll %>% left_join(llDemog, by="FINALID") %>% 
+  left_join(llTest, by=c("FINALID","specimen_date")) %>% 
+  filter(!is.na(specimen_date)) %>% 
+  arrange(FINALID,desc(specimen_date)) %>% 
+  filter(FINALID != lag(FINALID)) %>% 
+  mutate(
+    pillar="Pillar 2",
+    sGene = case_when(
+      sgtf_under30CT == 1 ~ "negative",
+      sgtf_under30CT == 0 ~ "positive",
+      is.na(sgtf) ~ "unknown",
+      is.na(sgtf_under30CT) ~ "equivocal",
+      TRUE ~ NA_character_
+    ),
+    asymptomatic_indicator = ifelse(is.na(asymptomatic_indicator),"U",asymptomatic_indicator)
+  )
+
+if(any(duplicated(lastTaqpath$FINALID))) stop("duplicates detected")
+
+lastTaqpath %>% with(table(asymptomatic_indicator,sGene))
+
+```
+# 4) INFECTION_EPISODES
+
+```{r}
+infectionEpisodes = allEpisodes %>% inner_join(llDemog,by="FINALID")%>% rename(specimen_date=earliest_specimen_date)
+
+infectionEpisodes %>% with(table(asymptomatic_indicator,sGene))
+
+```
+
+
+```{r}
+
+
+
+
+buildTimeseries = function(filterExpr = TRUE) {
+  
+  filterExpr = enexpr(filterExpr)
+  
+  lastTrustworthyDate = min(c(
+    max(sgll$specimen_date,na.rm = TRUE),
+    max(ll$specimen_date,na.rm = TRUE),
+    max(allEpisodes$earliest_specimen_date)
+  ))-4
+  
+  tmp = bind_rows(
+    firstInfection %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "LAD", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="first infection"),
+    firstTaqpath %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "LAD", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="first taqpath"),
+    lastTaqpath %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "LAD", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="last taqpath"),
+    infectionEpisodes %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "LAD", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="infection episodes")
+  )
+  
+  tmp = tmp %>% dpc$demog$findDemographics()
+  
+  tmp2 = tmp %>% 
+    left_join(aocDf %>% select(area,code),by = "code") %>% 
+    mutate(area = forcats::fct_explicit_na(area,na_level = "other")) %>% 
+    select(-code,-name) %>% 
+    mutate(code=area,name=area) %>% 
+    covidStandardDateGrouping() %>% 
+    summarise(
+      value = sum(value),
+      population = sum(population,na.rm = TRUE),
+      Implicit = all(Implicit)
+    ) 
+  
+  
+  tmp3 = bind_rows(
+    firstInfection %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="first infection"),
+    firstTaqpath %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="first taqpath"),
+    lastTaqpath %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="last taqpath"),
+    infectionEpisodes %>% dpc$spim$getLineListIncidence(ageBreaks = NULL,codeTypes = "CTRY", subgroup = sGene, filterExpr = !!filterExpr) %>% mutate(source="infection episodes")
+  )
+  
+  tmp3 = tmp3 %>% dpc$demog$findDemographics()
+  
+  tmp4 =   bind_rows(tmp2,tmp3) %>% filter(date <= lastTrustworthyDate)
+  return(tmp4)
+}
+
+allTimeseries = buildTimeseries()
+symptomaticTimeseries = buildTimeseries(asymptomatic_indicator != "Y")
+
+allTimeseries %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/all-case-counts-by-area-of-concern-and-method-",Sys.Date(),".csv"))
+symptomaticTimeseries %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/symptomatic-case-counts-by-area-of-concern-and-method-",Sys.Date(),".csv"))
+
+```
+
+
+
+# Integrate data from Laura and Chris
+
+```{r}
+
+
+laura1 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_S24052021_GrowthRate_all_prior2_2_119.csv")
+laura2 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_S24052021_GrowthRate_symptomatic_prior2_2_119.csv")
+chris = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/combined_results_UoM-2021-05-24.csv")
+
+laura3 = bind_rows(
+  laura2 %>% mutate(dataset = "Symptomatic") %>% select(-code) %>% rename(subgroup2 = subgroup,subgroup=source) %>% rename(source=subgroup2),
+  laura1 %>% mutate(dataset = "All") %>% select(-code) %>% rename(subgroup2 = subgroup,subgroup=source) %>% rename(source=subgroup2)
+) %>% 
+mutate(
+  Growth.median = median, 
+  Growth.lower = q0.025,
+  Growth.upper = q0.975
+) %>% select(-starts_with("q"))
+  
+chris2 = chris %>% 
+  pivot_longer(cols = c(-Region,-Type,-Source,-Status,-Parameter),names_to="date",values_to="value") %>%
+  pivot_wider(names_from = "Parameter",values_from="value") %>% rename(
+    name = Region,
+    subgroup = Type,
+    source = Source,
+    dataset = Status,
+    Growth = `mean growth rate`,
+    Growth.SE = `standard deviation`
+  ) %>% mutate(
+    Growth.median = Growth,
+    Growth.lower = Growth-1.96*Growth.SE,
+    Growth.upper = Growth+1.96*Growth.SE,
+    date = as.Date(date,"%d/%m/%Y"),
+    source = stringr::str_to_lower(source),
+    subgroup = stringr::str_remove(subgroup,"S ")
+  )
+
+```
+
+Modelled growth rate
+
+```{r}
+
+lsoaCentroid = dpc$geog$getMap("LSOA11")
+lsoaCentroid = lsoaCentroid %>% sf::st_centroid()
+mapping = dpc$geog$getContainedIn(inputSf = lsoaCentroid,outputShape = aocMap,outputIdVar = areaName)
+modelled = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/ByLSOAVariantRateswDGP.csv/ByLSOAVariantRateswDGP.csv")
+
+modelledAoc = bind_rows(
+  modelled %>% inner_join(mapping, by=c("LSOA_code"="from")) %>% group_by(area = to, week, type) %>% summarise(variantGR = sum(VariantRate)),
+  modelled %>% filter(LSOA_code %>% stringr::str_starts("E")) %>% group_by(week, type) %>% summarise(variantGR = sum(VariantRate,na.rm = TRUE)) %>% mutate(area="England")
+)
+
+# estGR = modelledAoc %>% group_by(area,type) %>% arrange(week) %>%
+#   group_modify(function(d,g,...) {
+#     
+#     gr = (log(d$variantGR)-log(lag(d$variantGR)))/7
+#     date = as.Date(sapply(0:6, function(x) d$week+x) %>% as.vector(),"1970-01-01")
+#     #tibble(date2 = date %>% as.vector() %>% as.Date("1970-01-01")) %>% glimpse()
+#     #browser()
+#     return(tibble(gr = gr %>% rep(7),date=date))
+# })
+
+estGR = modelledAoc %>% group_by(area,type) %>% arrange(week) %>%
+  mutate(
+    gr = (log(variantGR)-log(lag(variantGR)))/7,
+    date = week+as.numeric(week-lag(week))/2
+  )
+
+#ggplot(estGR,aes(x=date,y=gr,colour=type))+ geom_point()+facet_wrap(vars(area))
+doModelBar = function(clustName = paste(names,collapse = "-"), names = clusters[[clustName]]) {
+  ggplot(data=estGR %>% filter(area %in% names) %>% rename(name=area),mapping=aes(x=date,y=gr,fill=type))+
+    geom_bar(stat="identity",position = "dodge", width=5, colour="black",size=0.1)+
+    scale_y_continuous(limits = c(-0.25,0.25))+
+    scale_fill_brewer(palette="Set2",name=NULL)+
+    scale_x_date(breaks=seq(as.Date("2021-02-04"),Sys.Date(),by = 7),date_labels="%d-%m")+
+    ylab("growth rate, r")
+}
+
+p1 = doModelBar(names = "England")+
+  facet_wrap(vars(name),nrow=1)+
+  theme(axis.text.x = element_text(angle=0,hjust=0.5))+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  theme(axis.title.x = element_blank())+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm"))
+
+p2 = doModelBar(clustName = "NHS Regions")+
+  facet_wrap(vars(name),nrow=1)+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  standardPrintOutput::hideX()+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
+
+p3 = doModelBar(names = c("Bolton","M65 Corridor","Manchester"))+
+  facet_wrap(vars(name),nrow=1)+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  standardPrintOutput::hideX()+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
+
+p4 = doModelBar(names = c("Leicester","Nottingham","Birmingham"))+
+  facet_wrap(vars(name),nrow=1)+
+  standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
+
+p5 = (p1/p2/p3/p4 + patchwork::plot_annotation(tag_levels="A"))+patchwork::plot_layout(heights = c(2,2,1.5,1.5))
+standardPrintOutput::saveTwoThirdPageFigure(p5,paste0("~/Dropbox/covid19/sa-variant/ModelledGrowth-",Sys.Date()))
+
+```
+
+# Calculate growth rate ----
+
+```{r}
+
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::reload()
+
+allTimeseriesGR = allTimeseries %>% 
+  tsp$estimateGrowthRate(window = 56,leftSided=FALSE) %>%
+  tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
+  
+
+symptomaticTimeseriesGR = symptomaticTimeseries %>% 
+  tsp$estimateGrowthRate(window = 56,leftSided=FALSE) %>%
+  tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE) 
+
+pois = bind_rows(
+  allTimeseriesGR %>% mutate(dataset = "All"),
+  symptomaticTimeseriesGR  %>% mutate(dataset = "Symptomatic")
+) %>% select(
+  date,name, subgroup, source, dataset, Growth = Growth.poisson, Growth.SE = Growth.SE.poisson
+) %>% mutate(
+  Growth.median = Growth,
+  Growth.lower = Growth-1.96*Growth.SE,
+  Growth.upper = Growth+1.96*Growth.SE
+)
+
+logIncid = bind_rows(
+  allTimeseriesGR %>% mutate(dataset = "All"),
+  symptomaticTimeseriesGR  %>% mutate(dataset = "Symptomatic")
+) %>% select(
+  date,name, subgroup, source, dataset, Growth = Growth.value, Growth.SE = Growth.SE.value
+) %>% mutate(
+  Growth.median = Growth,
+  Growth.lower = Growth-1.96*Growth.SE,
+  Growth.upper = Growth+1.96*Growth.SE
+)
+
+```
+
+
+
+<!-- Debug M65 Corridor -->
+
+<!-- ```{r} -->
+
+<!-- tmp = symptomaticTimeseries %>% filter(source == "first infection" & subgroup == "positive" & code == "M65 Corridor") %>% arrange(date) -->
+
+
+<!-- for (i  in 1:nrow(tmp)) { -->
+<!--   tmp2 = tmp %>% filter(row_number() > i-28 & row_number()<i+28) -->
+<!--   tmp2 = tmp2 %>% rename(I = value) %>% mutate(time = row_number()) -->
+<!--   tmp3 = tryCatch({ -->
+<!--       model <- suppressWarnings(glm(I ~ time, family = quasipoisson(), data = tmp2)) -->
+<!--       model_sum <- summary(model) -->
+<!--       print(paste0("gr: ",model_sum$coefficients[2, 1],": ",paste0(tmp2$I, collapse=", "))) -->
+<!--   }, error = browser) -->
+<!-- } -->
+
+
+<!-- I_vec = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0) -->
+<!-- tmp2 = tibble(time = 1:length(I_vec), I = I_vec) -->
+<!-- model <- suppressWarnings(glm(I ~ time, family = quasipoisson(), data = tmp2)) -->
+<!-- summary(model) -->
+
+<!-- ``` -->
+
+
+```{r}
+
+allAreas = unname(c(unlist(clusters)))
+
+allEstimates = bind_rows(
+  laura3 %>% mutate(method = "GP"),
+  chris2 %>% mutate(method = "GAM"),
+  pois %>% mutate(method = "Pois")#,
+  #logIncid %>% mutate(method = "dlog/dt")
+)
+
+doGRPlot = function(
+  allEstimates,
+  sources="infection episodes",
+  minDate="2021-01-01",
+  subgroups = c("positive","negative"),
+  datasets="Symptomatic",
+  methods = unique(allEstimates$method),
+  clustName = paste(names,collapse = "-"),
+  names = clusters[[clustName]],
+  mergeModels = FALSE
+  ) {
+  
+    filteredTS = allEstimates %>% 
+      filter(source %in% sources & date>minDate) %>% 
+      filter(subgroup %in% subgroups) %>%
+      filter(dataset %in% datasets) %>%
+      filter(method %in% methods) %>% 
+      filter(name %in% names) %>% 
+      mutate(name = name %>% ordered(names))
+    
+    modelEndDate = filteredTS %>% filter(!is.na(Growth)) %>% group_by(source,subgroup,dataset,name,method) %>% summarise(end = max(date,na.rm = TRUE)) %>% pull(end) %>% min(na.rm = TRUE)
+    #browser()
+    filteredTS = filteredTS %>% filter(date<=modelEndDate)
+    
+    # if (mergeModels) {
+    #   
+    #   filteredTS = filteredTS %>% 
+    #     group_by(source,subgroup,dataset,name, date) %>%
+    #     group_modify(function(d,g,...) {
+    #       mus = d$Growth
+    #       sigmas = d$Growth.SE
+    #       boots = length(mus)
+    #       cdf = function(x) LaplacesDemon::pnormm(x, p=rep(1/boots,boots), mu=mus, sigma=sigmas)
+    #       # solve CDF for quantiles.
+    #       quantGenFn = function(q) return(function(x) cdf(x)-q)
+    #       bounds = c(-1,1) #log(c(0.5,5))
+    #       mean.estimate = mean(mus)
+    #       estimate.lower = tryCatch(uniroot(quantGenFn(0.025), interval=bounds)$root,error = function(e) -Inf)
+    #       estimate.median = tryCatch(uniroot(quantGenFn(0.5), interval=bounds)$root,error = function(e) NaN)
+    #       estimate.upper = tryCatch(uniroot(quantGenFn(0.975), interval=bounds)$root,error = function(e) Inf)
+    #       return(tibble(
+    #         Growth.median = estimate.median,
+    #         Growth.lower = estimate.lower,
+    #         Growth.upper = estimate.upper,
+    #         method = "ensemble"
+    #       ))
+    #     }) %>% ungroup()
+    # }
+    
+    modelComp = ggplot(filteredTS, mapping=aes(x=date))+
+      geom_ribbon(mapping=aes(
+        ymin=Growth.lower,
+        ymax=Growth.upper,
+        group=paste0(subgroup,method,dataset)),
+        colour=NA, 
+        fill="grey60", 
+        alpha=0.2)+
+      geom_line(mapping=aes(
+        y=Growth.median,
+        color = subgroup,
+        linetype=method)
+      )+ 
+      scale_y_continuous(
+        sec.axis = dup_axis( 
+          breaks = log(2)/c(3,7,14,Inf,-14,-7,-3), 
+          labels = c("3","7","14","\u221E","-14","-7","-3"), 
+          name="doubling time")
+      )+
+      scale_x_date(breaks=seq(as.Date("2021-02-04"),Sys.Date(),by = 14),date_labels="%d-%m")+  #date_breaks = "2 week",date_labels="%d-%m")+
+      scale_color_discrete(name="S-gene")+
+      coord_cartesian(ylim=c(-0.25,0.25), xlim=c(as.Date("2021-02-01"),NA))+
+      ylab("growth rate, r")+
+      theme(axis.text.x = element_text(angle=60), axis.text.y.right = element_text(size=7))+
+      geom_hline(yintercept = 0, colour="grey50")+
+      xlab("specimen date")
+    
+    #if (!mergeModels) 
+      modelComp = modelComp + scale_linetype_manual(values=c("Pois"="solid","GAM"="twodash", "GP"="dotted","dlog/dt"="dotdash"))
+      
+    modelComp
+}
+```
+
+
+```{r}
+# lapply(names(clusters),function(clustName) {
+#   allEstimates %>% 
+#     doGRPlot(clustName = clustName) %>% 
+#     standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-",clustName))})
+```
+
+# FIGURE 2
+
+```{r}
+
+doModelPlot = function(clustName = paste(names,collapse = "-"), names = clusters[[clustName]]) {
+  list( #ggnewscale::new_scale_colour(),
+    geom_point(data=estGR %>% filter(area %in% names & type %in% c("B.1.1.7","B.1.617.2")) %>% rename(name=area),mapping=aes(x=date,y=gr,fill=type),shape=21,stroke=0),
+    shades::lightness(scale_fill_discrete(), shades::scalefac(0.70))
+  )
+}
+
+p1 = doGRPlot(allEstimates,names = "England")+
+  doModelPlot(names = "England")+
+  facet_wrap(vars(name),nrow=1)+
+  theme(axis.text.x = element_text(angle=0,hjust=0.5))+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  theme(axis.title.x = element_blank())+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm"))
+
+p2 = doGRPlot(allEstimates,clustName = "NHS Regions",mergeModels = TRUE)+
+  doModelPlot(clustName = "NHS Regions")+
+  facet_wrap(vars(name),nrow=1)+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  standardPrintOutput::hideX()+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
+
+p3 = doGRPlot(allEstimates,names = c("Bolton","M65 Corridor","Manchester"),mergeModels = TRUE)+
+  doModelPlot(names = c("Bolton","M65 Corridor","Manchester"))+
+  facet_wrap(vars(name),nrow=1)+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  standardPrintOutput::hideX()+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
+
+p4 = doGRPlot(allEstimates,names = c("Leicester","Nottingham","Birmingham"),mergeModels = TRUE)+
+  doModelPlot(names = c("Leicester","Nottingham","Birmingham"))+
+  facet_wrap(vars(name),nrow=1)+
+  standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
+
+p5 = (p1/p2/p3/p4 + patchwork::plot_annotation(tag_levels="A"))+patchwork::plot_layout(heights = c(2,2,1.5,1.5))
+standardPrintOutput::saveTwoThirdPageFigure(p5,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-Fig2-",Sys.Date()))
+
+
+
 ```
 
 ```{r}
 
-sPosll = ll2 %>% select(-specimen_date) %>% inner_join(sgPosUniq %>% filter(sgtf_under30CT == 0) %>% select(FINALID,specimen_date), by="FINALID")
+tmp = doGRPlot(allEstimates,
+         sources = unique(allEstimates$source),
+         datasets = "Symptomatic",
+         names = allAreas)+
+  facet_grid(name~source)+
+  standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
 
-sPosIncid = sPosll %>% dpc$spim$getLineListIncidence(ageBreaks = c(18,35,65,75)) %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
-tsp$plotIncidenceQuantiles(covidTimeseries = sPosIncid %>% filter(name=="England"), dates = "2021-02-01", denominatorExpr = population/1000000, colour=ageCat)+scale_y_continuous(trans="log1p")
-
-tsp$plotRt(covidRtTimeseries = sPosIncid %>% filter(name=="England"), dates = "2021-02-01", colour=ageCat,rtlim = c(0.25,1.5))
+standardPrintOutput::saveFullPageFigure(tmp,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCSensitivity-to-sgene-method-",Sys.Date()))
 ```
 
 ```{r}
-notSNegll = ll %>% semi_join(sgll %>% filter(is.na(sgtf_under30CT) | sgtf_under30CT == 1), by="FINALID")
-sNotNegIncid = notSNegll %>% dpc$spim$getLineListIncidence() %>% tsp$aggregateGender() %>% dpc$demog$findDemographics()
-tsp$plotIncidenceQuantiles(covidTimeseries = sNotNegIncid, dates = "2021-02-01", denominatorExpr = population/1000000)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p")
+tmp = doGRPlot(allEstimates,
+         sources = "infection episodes",
+         datasets = c("All","Symptomatic"),
+         names = allAreas)+
+  facet_wrap(vars(name,dataset),ncol=4)+
+  standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
 
-tsp$plotRt(covidRtTimeseries = sNotNegIncid, dates = "2021-02-01",rtlim = c(0.25,1.5))+facet_wrap(vars(name))
+standardPrintOutput::saveFullPageFigure(tmp,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCSensitivity-to-dataset-",Sys.Date()))
+
+```
+
+
+```{r}
+
+# doGRPlot(allEstimates,methods="Pois",names = allAreas,sources = unique(allEstimates$source))+facet_wrap(vars(name,source))
 
 ```
 
 ```{r}
-sgUniq = sgll %>% group_by(FINALID) %>% 
-  filter(CDR_Specimen_Request_SK==min(CDR_Specimen_Request_SK,na.rm=TRUE)) 
-llWSgene = ll2 %>% filter(asymptomatic_indicator != "Y") %>% inner_join(sgll %>% filter(!is.na(sgtf_under30CT)) %>% mutate(sGene = ifelse(sgtf_under30CT == 1,"S neg","S pos")) %>% select(FINALID, sGene), by="FINALID")
-sGeneIncid = llWSgene %>% dpc$spim$getLineListIncidence(subgroup = sGene) %>% dpc$demog$findDemographics()
-tsp$plotIncidenceQuantiles(covidTimeseries = sGeneIncid, dates = "2021-02-01", colour = subgroup, denominatorExpr = population/1000000)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p")
 
+# plotAllGR = function(dataGR) {
+#   lapply(names(clusters),function(clustName) {
+#     (
+#       tsp$plotGrowthRate(
+#         dataGR %>% filter(name %in% clusters[[clustName]]) %>% filter(subgroup!="equivocal"),
+#         colour = subgroup,dates="2021-03-01",
+#         rlim=c(-0.25,0.25),
+#         growthVar = Growth.poisson,
+#         growthSEVar = Growth.SE.poisson,
+#       )+facet_wrap(vars(name))+standardPrintOutput::watermark(lab="provisional")+ylab("r - sliding 8 week window")
+#     ) %>%   
+#     standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-",clustName))
+#   })
+# }
+# 
+# 
+# 
+# 
+# aocSgeneCountsRt = aocSgeneCounts %>% tsp$estimateRt(window = 14)
+# lapply(names(clusters),function(clustName) {
+#   (
+#     tsp$plotRt(
+#       aocSgeneCountsRt %>% filter(name %in% clusters[[clustName]]) %>% filter(subgroup!="equivocal"),
+#       colour = subgroup,
+#       dates="2021-03-01",
+#       rtlim=c(0,3.5)
+#     )+
+#     facet_wrap(vars(name))+
+#     standardPrintOutput::watermark(lab="provisional")) %>%   
+#   standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighRt-",clustName))
+# })
+
+# allTimeseries %>% filter(date>"2021-03-01") %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour = source,ylim = c(0,200))+facet_grid(cols = vars(subgroup),rows=vars(name))
+# allTimeseries %>% tsp$plotGrowthRate(colour = subgroup,rlim = c(-0.25,0.25),dates = "2021-03-01",linetype=source,ribbons = FALSE)+facet_wrap(vars(name))
+# symptomaticTimeseries %>% tsp$plotGrowthRate(colour = subgroup,rlim = c(-0.25,0.25),dates = "2021-03-01",linetype=source,ribbons = FALSE)+facet_wrap(vars(name))
+```
+
+```{r}
 sRT14 = sGeneIncid %>% filter(name != "Unknown (England)") %>% tsp$estimateRt(quick = TRUE,window = 14)
 tsp$plotRt(covidRtTimeseries = sRT14, dates = "2021-02-01",rtlim = c(0.25,1.5), colour = subgroup)+facet_wrap(vars(name))
 
@@ -188,41 +724,6 @@ tsp$plotIncidenceQuantiles(aocSgeneCountsAll, colour=subgroup, dates="2021-03-01
 
 
 
-clusters = list(
-  "CommunityIndia2" = c("NW Cluster","Bedford etc","Sefton & Lpl"),
-  "MixedIndia2" = c("Leicester","Nottingham","West London"),
-  "MixedSA" = c("East London"),
-  "Reference" = c("England")
-)
-
-aocSgeneCountsGrowth = aocSgeneCounts %>% tsp$estimateGrowthRate(window = 56,growthRateWindow = 7)
-
-lapply(names(clusters),function(clustName) {
-  (
-    tsp$plotGrowthRate(
-      aocSgeneCountsGrowth %>% filter(name %in% clusters[[clustName]]) %>% filter(subgroup!="equivocal"),
-      colour = subgroup,dates="2021-03-01",
-      rlim=c(-0.25,0.25),
-      growthVar = Growth.poisson,
-      growthSEVar = Growth.SE.poisson,
-    )+facet_wrap(vars(name))+standardPrintOutput::watermark(lab="provisional")+ylab("r - sliding 8 week window")
-  ) %>%   
-  standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-",clustName))
-})
-
-aocSgeneCountsRt = aocSgeneCounts %>% tsp$estimateRt(window = 14)
-lapply(names(clusters),function(clustName) {
-  (
-    tsp$plotRt(
-      aocSgeneCountsRt %>% filter(name %in% clusters[[clustName]]) %>% filter(subgroup!="equivocal"),
-      colour = subgroup,
-      dates="2021-03-01",
-      rtlim=c(0,3.5)
-    )+
-    facet_wrap(vars(name))+
-    standardPrintOutput::watermark(lab="provisional")) %>%   
-  standardPrintOutput::saveThirdPageFigure(paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighRt-",clustName))
-})
 
 
 

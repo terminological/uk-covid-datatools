@@ -96,7 +96,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     tmpFile = self$fileProvider$getFile(path)
     if (stringr::str_detect(path,"zip")) {
       zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
-      unzip(tmpFile, filename=zipPath,exdir = to, junkpaths = TRUE)
+      unzip(tmpFile, files=zipPath,exdir = to, junkpaths = TRUE)
       return(paste0(to,zipPath))
     } else {
       fs::file_copy(path = tmpFile,new_path = paste0(to,fs::path_file(path)))
@@ -611,6 +611,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         }
         
         if(any(is.na(tmp$specimen_date))) warning("NA sprecimen dates in cases file")
+        
+        if ("finalid" %in% colnames(tmp)) tmp = tmp %>% rename(FINALID = finalid)
         
         return(tmp %>% mutate(
           pillar_2_testingkit = tolower(pillar_2_testingkit),

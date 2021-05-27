@@ -360,7 +360,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
     })
     
     # combine output with input
-    out = df %>% left_join(df6, by=c("code","gender","ageCat","codeType"),suffix=c(".old",""))
+    out = df %>% rename(code=!!codeVar) %>% left_join(df6, by=c("code","gender","ageCat","codeType"),suffix=c(".old","")) %>% rename(!!codeVar := code)
     return(out)
   }
   

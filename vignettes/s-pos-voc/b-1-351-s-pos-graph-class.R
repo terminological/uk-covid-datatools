@@ -23,7 +23,7 @@ ggplot2::theme_set(standardPrintOutput::defaultFigureLayout())
 standardPrintOutput::setDefaults()
 ukcovidtools::reload()
 
-source("./vignettes/b-1-351-s-pos-data.R")
+source("./vignettes/s-pos-data.R")
 
 # tmp3 %>% group_by(finalid) %>% filter(n() > 1) %>% arrange(finalid) %>% View()
 combinedSpositives %>% select(is_variant, type, finalid, date, sequenced, exposure_type, reinfect56, ctas_status, ethnicity_final, age_group, LSOA_code, LSOA_name, x, y) %>% 
