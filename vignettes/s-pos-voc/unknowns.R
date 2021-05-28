@@ -179,14 +179,15 @@ estimatedVOC3 = estimatedVOC2 %>%
 filterExpr = expr(name %in% c("Ealing","Croydon"))
 
 #ordering = estimatedVOC3 %>% filter(subgroup=="B.1.617.2" & !is.na(name)) %>% group_by(name) %>% summarise(order = max(subgroup.growth.mu)) %>% arrange(desc(order)) %>% pull(name)
-ordering = breakdownVOCCount2 %>% filter(subgroup=="B.1.617.2" & !is.na(name)) %>% group_by(name) %>% summarise(order = sum(value)) %>% arrange(desc(order)) %>% pull(name)
+#ordering = breakdownVOCCount2 %>% filter(!is.na(name)) %>% group_by(name,subgroup) %>% summarise(order = sum(value)) %>% ungroup() %>% pivot_wider(names_from = subgroup, values_from = order) %>% arrange(desc(`B.1.617.2`,`S+`)) %>% pull(name)
+ordering = estimatedVOC3 %>% filter(subgroup=="B.1.617.2" & !is.na(name) & date==max(date)) %>% group_by(name) %>% summarise(order = max(subgroup.rate)) %>% arrange(desc(order)) %>% pull(name)
 
 estimatedVOC3 = estimatedVOC3 %>% filter(!is.na(name)) %>% mutate(name = name %>% ordered(ordering))
 breakdownVOCCount2 = breakdownVOCCount2 %>% filter(!is.na(name)) %>% mutate(name = name %>% ordered(ordering))
 breakdownVOCKnown = breakdownVOCKnown %>% filter(!is.na(name)) %>% mutate(name = name %>% ordered(ordering))
 
 filterExpr = TRUE
-
+filterExpr = expr(name=="Croydon")
 
 p1 = ggplot(breakdownVOCCount2 %>% filter(!!filterExpr), aes(x=date, y=subgroup.proportion, fill=subgroup))+
   geom_area()+
