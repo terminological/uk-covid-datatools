@@ -91,7 +91,9 @@ llTest = ll %>% select(FINALID, specimen_date, case_category,asymptomatic_indica
 
 # Split s gene line list out into normalised parts.
 sgll = loader$getSGeneLineList()
-sgllTest = sgll %>% select(FINALID, specimen_date, CDR_Specimen_Request_SK, sgtf_under30CT) %>% mutate(sglinelist = TRUE)
+sgllTest = sgll %>% 
+  select(FINALID, specimen_date, CDR_Specimen_Request_SK, sgtf_under30CT) %>% 
+  mutate(sglinelist = TRUE)
 
 # combine tests from ll (first only) with tests from S-gene files
 # N.B. this will be a bit of a funny mixture - multiple tests but only for cases that went through taqpath assay.
@@ -99,6 +101,11 @@ tests = llTest %>%
   full_join(
     sgllTest,
     by = c("FINALID","specimen_date")  
+  )  %>%
+  mutate(
+    linelist = ifelse(is.na(linelist),FALSE,linelist),
+    sglinelist = ifelse(is.na(sglinelist),FALSE,sglinelist),
+    case_category = ifelse(sglinelist,"TaqPath",case_category)
   ) %>% mutate(
     sGene = case_when(
       is.na(sgtf_under30CT) & sglinelist ~ "equivocal",
@@ -113,7 +120,7 @@ tests = llTest %>%
 cutoff = 28
 
 ## calculate the individual episodes of covid resulting from runs of sequential positive tests <28 days apart.
-allEpisodes = dpc$getSaved(id = "EPISODES",params = list(cutoff, tests), orElse = function(...) {
+allEpisodes = dpc$getSaved(id = "EPISODES",params = list(cutoff, tests), nocache = TRUE, orElse = function(...) {
   
   # use data.table to speed it all up.
   tests2 = dtplyr::lazy_dt(tests)
@@ -144,7 +151,8 @@ allEpisodes = dpc$getSaved(id = "EPISODES",params = list(cutoff, tests), orElse 
       anyNegSGene = any(sGene == "negative"),
       anyEquivSGene = any(sGene == "equivocal"),
       anyUnknSGene = any(sGene == "unknown"),
-      asymptomatic_indicator = first(na.omit(asymptomatic_indicator),default="U")
+      asymptomatic_indicator = first(na.omit(asymptomatic_indicator),default="U"),
+      lft_only = all(na.omit(case_category=="LFT_Only"))
     ) 
   tests5 = tests4 %>% mutate(
     sGene=case_when(
