@@ -381,6 +381,7 @@ doEpiCurve = function(combinedData, areas = aocDf, earliestDate = as.Date("2021-
       asymptomatic_indicator == "U" ~ "unknown",
       TRUE ~ NA_character_
     ) %>% ordered(c("symptoms","screening","unknown")),
+    infection = paste0("infection ",eraIndex),
     ageCat = case_when(
       age < 6 ~ "<6",
       age < 19 ~ "6-18",
@@ -432,6 +433,12 @@ doEpiCurve = function(combinedData, areas = aocDf, earliestDate = as.Date("2021-
       scale_fill_brewer(palette = "Accent",na.value = "grey70",name=NULL)+
       standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByEthnic")
   
+  p6 = (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=infection))+
+      geom_histogram(binwidth = 1)+
+      facet_wrap(vars(area),nrow=1)+
+      coord_cartesian(xlim=c(earliestDate,lastDate))+
+      scale_fill_brewer(palette = "Set3",na.value = "grey70",name=NULL)+
+      standardPrintOutput::smallLegend()) #%>% standardPrintOutput::saveHalfPageFigure("~/Dropbox/covid19/sa-variant/AOCByEthnic")
   
   # (ggplot(tmp %>% filter(date>earliestDate & date<=lastDate),aes(x=date,fill=isolation_cat))+
   #     geom_histogram(binwidth = 1)+
@@ -452,7 +459,8 @@ doEpiCurve = function(combinedData, areas = aocDf, earliestDate = as.Date("2021-
   (p2+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
   (p3+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
   (p4+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
-  (p5+ylab("S+ counts")+theme(legend.justification='left'))+
+  (p5+standardPrintOutput::hideX()+ylab("S+ counts")+theme(legend.justification='left'))+
+  (p6+ylab("S+ counts")+theme(legend.justification='left'))+
   patchwork::plot_layout(ncol=1)) %>% return()
 }
 
@@ -624,10 +632,10 @@ countsBySgene2 =
       aes(x=date,y=count, linetype=source, colour=sGene)
     )+
     geom_line(aes(y=Roll.count))+
-    geom_point(aes(y=count,shape=source),size=1,aplha=0.5)+
+    geom_point(aes(y=count),size=0.24,alpha=0.5)+
     #geom_smooth(aes(y=count))+
     scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+
-    scale_linetype(name="Source")+
+    scale_linetype_manual(name="Source",values = c("Pillar 2 positives"="solid","Sequencing"="longdash"))+
     scale_colour_discrete(name="S gene status")+
     #standardPrintOutput::narrower()+
     standardPrintOutput::smallLegend(textSize = 8,spaceLegend = 1)+
