@@ -911,8 +911,8 @@ DistributionFit$convertParameters = function(
   conversion = DistributionFit$conversionFrom[[dist]]
   paramSamples = NULL
   if (invalid(sdOfMean)) sdOfMean = (upperOfMean-lowerOfMean)/(qnorm(confint[2],0,1)-qnorm(confint[1],0,1))
-  if (invalid(sdOfMean)) stop("either sdOfMean or upperOfMean and lowerOfMean must be specified")
-  if (invalid(sdOfSd)) {
+  
+  if (!invalid(sdOfMean) & invalid(sdOfSd)) {
     if (invalid(c(lowerOfSd, upperOfSd))) {
       #stop("must supply non NA values for: lowerOfSd and upperOfSd or sdOfSd")
       # browser()
@@ -925,27 +925,40 @@ DistributionFit$convertParameters = function(
     }
     #TODO: we could have fixed the scale to 2 and used the moments to get the shape from the mean... This wouldn't use the lower and upper at all.
   }
-  if (invalid(sdOfSd)) stop("either sdOfSd or upperOfSd and lowerOfSd must be specified")
-  # central limit - means are normally
-  boot_mean = msm::rtnorm(bootstraps,mean = meanOfMean,sd = sdOfMean,lower = lowerOfMean, upper=upperOfMean) 
-  if (epiestimMode) {
-    boot_sd = msm::rtnorm(bootstraps,mean = meanOfSd,sd = sdOfSd,lower = lowerOfSd, upper=upperOfSd) 
+  
+  if ((invalid(sdOfMean) | sdOfMean == 0) & (invalid(sdOfSd) | sdOfSd == 0)) {
+    
+    bootstraps = 1
+    boot_mean = meanOfMean
+    boot_sd = meanOfSd
+    
   } else {
-    if (is.na(N)) {
-      if (sdOfSd == 0) {
-        #browser()
-        boot_sd = meanOfSd
-      } else {
-        sdShape = meanOfSd^2/sdOfSd^2
-        sdScale = sdOfSd^2/meanOfSd # this should maybe hard limited to 2 - as SD is chisq distributed and chisq is gamma with scale 2 (or rate 0.5).
-        boot_sd = rgamma(bootstraps,shape = sdShape,scale = sdScale)
-      }
+  
+    if (invalid(sdOfMean)) stop("either sdOfMean or upperOfMean and lowerOfMean must be specified")
+    if (invalid(sdOfSd)) stop("either sdOfSd or upperOfSd and lowerOfSd must be specified")
+    
+    # central limit - means are normally
+    boot_mean = msm::rtnorm(bootstraps,mean = meanOfMean,sd = sdOfMean,lower = lowerOfMean, upper=upperOfMean) 
+    if (epiestimMode) {
+      boot_sd = msm::rtnorm(bootstraps,mean = meanOfSd,sd = sdOfSd,lower = lowerOfSd, upper=upperOfSd) 
     } else {
-      boot_sd = meanOfSd*sqrt(rchisq(bootstraps, N-1)/(N-1))
+      if (is.na(N)) {
+        if (sdOfSd == 0) {
+          #browser()
+          boot_sd = meanOfSd
+        } else {
+          sdShape = meanOfSd^2/sdOfSd^2
+          sdScale = sdOfSd^2/meanOfSd # this should maybe hard limited to 2 - as SD is chisq distributed and chisq is gamma with scale 2 (or rate 0.5).
+          boot_sd = rgamma(bootstraps,shape = sdShape,scale = sdScale)
+        }
+      } else {
+        boot_sd = meanOfSd*sqrt(rchisq(bootstraps, N-1)/(N-1))
+      }
+      if (!invalid(c(lowerOfSd, upperOfSd))) {
+        boot_sd = boot_sd %>% scales::squish(range = c(lowerOfSd,upperOfSd))
+      }
     }
-    if (!invalid(c(lowerOfSd, upperOfSd))) {
-      boot_sd = boot_sd %>% scales::squish(range = c(lowerOfSd,upperOfSd))
-    }
+    
   }
   # browser()
   for(paramName in names(conversion)) {

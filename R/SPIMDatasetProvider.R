@@ -22,7 +22,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     filter=list(
       chess="CHESS COVID19", #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
       sari="SARI COVID19",
-      lineList="Anonymised .*Line List",
+      lineList="Anonymised .*Line List [0-9]{8}",
       rcgp="RCGP",
       deathsLineList="COVID19 Deaths",
       ff100="FF100",
@@ -63,7 +63,12 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     getLatest = function(search) {
       tmp2 = self$getPaths() %>% stringr::str_subset(search)
-      tmp2Date = tmp2 %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-")
+      tmp2Date = tmp2 %>% stringr::str_extract_all("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") 
+      tmp2Date = sapply(tmp2Date, function(x) {
+        x = x %>% stringr::str_remove_all("-")
+        y = unique(x[x==max(x)])
+        return(y)
+      })
       tmp3 = tmp2[tmp2Date == max(tmp2Date)]
       if(length(tmp3)==0) {
         warning("Missing file: ",search)

@@ -162,4 +162,19 @@ nn = arear::createNeighbourNetwork(lsoa11)
 nn %>% readr::write_csv("~/Dropbox/covid19/exports/LSOA11RookNeighbours.csv")
 ```
 
+## Cases by age group for Chris & Ellen
 
+```{r}
+tmp = dpc$spim$getLineListIncidence(ageBreaks = c(18,65,84),gender = FALSE,codeTypes = c("CTRY","NHSER")) 
+tmp2 = tmp %>% dpc$demog$findDemographics()
+tmp2 %>% readr::write_csv(path = paste0("~/Dropbox/covid19/exports/cases-by-admissions-age-bands-",Sys.Date(),".csv"))
+
+```
+
+```{r}
+
+tmp = dpc$spim$getLatestRawFile(dpc$spim$filter$trust,to = "~/tmp")
+
+
+dpc$spim$getPaths(nocache=TRUE)
+```

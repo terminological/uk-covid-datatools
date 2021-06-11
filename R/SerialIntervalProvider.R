@@ -168,12 +168,15 @@ ParametricSerialIntervalProvider = R6::R6Class("ParametricSerialIntervalProvider
   paramDf = NULL,
   uncertain = NULL,
   
-  initialize = function(providerController, dist, paramDf, offset=0, epiestimMode = TRUE, ...) {
+  initialize = function(providerController, dist, paramDf, offset=0, epiestimMode = TRUE, allowNonZeroAtZero = FALSE, ...) {
     fitter = DistributionFit$new()
     paramDf = ukcovidtools::parameterDefinition(paramDf)
     fitter$withSingleDistribution(dist = dist, paramDf = paramDf, epiestimMode = epiestimMode, ...)
     shapeFilter = fitter$bootstraps %>% filter(dist=="gamma" & param=="shape" & value > 1) %>% pull(bootstrapNumber)
-    fitter$bootstraps = fitter$bootstraps %>% filter(bootstrapNumber %in% shapeFilter)
+    if (!allowNonZeroAtZero) {
+      fitter$bootstraps = fitter$bootstraps %>% filter(bootstrapNumber %in% shapeFilter)
+      if (nrow(fitter$bootstraps) == 0) stop("No valid shaped distributions for serial interval defined. N.b. gamma shape parameters must be greater than 1 (or mean > sd)")
+    }
     self$paramDf = paramDf
     self$dist = dist
     # self$dfit = fitter

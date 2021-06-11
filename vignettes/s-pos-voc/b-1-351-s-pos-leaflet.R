@@ -44,7 +44,7 @@ msoaMap = dpc$geog$getMap("MSOA11") %>% ungroup() %>% filter(code %>% stringr::s
 if(!file.exists("~/Dropbox/covid19/sa-variant/MSOA-neighbours.csv")) {
   msoaNetwork = arear::createNeighbourNetwork(msoaMap)
   msoaNetwork %>% readr::write_csv("~/Dropbox/covid19/sa-variant/MSOA-neighbours.csv")
-  msoaMapSimple = msoaMap %>% rmapshaper::ms_simplify(keep=0.05)
+  msoaMapSimple = msoaMap %>% rmapshaper::ms_simplify(keep=0.05, keep_shapes=TRUE)
   arear::saveShapefile(msoaMapSimple,"simplifiedMSOA11",dir = "~/Dropbox/covid19/sa-variant/")
 }
 
@@ -63,7 +63,7 @@ lsoaXY =  lsoaCentroid %>% mutate(
 if(!file.exists("~/Dropbox/covid19/sa-variant/LSOA-neighbours.csv")) {
   lsoaNetwork = arear::createNeighbourNetwork(lsoaMap)
   lsoaNetwork %>% readr::write_csv("~/Dropbox/covid19/sa-variant/LSOA-neighbours.csv")
-  lsoaMapSimple = lsoaMap %>% rmapshaper::ms_simplify(keep=0.05)
+  lsoaMapSimple = lsoaMap %>% rmapshaper::ms_simplify(keep=0.05, keep_shapes=TRUE)
   arear::saveShapefile(lsoaMapSimple,"simplifiedLSOA11",dir = "~/Dropbox/covid19/sa-variant/")
 }
 
@@ -84,13 +84,13 @@ if(!file.exists("~/Dropbox/covid19/sa-variant/LSOA-neighbours.csv")) {
 variantColourScheme = tribble(
   ~type, ~hue, ~sat, ~value,
   "B.1.351", 0,1,1,
-  "B.1.617.1", 0.2,0.5,1,
+  "AV.1", 0.9,1,1,
   "B.1.617.2", 0.2,1,1,
-  "P.1 & P.2", 0.95,1,1,
-  # "B.1.1.318", 0.1,1,1,
+  #"P.1 & P.2", 0.95,1,1,
+  #"B.1.1.318", 0.1,1,1,
   "other VOC/VUI", 0.9,0,1,
   "B.1.1.7", 0.7,1,1,
-  "B.1.525", 0.7,0.5,1,
+  #"B.1.525", 0.7,0.5,1,
   "non VOC/VUI", 0,0,0.5,
   "not sequenced", 0.5,1,1
 ) %>% mutate(variantColour = hsv(hue,sat,value))
@@ -309,7 +309,7 @@ ltlaLineageCounts = prepLtlaCounts(combinedCases %>% mutate(type = ifelse(is.na(
 <u>sequencing last 28 days:</u>
 <li>non VOC/VUI: {sum(ifelse(subgroup=='non VOC/VUI',total.28day,0),na.rm=TRUE)}</li>
 <li>B.1.617.2: {sum(ifelse(subgroup=='B.1.617.2',total.28day,0),na.rm=TRUE)}</li>
-<li>B.1.617.1: {sum(ifelse(subgroup=='B.1.617.1',total.28day,0),na.rm=TRUE)}</li>
+<li>AV.1: {sum(ifelse(subgroup=='AV.1',total.28day,0),na.rm=TRUE)}</li>
 <li>B.1.1.7: {sum(ifelse(subgroup=='B.1.1.7',total.28day,0),na.rm=TRUE)}</li>
 <li>B.1.351: {sum(ifelse(subgroup=='B.1.351',total.28day,0),na.rm=TRUE)}</li>
 <li>other VOC/VUI: {sum(ifelse(subgroup=='other VOC/VUI',total.28day,0),na.rm=TRUE)}</li>
@@ -317,7 +317,7 @@ ltlaLineageCounts = prepLtlaCounts(combinedCases %>% mutate(type = ifelse(is.na(
 <u>sequencing per week per 100K:</u>
 <li>non VOC/VUI: {(sum(ifelse(subgroup=='non VOC/VUI',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
 <li>B.1.617.2: {(sum(ifelse(subgroup=='B.1.617.2',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
-<li>B.1.617.1: {(sum(ifelse(subgroup=='B.1.617.1',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
+<li>AV.1: {(sum(ifelse(subgroup=='AV.1',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
 <li>B.1.1.7: {(sum(ifelse(subgroup=='B.1.1.7',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
 <li>B.1.351: {(sum(ifelse(subgroup=='B.1.351',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>
 <li>other VOC/VUI: {(sum(ifelse(subgroup=='other VOC/VUI',daily.28day,0),na.rm=TRUE)/population*700000) %>% sprintf(fmt='%1.1f')}</li>

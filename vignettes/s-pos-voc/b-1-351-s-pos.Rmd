@@ -63,8 +63,11 @@ if (!exists("combinedSpositives")) source("./vignettes/s-pos-voc/s-pos-data.R")
 ```{r}
 # quick count summary ----
 
-aprilCases = combinedCases %>% filter(earliest_specimen_date > "2021-04-01")
-with(aprilCases, table(sGene,type,useNA = "ifany"))
+mayCases = combinedCases %>% filter(earliest_specimen_date > "2021-05-01")
+with(mayCases, table(sGene,type,useNA = "ifany"))
+
+combinedSpositives  %>% filter(earliest_specimen_date > "2021-05-01" & !is.na(type)) %>% group_by(type) %>% count() %>%
+  ungroup() %>% mutate(p=  n/sum(n))
 
 genomics %>% 
   group_by(variant) %>% 
@@ -76,6 +79,23 @@ genomics %>%
   mapVOCtoLineage(vocVar = variant) %>% 
   readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/CTAS-genomics-summary-",Sys.Date(),".csv"))
 
+
+1-sapply(c(7,14,21,28,35,42,49,56,63,70), function(x) {
+  tmp = combinedCases %>% filter(sGene !="unknown" & earliest_specimen_date > max(earliest_specimen_date)-x & earliest_specimen_date <= max(earliest_specimen_date)-x+14)
+  return((tmp %>% filter(is.na(type)) %>% nrow())/(tmp %>% nrow()))
+})
+
+unsequenced = 
+(combinedSpositives %>% filter(earliest_specimen_date > "2021-01-21") %>% filter(is.na(type)) %>% nrow())/
+  (combinedSpositives %>% filter(earliest_specimen_date > "2021-01-21") %>% nrow())
+"2021-02-01"
+
+combinedCases %>% filter(sGene !="unknown" & earliest_specimen_date >= "2021-04-01" & earliest_specimen_date < "2021-05-01") %>% group_by(type) %>% count() %>% ungroup() %>% mutate(p = n/sum(n)*100)
+
+max(combinedCases$earliest_specimen_date)
+
+
+
 # TODO - more required here
 ```
 
@@ -83,12 +103,15 @@ genomics %>%
 
 ```{r}
 
+lastLLdate = max(ll$specimen_date)
+startLLdate = lastLLdate-7
+
 matched = ll %>% filter(pillar == "Pillar 2") %>% inner_join(sgll, by="FINALID", suffix = c("",".sgene")) %>% filter(specimen_date >= specimen_date.sgene & specimen_date <= specimen_date.sgene + 4 ) %>% select(FINALID)
 
 tmp = bind_rows(
   ll %>% filter(pillar == "Pillar 2") %>% semi_join(matched, by="FINALID") %>% mutate(sgeneKnown=TRUE),
   ll %>% filter(pillar == "Pillar 2") %>% anti_join(matched, by="FINALID") %>% mutate(sgeneKnown=FALSE)
-) %>% filter(specimen_date > earliestDate & specimen_date < lastDate)
+) %>% filter(specimen_date > startLLdate & specimen_date < lastLLdate)
 
 tqPathCoverage = tmp %>% group_by(LTLA_code, sgeneKnown) %>% summarise(count = n()) %>%
   group_by(LTLA_code) %>%
@@ -102,18 +125,18 @@ tqPathCoverage %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/taq-pat
 map = dpc$geog$getMap("LAD19")
 map2 = map %>% left_join(tqPathCoverage, by=c("code"="LTLA_code")) %>% 
   mutate(
-    mean = ifelse(!is.finite(mean),0,mean),
+    #mean = ifelse(!is.finite(mean),0,mean),
     n = ifelse(is.na(n),0,n)
     ) %>% filter(code %>% stringr::str_starts("E"))
 
 (ggplot(map2,aes(fill=mean*100))+geom_sf(size=0.3)+
     scale_fill_gradient(low="#FFFFFF",high="#0080FF",lim=c(0,100),name="% coverage")+
-    labs(subtitle = paste0(earliestDate," to ",lastDate))
+    labs(subtitle = paste0(startLLdate," to ",lastLLdate))
 ) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-taqpath-coverage")
 
 (ggplot(map2,aes(fill=n))+geom_sf(size=0.3)+
     scale_fill_gradient(low="#FFFFFF",high="#FF8000",name="Pillar 2 tests")+
-    labs(subtitle = paste0(earliestDate," to ",lastDate))
+    labs(subtitle = paste0(startLLdate," to ",lastLLdate))
 ) %>% standardPrintOutput::saveFigure(maxWidth = 6,maxHeight = 6,filename = "~/Dropbox/covid19/sa-variant/LTLA-cumulative-cases")
 
 

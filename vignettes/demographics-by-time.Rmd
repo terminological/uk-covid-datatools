@@ -81,7 +81,7 @@ Report: `r Sys.Date()`
 
 ```{r}
 events = dpc$datasets$getSignificantDates(nocache=TRUE) %>% filter(Label %in% c("Hotels and bars reopen","End summer term","Start autumn term","Start univerity term","England 2nd lockdown"))
-startDate = "2020-10-01"
+startDate = "2020-12-01"
 ```
 
 ```{r}
@@ -259,7 +259,7 @@ p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/
 ```{r}
 tmp = deaths %>% filter(codeType == "CTRY") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
 p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = startDate) + facet_wrap(vars(ageCat), ncol=4) + 
-  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))#+coord_cartesian(ylim=c(0,200))
 p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/Dropbox/covid19/by-age/CTRY_DeathsByAge")
 ```
 
@@ -268,7 +268,7 @@ p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/
 ```{r}
 tmp = deaths %>% filter(codeType == "NHSER" & ageCat!="unknown") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
 p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=name, events = events,dates = startDate) + facet_wrap(vars(ageCat), ncol=4) + 
-  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("region"))#+coord_cartesian(ylim=c(0,500))
 p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/Dropbox/covid19/by-age/NHSER_DeathsByAgeAndRegion")
 ```
 
@@ -277,7 +277,7 @@ p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/
 ```{r}
 tmp = deaths %>% filter(codeType == "NHSER" & ageCat!="unknown") %>% mutate(ageCat = tsp$ageCatToFactor(ageCat)) %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$aggregateSource() %>% dpc$demog$findDemographics() 
 p = tmp %>% tsp$plotIncidenceQuantiles(denominatorExpr = population/1000000,colour=ageCat, events = events,dates = startDate) + facet_wrap(vars(name), ncol=4) + 
-  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("age"))+scale_color_viridis_d()
+  scale_y_continuous(trans="log1p",breaks = c(5,20,50,200,500))+ylab("deaths per 1M per day")+guides(colour=guide_legend("age"))+scale_color_viridis_d()#+coord_cartesian(ylim=c(0,500))
 p %>% standardPrintOutput::saveFigure(maxWidth = 12,maxHeight = 6,filename = "~/Dropbox/covid19/by-age/NHSER_DeathsByRegionAndAge")
 ```
 
@@ -400,7 +400,7 @@ p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CaseAn
 ## Cases and deaths growth by functional age category
 
 ```{r}
-p2 = combined %>% filter(codeType=="CTRY") %>% tsp$plotWindowedGrowthRate(dates = "2020-08-01", events = events, colour=statistic, rlim = c(-0.1,0.2), leftSided=TRUE) + facet_wrap(vars(ageCat),ncol=4)
+p2 = combined %>% filter(codeType=="CTRY") %>% tsp$plotGrowthRate(dates = startDate, events = events, colour=statistic, rlim = c(-0.1,0.2), leftSided=TRUE) + facet_wrap(vars(ageCat),ncol=4)
 # tsp$estimateRt(window = 14) %>%  tsp$plotRt(dates = "2020-08-01", events = events2) + facet_wrap(vars(ageCat))
 p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CaseAndDeathGrowthByAge")
 ```
@@ -411,9 +411,9 @@ p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CaseAn
 #p2 = 
 tmp = combined %>% filter(codeType=="NHSER" & statistic=="case" & name!="unknown")
 
-p2 = tmp %>% tsp$plotWindowedGrowthRate(dates = startDate, events = events, group=name, rlim = c(-0.1,0.2), colour="grey60") +
-  plotRibbons(data = tmp %>% filter(name=="North West"),meanVar = `Growth.windowed.value`,sdVar = `Growth.windowed.SE.value`,colourExpr = "red") +
-  plotRibbons(data = tmp %>% filter(name=="London"),meanVar = `Growth.windowed.value`,sdVar = `Growth.windowed.SE.value`,colourExpr = "blue") +
+p2 = tmp %>% tsp$plotGrowthRate(dates = startDate, events = events, group=name, rlim = c(-0.1,0.2), colour="grey50") +
+  plotRibbons(data = tmp %>% filter(name=="North West"),meanVar = `Growth.value`,sdVar = `Growth.SE.value`,colourExpr = "red") +
+  plotRibbons(data = tmp %>% filter(name=="London"),meanVar = `Growth.value`,sdVar = `Growth.SE.value`,colourExpr = "blue") +
   facet_wrap(vars(ageCat),ncol=4)#+
   #gghighlight::gghighlight(name %in% c("London","North West"))
   #scale_color_manual(
@@ -426,12 +426,12 @@ p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/Region
 
 ```{r}
 
-tmp3 = totalCases %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% filter(codeType=="NHSER" & statistic=="case" & name!="unknown") %>% tsp$demog$findDemographics()
+#tmp3 = totalCases %>% tsp$logIncidenceStats(growthRateWindow = 14) %>% filter(codeType=="NHSER" & statistic=="case" & name!="unknown") %>% tsp$demog$findDemographics()
 
-maxDate = (tmp3 %>% pull(date) %>% max())
+maxDate = (totalCases %>% pull(date) %>% max())
 #plotDates = seq(maxDate,by = -14,length.out = 4)
 
-p2 = (tmp3 %>% filter(code != "E99999999") %>% group_by(name,ageCat) %>% tsp$plotGrowthIncidence(plotDates = maxDate,timespan = 31, populationExpr = population, colour = ageCat,maxSize = 4))+scale_color_manual(values = highlightList(vector=tmp3$ageCat,list("75+"="dark magenta","11-17"="#008000","6-10"="#00B000")))+facet_wrap(vars(name),ncol=4)+
+p2 = (totalCases %>% filter(code != "E99999999") %>% group_by(name,ageCat) %>% tsp$plotGrowthIncidence(plotDates = maxDate,timespan = 31, populationExpr = population, colour = ageCat,maxSize = 4))+scale_color_manual(values = highlightList(vector=totalCases$ageCat,list("75+"="dark magenta","11-17"="#008000","6-10"="#00B000")))+facet_wrap(vars(name),ncol=4)+
   xlab("7 day growth rate")+ylab("Symptomatic positives per 1M per day")
 
 p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/GrowthVsIncidenceByAgeAndRegion")
@@ -461,7 +461,7 @@ tmp2 = bind_rows(
 ```
 
 ```{r}
-casesGeog = tmp2 %>% tsp$logIncidenceStats(growthRateWindow = 7)
+casesGeog = tmp2 %>% tsp$estimateGrowthRate2()
 maxDate = (tmp2 %>% pull(date) %>% max())
 
 map = dpc$geog$getMap("LAD19") %>% inner_join(casesGeog %>% filter(date == maxDate) %>% select(-name,-codeType), by=c("code"))
@@ -470,9 +470,9 @@ map = dpc$geog$getMap("LAD19") %>% inner_join(casesGeog %>% filter(date == maxDa
 ## LTLA distribution of case growth and probability of positive growth
 
 ```{r}
-p3a = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
+p3a = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10))
 
-p5a = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.ProbPos.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdYlGn", name="P(r>0)",lim = c(0,1))
+p5a = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.ProbPos),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdYlGn", name="P(r>0)",lim = c(0,1))
 (p3a + p5a + patchwork::plot_layout(nrow=1)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CaseGrowthAndPGrowthPosByLAD")
 ```
 
@@ -480,25 +480,25 @@ p5a = ggplot(map %>% ungroup() %>% filter(ageCat=="all") %>% sf::st_as_sf()) + g
 ## LTLA distribution of case growth by functional age category
 
 ```{r}
-p4 = ggplot(map %>% ungroup() %>% filter(ageCat!="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10)) + facet_wrap(vars(ageCat), nrow = 1)
+p4 = ggplot(map %>% ungroup() %>% filter(ageCat!="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.value),size = 0.05) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdGy", name="growth rate", oob=scales::squish, lim=c(-0.10,0.10)) + facet_wrap(vars(ageCat), nrow = 1)
 p4 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CaseGrowthByAgeAndLAD")
 ```
 
 ## LTLA distribution of probability of positive growth by functional age category
 
 ```{r}
-p5 = ggplot(map %>% ungroup() %>% filter(ageCat!="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.windowed.ProbPos.value),size = 0.05) + facet_wrap(vars(ageCat), nrow=1) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdYlGn", name="P(r>0)",lim = c(0,1)) #, oob=scales::squish, lim=c(-0.10,0.10))
+p5 = ggplot(map %>% ungroup() %>% filter(ageCat!="all") %>% sf::st_as_sf()) + geom_sf(aes(fill=Growth.ProbPos),size = 0.05) + facet_wrap(vars(ageCat), nrow=1) + standardPrintOutput::defaultMapLayout() + standardPrintOutput::narrower() + scale_fill_distiller(palette = "RdYlGn", name="P(r>0)",lim = c(0,1)) #, oob=scales::squish, lim=c(-0.10,0.10))
 p5 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/CasePGrowthPosByAgeAndLAD")
 ```
 
 ## Relative proportion of cases by age
 
 ```{r}
-totalCases2 = totalCases %>% tsp$logIncidenceStats()
+totalCases2 = totalCases %>% tsp$estimateGrowthRate2()
 totalCases2 = totalCases2 %>% group_by(date,codeType,code,name) %>% mutate(totalAllAges = sum(Est.value), percentAllAges = Est.value/sum(Est.value))
 
-p1=ggplot(totalCases2 %>% filter(name=="England" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+ylab("%age of total") + scale_x_date(date_breaks = "2 weeks",date_labels = "%d-%m")+
-  tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 10,labelY=75)
+p1=ggplot(totalCases2 %>% filter(name=="England" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+ylab("%age of total") + scale_x_date(date_breaks = "2 weeks",date_labels = "%d-%m")#+
+  #tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 10,labelY=75)
 
 p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/RelativeCasesByAgeGroup")
 ```
@@ -506,8 +506,8 @@ p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/Relati
 ## Relative proportion of cases by age and region
 
 ```{r}
-p1 = ggplot(totalCases2 %>% filter(codeType=="NHSER" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+facet_wrap(vars(name),ncol=4)+ylab("%age of total") + scale_x_date(date_breaks = "4 weeks",date_labels = "%d-%m")+
-  tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 8,labelY=75)
+p1 = ggplot(totalCases2 %>% filter(codeType=="NHSER" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+facet_wrap(vars(name),ncol=4)+ylab("%age of total") + scale_x_date(date_breaks = "4 weeks",date_labels = "%d-%m")#+
+  #tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 8,labelY=75)
 
 p1 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/RelativeCasesByAgeGroupAndRegion")
 ```
@@ -522,8 +522,8 @@ deaths2 = dpc$spim$getDeathsLineListIncidence(ageBreaks = ageBreaks, filterExpr 
 totalDeaths2 = deaths2 %>% tsp$aggregateSubgroup() %>% tsp$aggregateGender() %>% tsp$logIncidenceStats()
 totalDeaths2 = totalDeaths2 %>% group_by(date,codeType,code,name) %>% mutate(totalAllAges = sum(Est.value), percentAllAges = Est.value/sum(Est.value))
 
-p2 = ggplot(totalDeaths2 %>% filter(name=="England" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+ylab("%age of total") + scale_x_date(date_breaks = "2 weeks",date_labels = "%d-%m")+scale_fill_brewer(palette = "Pastel1")+
-  tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 10,labelY=75)
+p2 = ggplot(totalDeaths2 %>% filter(name=="England" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+ylab("%age of total") + scale_x_date(date_breaks = "2 weeks",date_labels = "%d-%m")+scale_fill_brewer(palette = "Pastel1")#+
+  #tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 10,labelY=75)
 
 p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/RelativeDeathsByAgeGroup")
 ```
@@ -532,7 +532,8 @@ p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/Relati
 
 ```{r}
 p2 = ggplot(totalDeaths2 %>% filter(codeType=="NHSER" & date > startDate),aes(x=date,y=percentAllAges*100,fill=ageCat)) + geom_area()+facet_wrap(vars(name),ncol=4)+ylab("%age of total") + scale_x_date(date_breaks = "4 weeks",date_labels = "%d-%m")+
-  tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 6,labelY=75)+scale_fill_brewer(palette = "Pastel1")
+  #tsp$plotEvents(events %>% filter(`Start date`> startDate),labelSize = 6,labelY=75)+
+  scale_fill_brewer(palette = "Pastel1")
 
 p2 %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/by-age/RelativeDeathsByAgeGroupAndRegion")
 ```

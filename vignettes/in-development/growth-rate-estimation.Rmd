@@ -64,7 +64,7 @@ Our purpose in this paper is to demonstrate and test different methods of genera
 
 ```{r}
 devtools::load_all("~/Git/uk-covid-datatools/")
-ukcovidtools::setup()
+ukcovidtools::reload()
 ```
 
 # Method
@@ -72,25 +72,93 @@ ukcovidtools::setup()
 We calculate growth rates for two time series. Time series one is artificial, constructed from 100 time points starting form Jan 1st 2020 at 1, and growing exponentially with a day on day increase given by 1.5 for days 1-29 days, followed by 0.8 for 20-49, then 1.1 for 50-69 days, 0.7 for 70-89, then steady at 1 for the last 10 days. Timeseries 2 is based on case counts published on the Public Health England coronavirus website for England. It has a few missing values.
 
 ```{r}
-testData = tibble(time = 1:100) %>% mutate(growth_rate = case_when(
-  time < 30 ~ 1.5,
-  time < 50 ~ 0.8,
-  time < 70 ~ 1.1,
-  time < 90 ~ 0.7,
-  TRUE ~ 1
-), value = growth_rate ) %>% mutate(type = "incidence", value = cumprod(growth_rate), date = as.Date("2020-01-01")+time)
+testData = tibble(time = 1:200) %>% mutate(growth_rate = case_when(
+  time < 60 ~ 0.05,
+  time < 80 ~ -0.025,
+  time < 140 ~ -0.025+0.045/40*(time-80),
+  time < 180 ~ -0.05,
+  TRUE ~ 0.03
+), value = growth_rate ) %>% 
+  mutate(type = "incidence", lambda_t = cumsum(growth_rate), date = as.Date("2020-01-01")+time) %>%
+  group_by_all() %>%
+  summarise(tibble(subgroup = 1:10,value=rpois(10,exp(lambda_t)))) %>%
+  ungroup()
 
-testTs = tsp$importTimeseries(testData,dateVar = date,valueExpr = value,statisticExpr = "cases",typeExpr = "incidence")
-testTs = testTs %>%
-  tsp$logIncidenceStats(window=14) %>%
-  tsp$smoothAndSlopeTimeseries(smoothExpr = value,window=14) %>%
-  tsp$estimateLittleR(window = 14, nocache=TRUE)
+testTs = testData %>% mutate(statistic = "case",type = "incidence", code="XYZ", name="Test",codeType = "TEST",source="TEST",gender=NA_character_,ageCat=NA_character_)
+
+ggplot(testTs,aes(x=date,y=value,group=subgroup))+geom_line(alpha=0.2)
+
+testEst = testTs %>%
+  tsp$logIncidenceStats(growthRateWindow = 28, nocache=TRUE) %>%
+  tsp$estimateGrowthRate(growthRateWindow = 28, nocache=TRUE) %>%
+  tsp$estimateGrowthRate2(growthRateWindow = 28, nocache=TRUE)
+  
+testEst3 = testTs %>%
+  tsp$smoothAndSlopeTimeseries(smoothExpr = value,window = 28)
+  
+
+ggplot(testEst, aes(x=date, group=subgroup))+
+  geom_line(aes(y=Growth.windowed.value,colour="dlog/dt (smoothed)"))+
+  geom_ribbon(aes(ymin=Growth.windowed.value-1.96*Growth.windowed.SE.value,ymax=Growth.windowed.value+1.96*Growth.windowed.SE.value,fill="dlog/dt (smoothed)"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))
+
+ggplot(testEst, aes(x=date, group=subgroup))+
+  geom_line(aes(y=Growth.value,colour="pois (loess)"))+
+  geom_ribbon(aes(ymin=Growth.Quantile.0.025.value,ymax=Growth.Quantile.0.975.value,fill="pois (loess)"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))
+
+
+bayes.window=14
+mu.prior = 0
+var.prior = 1
+
+testEst2 = testEst %>% 
+  group_by(subgroup) %>% arrange(date) %>%
+  mutate(
+    subgroup.growth.mu = stats::filter(x = Growth.poisson/bayes.window, filter = rep(1,bayes.window)),
+  ) %>%
+  fill(subgroup.growth.mu, .direction = "down") %>%
+  mutate(
+    subgroup.growth.var = stats::filter(x = ((Growth.poisson-subgroup.growth.mu)^2)/(bayes.window-1), filter = rep(1,bayes.window))
+  ) %>%
+  #fill(subgroup.growth.var, .direction = "down") %>%
+  mutate(  
+    # https://towardsdatascience.com/a-bayesian-approach-to-estimating-revenue-growth-55d029efe2dd
+    # bayes normal normal - prior mu = 0, prior variance = 1.
+    subgroup.growth.mu.posterior =
+      (mu.prior/var.prior + bayes.window*subgroup.growth.mu/subgroup.growth.var) /
+      (1/var.prior+bayes.window/subgroup.growth.var),
+    subgroup.growth.var.posterior = 1 /
+      (1/var.prior + bayes.window/subgroup.growth.var)
+  )
+
+ggplot(testEst2 %>% filter(subgroup==2), aes(x=date, group=subgroup))+
+  geom_line(aes(y=Growth.poisson,colour="pois (unsmoothed)"))+
+  geom_ribbon(aes(ymin=Growth.poisson-1.96*Growth.SE.poisson,ymax=Growth.poisson+1.96*Growth.SE.poisson,fill="pois (smoothed)"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))
+
+ggplot(testEst2, aes(x=date, group=subgroup))+
+  geom_line(aes(y=subgroup.growth.mu.posterior,colour="pois (bayes normal)"))+
+  geom_ribbon(aes(ymin=subgroup.growth.mu.posterior-1.96*sqrt(subgroup.growth.var.posterior),ymax=subgroup.growth.mu.posterior+1.96*sqrt(subgroup.growth.var.posterior),fill="pois (bayes normal)"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))+
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+ggplot(testEst2, aes(x=date, group=subgroup))+
+  geom_line(aes(y=Growth.windowed.poisson,colour="pois (smoothed)"))+
+  geom_ribbon(aes(ymin=Growth.windowed.poisson-1.96*Growth.windowed.SE.poisson,ymax=Growth.windowed.poisson+1.96*Growth.windowed.SE.poisson,fill="pois (smoothed)"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))+
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+ggplot(testEst3, aes(x=date, group=subgroup))+
+  geom_line(aes(y=Ratio.value,colour="dI/dt / I"))+
+  geom_ribbon(aes(ymin=Ratio.value-1.96*Ratio.SE.value,ymax=Ratio.value+1.96*Ratio.SE.value,fill="dI/dt / I"),alpha=0.1)+
+  geom_line(aes(y=growth_rate,colour="reference"))+
+  coord_cartesian(ylim=c(-0.1,0.1))
 
 
 ukts = dpc$datasets$getPHEDashboard() %>% 
   filter(name=="England" & type=="incidence") %>%
   tsp$logIncidenceStats(window=14) %>%
-  tsp$smoothAndSlopeTimeseries(smoothExpr = value,window=14) %>%
   tsp$estimateLittleR(window = 14, nocache=TRUE)
 ```
 
@@ -104,7 +172,7 @@ The rate of growth of these distributions is calculated using 3 methods all of w
 
 The 3 methods explored are Poisson distribution fitting, direct estimation of the rate of change incidence as a fraction of incidence, and estimation of the rate of change of the logarithm of incidence.
 
-Poisson fitting is conducted using the R glm library on a 14 day subsection of the data. The lambda parameter of the Poisson distribution is used as an estimate of the growth rate.
+Poisson fitting is conducted using the R glm library on a 14 day subsection of the data. The rate of change of the log of the rate parameter wrt to time of the Poisson distribution is used as an estimate of the growth rate.
 
 The second method, direct estimation of the rate of change assumes that the incidence is a noisy sample of a smooth function. Estimation of the value and first derivative of that smooth function is done by applying a local regression direct to incidence figures. The regression is linear over the 14 day window, and performed with the locfit R package. The estimate of the growth rate is the estimated gradient at any given timepoint divided by estimated value. The fitting is conducted with a degree 1 polynomial, the locfit alpha parameter is set to ensure that fitting algorithm is using the correct numbers of points of data (alpha = window/N in a timeseries of N points).
 
@@ -171,6 +239,25 @@ p3 = ggplot(ukts, aes(x=date)) + plotRibbons(`Growth`,`Growth.SE`,"magenta")+geo
 (p1+p2+p3+patchwork::plot_annotation(tag_levels = "A") + patchwork::plot_layout(nrow=1)) %>% standardPrintOutput::saveThirdPageFigure("~/Dropbox/covid19/growth-rates/Fig3_RealTest")
 
 ```
+
+# Bayesian method
+
+```{r}
+# https://people.stat.sc.edu/Hitchcock/slides535day5spr2014.pdf
+# https://en.wikipedia.org/wiki/Conjugate_prior#Table_of_conjugate_distributions
+# https://people.stat.sc.edu/Hitchcock/stat535slidesday18.pdf
+
+# assume lambda is fixed over a short window
+# and lambda is a gamma distributed quantity with ?prior mean and ?SD
+# posterior lambda is gamma(Sum(xi) + α, n + β)
+
+# gr is log of ratio of lambda at time t and lambda at t+1
+# https://stats.stackexchange.com/questions/207595/distribution-of-the-ratio-of-two-gamma-random-variables
+# https://rdrr.io/cran/extraDistr/src/R/beta-prime-distribution.R
+
+
+```
+
 
 # Conclusion
 

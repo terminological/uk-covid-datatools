@@ -175,8 +175,6 @@ infectionEpisodes = allEpisodes %>% inner_join(llDemog,by="FINALID")%>% rename(s
 infectionEpisodes %>% with(table(asymptomatic_indicator,sGene))
 
 ```
-
-
 ```{r}
 
 
@@ -242,9 +240,10 @@ symptomaticTimeseries %>% readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/
 ```{r}
 
 
-laura1 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_S24052021_GrowthRate_all_prior2_2_119.csv")
-laura2 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_S24052021_GrowthRate_symptomatic_prior2_2_119.csv")
-chris = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/combined_results_UoM-2021-05-24.csv")
+laura1 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_31052021_GrowthRate_all_prior2_2_119.csv")
+laura2 = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/R18pIV_31052021_GrowthRate_symptomatic_prior2_2_119.csv")
+chris = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/combined_results_UoM-2021-06-01.csv")
+david = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/output_complete-2021-06-02.csv")
 
 laura3 = bind_rows(
   laura2 %>% mutate(dataset = "Symptomatic") %>% select(-code) %>% rename(subgroup2 = subgroup,subgroup=source) %>% rename(source=subgroup2),
@@ -274,6 +273,15 @@ chris2 = chris %>%
     subgroup = stringr::str_remove(subgroup,"S ")
   )
 
+david2 = david %>% select(
+  date,name, subgroup, source, 
+  Growth.median = MAP,
+  Growth.lower = lower,
+  Growth.upper = upper
+) %>% mutate(
+  dataset = "Symptomatic"
+)
+
 ```
 
 Modelled growth rate
@@ -282,23 +290,17 @@ Modelled growth rate
 
 lsoaCentroid = dpc$geog$getMap("LSOA11")
 lsoaCentroid = lsoaCentroid %>% sf::st_centroid()
+
 mapping = dpc$geog$getContainedIn(inputSf = lsoaCentroid,outputShape = aocMap,outputIdVar = areaName)
-modelled = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/ByLSOAVariantRateswDGP.csv/ByLSOAVariantRateswDGP.csv")
+mapping %>% readr::write_csv("~/Dropbox/covid19/sa-variant/Inputs/LSOAtoAOCMapping.csv")
+
+mapping = readr::read_csv("~/Dropbox/covid19/sa-variant/LSOAtoAOCMapping.csv")
+modelled = readr::read_csv("~/Dropbox/covid19/sa-variant/Inputs/ByLSOAVariantRates-2021-06-02.csv")
 
 modelledAoc = bind_rows(
   modelled %>% inner_join(mapping, by=c("LSOA_code"="from")) %>% group_by(area = to, week, type) %>% summarise(variantGR = sum(VariantRate)),
   modelled %>% filter(LSOA_code %>% stringr::str_starts("E")) %>% group_by(week, type) %>% summarise(variantGR = sum(VariantRate,na.rm = TRUE)) %>% mutate(area="England")
 )
-
-# estGR = modelledAoc %>% group_by(area,type) %>% arrange(week) %>%
-#   group_modify(function(d,g,...) {
-#     
-#     gr = (log(d$variantGR)-log(lag(d$variantGR)))/7
-#     date = as.Date(sapply(0:6, function(x) d$week+x) %>% as.vector(),"1970-01-01")
-#     #tibble(date2 = date %>% as.vector() %>% as.Date("1970-01-01")) %>% glimpse()
-#     #browser()
-#     return(tibble(gr = gr %>% rep(7),date=date))
-# })
 
 estGR = modelledAoc %>% group_by(area,type) %>% arrange(week) %>%
   mutate(
@@ -356,12 +358,13 @@ ukcovidtools::reload()
 
 allTimeseriesGR = allTimeseries %>% 
   tsp$estimateGrowthRate(window = 56,leftSided=FALSE) %>%
-  tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
+  tsp$estimateGrowthRate2(window = 14) #smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
   
 
 symptomaticTimeseriesGR = symptomaticTimeseries %>% 
   tsp$estimateGrowthRate(window = 56,leftSided=FALSE) %>%
-  tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE) 
+  tsp$estimateGrowthRate2(window = 28, nocache=TRUE)
+  #tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE) 
 
 pois = bind_rows(
   allTimeseriesGR %>% mutate(dataset = "All"),
@@ -372,23 +375,58 @@ pois = bind_rows(
   Growth.median = Growth,
   Growth.lower = Growth-1.96*Growth.SE,
   Growth.upper = Growth+1.96*Growth.SE
-)
+) 
 
 logIncid = bind_rows(
   allTimeseriesGR %>% mutate(dataset = "All"),
   symptomaticTimeseriesGR  %>% mutate(dataset = "Symptomatic")
 ) %>% select(
-  date,name, subgroup, source, dataset, Growth = Growth.value, Growth.SE = Growth.SE.value
-) %>% mutate(
-  Growth.median = Growth,
-  Growth.lower = Growth-1.96*Growth.SE,
-  Growth.upper = Growth+1.96*Growth.SE
+  date,name, subgroup, source, dataset, Growth.Quantile.0.5.value, Growth.Quantile.0.025.value, Growth.Quantile.0.975.value
+) %>% rename(
+  Growth.median = Growth.Quantile.0.5.value,
+  Growth.lower = Growth.Quantile.0.025.value,
+  Growth.upper = Growth.Quantile.0.975.value
 )
 
 ```
 
 
+```{r}
+devtools::load_all("~/Git/uk-covid-datatools/")
+ukcovidtools::reload()
 
+symptomaticTimeseriesGR = symptomaticTimeseries %>% 
+  tsp$estimateGrowthRate(window = 56,leftSided=FALSE) %>%
+  tsp$estimateGrowthRate2(window = 28, nocache=TRUE)
+
+logIncid = bind_rows(
+  allTimeseriesGR %>% mutate(dataset = "All"),
+  symptomaticTimeseriesGR  %>% mutate(dataset = "Symptomatic")
+) %>% select(
+  date,name, subgroup, source, dataset, Growth.Quantile.0.5.value, Growth.Quantile.0.025.value, Growth.Quantile.0.975.value
+) %>% rename(
+  Growth.median = Growth.Quantile.0.5.value,
+  Growth.lower = Growth.Quantile.0.025.value,
+  Growth.upper = Growth.Quantile.0.975.value
+)
+
+allEstimates = bind_rows(
+  laura3 %>% mutate(method = "GP"),
+  chris2 %>% mutate(method = "GAM"),
+  pois %>% mutate(method = "Pois (GLM)"),
+  david2 %>% mutate(method = "Pois (Bayes)"),
+  logIncid %>% mutate(method = "Pois (Loess)")
+)
+
+p3 = doGRPlot(allEstimates,names = c("Bolton","M65 Corridor","Manchester"),mergeModels = TRUE)+
+  #doModelPlot(names = c("Bolton","M65 Corridor","Manchester"))+
+  facet_wrap(vars(name),nrow=1)+
+  guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
+  standardPrintOutput::hideX()+
+  theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
+
+p3
+```
 <!-- Debug M65 Corridor -->
 
 <!-- ```{r} -->
@@ -422,9 +460,17 @@ allAreas = unname(c(unlist(clusters)))
 allEstimates = bind_rows(
   laura3 %>% mutate(method = "GP"),
   chris2 %>% mutate(method = "GAM"),
-  pois %>% mutate(method = "Pois")#,
-  #logIncid %>% mutate(method = "dlog/dt")
+  pois %>% mutate(method = "Pois (GLM)"),
+  david2 %>% mutate(method = "Pois (Bayes)"),
+  logIncid %>% mutate(method = "Pois (Loess)")
 )
+
+growthRateTest = list(
+  input = symptomaticTimeseries %>% filter(source == "infection episodes") %>% ungroup() %>% as_tibble() %>% select(-type,-statistic,-ageCat,-gender,-codeType,-code,-Implicit, -name.original, -note), 
+  output = allEstimates %>% filter(source == "infection episodes" & dataset == "Symptomatic") %>% select(-dataset,-median)
+)
+
+usethis::use_data(growthRateTest,overwrite = TRUE)
 
 doGRPlot = function(
   allEstimates,
@@ -446,7 +492,7 @@ doGRPlot = function(
       filter(name %in% names) %>% 
       mutate(name = name %>% ordered(names))
     
-    modelEndDate = filteredTS %>% filter(!is.na(Growth)) %>% group_by(source,subgroup,dataset,name,method) %>% summarise(end = max(date,na.rm = TRUE)) %>% pull(end) %>% min(na.rm = TRUE)
+    modelEndDate = filteredTS %>% filter(!is.na(Growth)) %>% group_by(source,subgroup,dataset,name,method) %>% summarise(end = max(date,na.rm = TRUE)) %>% pull(end) %>% max(na.rm = TRUE)
     #browser()
     filteredTS = filteredTS %>% filter(date<=modelEndDate)
     
@@ -503,7 +549,7 @@ doGRPlot = function(
       xlab("specimen date")
     
     #if (!mergeModels) 
-      modelComp = modelComp + scale_linetype_manual(values=c("Pois"="solid","GAM"="twodash", "GP"="dotted","dlog/dt"="dotdash"))
+      modelComp = modelComp + scale_linetype_manual(values=c("Pois (GLM)"="solid","GAM"="twodash", "GP"="dotted","Pois (Bayes)"="dotdash","Pois (Loess)"="longdash"))
       
     modelComp
 }
@@ -523,13 +569,13 @@ doGRPlot = function(
 
 doModelPlot = function(clustName = paste(names,collapse = "-"), names = clusters[[clustName]]) {
   list( #ggnewscale::new_scale_colour(),
-    geom_point(data=estGR %>% filter(area %in% names & type %in% c("B.1.1.7","B.1.617.2")) %>% rename(name=area),mapping=aes(x=date,y=gr,fill=type),shape=21,stroke=0),
+    geom_point(data=estGR %>% filter(area %in% names & type %in% c("B.1.1.7","B.1.617.2") & date<=max(allEstimates$date)) %>% rename(name=area),mapping=aes(x=date,y=gr,fill=type),shape=21,stroke=0),
     shades::lightness(scale_fill_discrete(), shades::scalefac(0.70))
   )
 }
 
 p1 = doGRPlot(allEstimates,names = "England")+
-  doModelPlot(names = "England")+
+  #doModelPlot(names = "England")+
   facet_wrap(vars(name),nrow=1)+
   theme(axis.text.x = element_text(angle=0,hjust=0.5))+
   guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
@@ -537,21 +583,21 @@ p1 = doGRPlot(allEstimates,names = "England")+
   theme(plot.margin = margin(0, 0, 0, 0, "mm"))
 
 p2 = doGRPlot(allEstimates,clustName = "NHS Regions",mergeModels = TRUE)+
-  doModelPlot(clustName = "NHS Regions")+
+  #doModelPlot(clustName = "NHS Regions")+
   facet_wrap(vars(name),nrow=1)+
   guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
   standardPrintOutput::hideX()+
   theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
 
 p3 = doGRPlot(allEstimates,names = c("Bolton","M65 Corridor","Manchester"),mergeModels = TRUE)+
-  doModelPlot(names = c("Bolton","M65 Corridor","Manchester"))+
+  #doModelPlot(names = c("Bolton","M65 Corridor","Manchester"))+
   facet_wrap(vars(name),nrow=1)+
   guides(linetype=guide_none(),colour=guide_none(),fill=guide_none())+
   standardPrintOutput::hideX()+
   theme(plot.margin = margin(0, 0, 0, 0, "mm")) #,axis.ticks.x = element_blank())
 
 p4 = doGRPlot(allEstimates,names = c("Leicester","Nottingham","Birmingham"),mergeModels = TRUE)+
-  doModelPlot(names = c("Leicester","Nottingham","Birmingham"))+
+  #doModelPlot(names = c("Leicester","Nottingham","Birmingham"))+
   facet_wrap(vars(name),nrow=1)+
   standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
     legend.position = "bottom",
@@ -559,10 +605,11 @@ p4 = doGRPlot(allEstimates,names = c("Leicester","Nottingham","Birmingham"),merg
   )
 
 p5 = (p1/p2/p3/p4 + patchwork::plot_annotation(tag_levels="A"))+patchwork::plot_layout(heights = c(2,2,1.5,1.5))
-standardPrintOutput::saveTwoThirdPageFigure(p5,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-Fig2-",Sys.Date()))
+#standardPrintOutput::saveTwoThirdPageFigure(p5,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-Fig2-",Sys.Date()))
+standardPrintOutput::saveTwoThirdPageFigure(p5,paste0("~/Dropbox/covid19/sa-variant/sGeneAOCHighGrowth-nomodel-Fig2-",Sys.Date()))
 
-
-
+allEstimates %>% filter(source=="infection episodes" & date>"2021-01-01" & subgroup %in% c("positive","negative") & dataset=="Symptomatic") %>% 
+  readr::write_csv(paste0("~/Dropbox/covid19/sa-variant/allEstimates-Fig2-",Sys.Date(),".csv"))
 ```
 
 ```{r}
@@ -641,9 +688,70 @@ standardPrintOutput::saveFullPageFigure(tmp,paste0("~/Dropbox/covid19/sa-variant
 # symptomaticTimeseries %>% tsp$plotGrowthRate(colour = subgroup,rlim = c(-0.25,0.25),dates = "2021-03-01",linetype=source,ribbons = FALSE)+facet_wrap(vars(name))
 ```
 
+## R advantage
+
 ```{r}
-sRT14 = sGeneIncid %>% filter(name != "Unknown (England)") %>% tsp$estimateRt(quick = TRUE,window = 14)
-tsp$plotRt(covidRtTimeseries = sRT14, dates = "2021-02-01",rtlim = c(0.25,1.5), colour = subgroup)+facet_wrap(vars(name))
+
+psi = ParametricSerialIntervalProvider$new(dpc, "gamma", tibble(param = c("mean","sd"), mean=c(4.2,4.9), sd=c(NA,NA), lower=c(NA,NA), upper=c(NA,NA)))
+
+sRT14 = symptomaticTimeseries %>% filter(name != "Unknown (England)") %>% tsp$imputeAndWeeklyAverage() %>% tsp$estimateRt(quick = TRUE,serialIntervalProvider = psi,valueVar = Imputed.value,window = 21)
+
+tsp$plotIncidenceQuantiles(sRT14 %>% filter(source=="infection episodes"),colour = subgroup,dates = "2021-03-01",denominatorExpr = population/1000000,ylim = c(0,500))+facet_wrap(vars(name))+scale_y_continuous(trans="log1p")
+
+tsp$plotRt(sRT14 %>% filter(source=="infection episodes"),colour = subgroup,dates = "2021-03-01",rtlim = c(0.5,2.5))+facet_wrap(vars(name))
+
+pos = sRT14 %>% 
+  filter(subgroup=="positive") %>% 
+  mutate(posShape = (`Mean(R)`^2)/(`Std(R)`^2), posScale=(`Std(R)`^2)/`Mean(R)`) %>% 
+  ungroup() %>%
+  select(date,source,name, posShape, posScale, posMean = `Mean(R)`)
+
+neg = sRT14 %>% 
+  filter(subgroup=="negative") %>% 
+  mutate(negShape = (`Mean(R)`^2)/(`Std(R)`^2), negScale=(`Std(R)`^2)/`Mean(R)`) %>% 
+  ungroup() %>%
+  select(date,source,name, negShape, negScale, negMean = `Mean(R)`)
+
+rtRatio = pos %>% left_join(neg, by=c("date","source","name"))
+
+rtRatio2 = rtRatio %>% 
+  filter(!is.na(posShape) & !is.na(negShape) & !is.na(posScale) & !is.na(negScale) & negScale > 0) %>%
+  mutate(
+    ratio.median = gbeta::qgbetap(p=0.5,posShape,posScale/negScale,negShape,1),
+    ratio.q.025 = gbeta::qgbetap(0.025,posShape,posScale/negScale,negShape,1),
+    ratio.q.975 = gbeta::qgbetap(0.975,posShape,posScale/negScale,negShape,1),
+    ratio.mean = posMean/negMean
+  )
+
+rtRatio3 = rtRatio %>% filter(!is.na(posShape) & !is.na(negShape) & !is.na(posScale) & !is.na(negScale) & negScale > 0) %>%
+  group_by(date,source,name) %>%
+  group_modify(function(d,g,...) {
+    posRt = rgamma(100,shape=d$posShape,scale=d$posScale)
+    negRt = rgamma(100,shape=d$negShape,scale=d$negScale)
+    ratios = posRt/negRt
+    tibble(
+      ratio.mean = mean(ratios),
+      ratio.q.025 = unname(quantile(ratios,0.025)),
+      ratio.median = unname(quantile(ratios,0.5)),
+      ratio.q.975 = unname(quantile(ratios,0.975))
+    )
+  })
+  
+
+ggplot(rtRatio3 %>% filter(source=="infection episodes" & date>"2021-03-01"),aes(x=date,y=ratio.median,ymin=ratio.q.025,ymax=ratio.q.975,group=source))+
+  geom_ribbon(fill="grey",alpha=0.5)+
+  #geom_line()+
+  geom_line(aes(y=ratio.mean),colour = "blue")+
+  geom_hline(yintercept = 1,colour="red")+
+  facet_wrap(vars(name))+coord_cartesian(ylim=c(0,3))+
+  ylab(latex2exp::TeX("$R_t^{S+}/R_t^{S-}$"))+
+  standardPrintOutput::watermark(lab="PROVISIONAL")
+
+#https://stats.stackexchange.com/questions/207595/distribution-of-the-ratio-of-two-gamma-random-variables
+# X = gamma(alpha1,beta1); Y = gamma(alpha2,beta2)
+# => X/Y approx generalisedbetaprime(alpha1,alpha2,1,beta2/beta1)
+# => X/Y approx generalisedbetaprime(kappa1,kappa2,1,theta1/theta2) (kappa=shape,theta=scale)
+
 
 ```
 

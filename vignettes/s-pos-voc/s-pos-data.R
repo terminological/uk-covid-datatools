@@ -27,21 +27,22 @@ ukcovidtools::setup()
 
 # Utility function ----
 
-mapVOCtoLineage = function(df, vocVar = "vam", lineageVar = "type", lineages=c("B.1.1.7","B.1.525","B.1.617.1","B.1.617.2","B.1.351","P.1 & P.2")) {
+mapVOCtoLineage = function(df, vocVar = "vam", lineageVar = "type", lineages=c("B.1.1.7","B.1.525","AV.1","B.1.617.1","B.1.617.2","B.1.351","P.1 & P.2")) {
   vocVar = ensym(vocVar)
   lineageVar = ensym(lineageVar)
   return(df %>% mutate(
     !!lineageVar := case_when(
-      "B.1.1.7" %in% lineages & !!vocVar == "VOC-20DEC-01" ~ "B.1.1.7",
-      "B.1.351" %in% lineages & !!vocVar == "VOC-20DEC-02" ~ "B.1.351",
-      "B.1.525" %in% lineages & !!vocVar == "VUI-21FEB-03" ~ "B.1.525",
-      "P.1 & P.2" %in% lineages & !!vocVar == "VOC-21JAN-02" ~ "P.1 & P.2",
-      "P.1 & P.2" %in% lineages & !!vocVar == "VUI-21JAN-01" ~ "P.1 & P.2",
-      "B.1.1.318" %in% lineages & !!vocVar == "VUI-21FEB-04" ~ "B.1.1.318",
-      "B.1.617.1" %in% lineages & !!vocVar == "VUI-21APR-01" ~ "B.1.617.1",
-      "B.1.617.2" %in% lineages & !!vocVar == "VUI-21APR-02" ~ "B.1.617.2",
-      "B.1.617.2" %in% lineages & !!vocVar == "VOC-21APR-02" ~ "B.1.617.2", # reassigned
-      "B.1.617.3" %in% lineages & !!vocVar == "VUI-21APR-03" ~ "B.1.617.3",
+      "B.1.1.7" %in% lineages & !!vocVar %>% stringr::str_detect("20DEC-01") ~ "B.1.1.7",
+      "B.1.351" %in% lineages & !!vocVar %>% stringr::str_detect("20DEC-02") ~ "B.1.351",
+      "B.1.525" %in% lineages & !!vocVar %>% stringr::str_detect("21FEB-03") ~ "B.1.525",
+      "P.1 & P.2" %in% lineages & !!vocVar %>% stringr::str_detect("21JAN-02") ~ "P.1 & P.2",
+      "P.1 & P.2" %in% lineages & !!vocVar %>% stringr::str_detect("21JAN-01") ~ "P.1 & P.2",
+      "B.1.1.318" %in% lineages & !!vocVar %>% stringr::str_detect("21FEB-04") ~ "B.1.1.318",
+      "B.1.617.1" %in% lineages & !!vocVar %>% stringr::str_detect("21APR-01") ~ "B.1.617.1",
+      "B.1.617.2" %in% lineages & !!vocVar %>% stringr::str_detect("21APR-02") ~ "B.1.617.2",
+      "B.1.617.3" %in% lineages & !!vocVar %>% stringr::str_detect("21APR-03") ~ "B.1.617.3",
+      "AV.1" %in% lineages & !!vocVar %>% stringr::str_detect("21MAY-01") ~ "AV.1",
+      "C.36.3" %in% lineages & !!vocVar %>% stringr::str_detect("21MAY-02") ~ "C.36.3",
       !!vocVar %>% stringr::str_starts("VOC|VUI") ~ "other VOC/VUI",
       !!vocVar %>% stringr::str_detect("E484") ~ "other VOC/VUI",
       TRUE ~ "non VOC/VUI"
@@ -189,14 +190,14 @@ allVoc = genomics %>%
 # filter to remove S gene positives before start of sequencing data
 ## Classify S+ ives ----
 
-createClassifierInput = function(from = "2021-02-01", genomicFilterExpr = NULL, sgeneFilterExpr = NULL, lineages = c("B.1.617.1","B.1.617.2","B.1.351","B.1.1.7"), ...) {
+createClassifierInput = function(from = "2021-02-01", genomicFilterExpr = NULL, sgeneFilterExpr = NULL, lineages = c("AV.1","B.1.617.2","B.1.351","B.1.1.7"), ...) {
   
   genomicFilterExpr = enexpr(genomicFilterExpr)
   sgeneFilterExpr = enexpr(sgeneFilterExpr)
   if (identical(genomicFilterExpr,NULL)) genomicFilterExpr = TRUE
   if (identical(sgeneFilterExpr,NULL)) sgeneFilterExpr = TRUE
   
-  dpc$getSaved(id = "VOC-CLASSIFIER",params = list(from,genomicFilterExpr,sgeneFilterExpr,lineages,allEpisodes,allVoc), ..., orElse = function(...) {
+  dpc$getSaved(id = "VOC-CLASSIFIER",params = list(from,genomicFilterExpr,sgeneFilterExpr,lineages,allEpisodes,allVoc,mapVOCtoLineage), ..., orElse = function(...) {
     
     #browser()
     
@@ -235,9 +236,9 @@ createClassifierInput = function(from = "2021-02-01", genomicFilterExpr = NULL, 
 
 }
 
-combinedSpositives = createClassifierInput(from="2021-02-01", genomicFilterExpr = !(variant %in% c("VOC-20DEC-01","VUI-21FEB-03")), sgeneFilterExpr = sGene == "positive", lineages = c("B.1.617.1","B.1.617.2","B.1.351"))
-combinedSnotNegatives = createClassifierInput(from="2021-02-01", genomicFilterExpr = !(variant %in% c("VOC-20DEC-01","VUI-21FEB-03")), sgeneFilterExpr = sGene != "negative", lineages = c("B.1.617.1","B.1.617.2","B.1.351"))
-combinedCases = createClassifierInput(from="2021-02-01",lineages = c("B.1.617.1","B.1.617.2","B.1.351","B.1.1.7"))
+combinedSpositives = createClassifierInput(from="2021-02-01", genomicFilterExpr = !(variant %in% c("VOC-20DEC-01","VUI-21FEB-03")), sgeneFilterExpr = sGene == "positive", lineages = c("AV.1","B.1.617.2","B.1.351"))
+# combinedSnotNegatives = createClassifierInput(from="2021-02-01", genomicFilterExpr = !(variant %in% c("VOC-20DEC-01","VUI-21FEB-03")), sgeneFilterExpr = sGene != "negative", lineages = c("AV.1","B.1.617.2","B.1.351"))
+combinedCases = createClassifierInput(from="2021-02-01",lineages = c("AV.1","B.1.617.2","B.1.351","B.1.1.7"))
 
 # Define areas ----
 
@@ -370,6 +371,9 @@ saveAndZipClassifier = function(combined, filename, directory="~/Dropbox/covid19
 combinedSpositivesLSOA = combinedSpositives %>% saveAndZipClassifier(filename = "s-positives")
 combinedCasesLSOA = combinedCases %>% saveAndZipClassifier(filename = "all-cases")
 
+
+
+with(combinedCases, table(sGene,type,useNA = "ifany"))
 
 ## TODO----
 ## OLD CODE ----

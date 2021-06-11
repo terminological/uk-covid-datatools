@@ -60,7 +60,7 @@ doExport = function(currentRtSet, type, ..., models = c("4NationsCases","Admissi
   )
 
   
-  exportSPIM7day
+  #exportSPIM7day
   
   excelOutput <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(excelOutput, "Template")
@@ -81,8 +81,8 @@ doExport = function(currentRtSet, type, ..., models = c("4NationsCases","Admissi
 
 }
 
-doExport(currentRt$rt7, "7Day", !(source=="Admissions" & name %in% c("United Kingdom","Northern Ireland")))
-doExport(currentRt$rt14, "14Day", !(source=="Admissions" & name %in% c("United Kingdom","Northern Ireland")))
+doExport(currentRt$rt7, "7Day", !(source=="Admissions")) # & name %in% c("United Kingdom","Northern Ireland")))
+doExport(currentRt$rt14, "14Day", !(source=="Admissions")) # & name %in% c("United Kingdom","Northern Ireland")))
 
 # export14dayRt = currentRt$rt14 %>%
 #   #tsp$adjustRtConfidence(sdMultiplier = 4, predicate = statistic=="case" & date > "2020-09-01" & date < "2020-09-21") %>%
