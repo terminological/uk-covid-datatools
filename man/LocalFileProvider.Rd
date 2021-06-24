@@ -42,10 +42,30 @@ Read only file providers
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+Local filesystem provider
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$new(config, root = config$root, sep = .Platform$file.sep)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$new(
+  config,
+  root = config$root,
+  sep = .Platform$file.sep,
+  ...
+)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{root}}{- the top level directory from which to search for files}
+
+\item{\code{sep}}{- the platform file separator}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}

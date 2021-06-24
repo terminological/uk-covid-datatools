@@ -24,10 +24,12 @@ General timeseries processing
 \item \href{#method-aggregateSource}{\code{TimeseriesProcessingPipeline$aggregateSource()}}
 \item \href{#method-aggregateGeography}{\code{TimeseriesProcessingPipeline$aggregateGeography()}}
 \item \href{#method-imputeAndWeeklyAverage}{\code{TimeseriesProcessingPipeline$imputeAndWeeklyAverage()}}
+\item \href{#method-removeZeroDays}{\code{TimeseriesProcessingPipeline$removeZeroDays()}}
 \item \href{#method-completeAndRemoveAnomalies}{\code{TimeseriesProcessingPipeline$completeAndRemoveAnomalies()}}
 \item \href{#method-smoothAndSlopeTimeseries}{\code{TimeseriesProcessingPipeline$smoothAndSlopeTimeseries()}}
 \item \href{#method-logIncidenceStats}{\code{TimeseriesProcessingPipeline$logIncidenceStats()}}
 \item \href{#method-estimateGrowthRate}{\code{TimeseriesProcessingPipeline$estimateGrowthRate()}}
+\item \href{#method-estimateGrowthRate2}{\code{TimeseriesProcessingPipeline$estimateGrowthRate2()}}
 \item \href{#method-estimateRtQuick}{\code{TimeseriesProcessingPipeline$estimateRtQuick()}}
 \item \href{#method-estimateRt}{\code{TimeseriesProcessingPipeline$estimateRt()}}
 \item \href{#method-defaultOffsetAssumptions}{\code{TimeseriesProcessingPipeline$defaultOffsetAssumptions()}}
@@ -41,7 +43,6 @@ General timeseries processing
 \item \href{#method-estimateVolatilty}{\code{TimeseriesProcessingPipeline$estimateVolatilty()}}
 \item \href{#method-plotRt}{\code{TimeseriesProcessingPipeline$plotRt()}}
 \item \href{#method-plotGrowthRate}{\code{TimeseriesProcessingPipeline$plotGrowthRate()}}
-\item \href{#method-plotWindowedGrowthRate}{\code{TimeseriesProcessingPipeline$plotWindowedGrowthRate()}}
 \item \href{#method-plotGrowthIncidence}{\code{TimeseriesProcessingPipeline$plotGrowthIncidence()}}
 \item \href{#method-gogPlot}{\code{TimeseriesProcessingPipeline$gogPlot()}}
 \item \href{#method-plotEvents}{\code{TimeseriesProcessingPipeline$plotEvents()}}
@@ -57,6 +58,7 @@ General timeseries processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="unloadCache">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-unloadCache}{\code{ukcovidtools::PassthroughFilesystemCache$unloadCache()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
@@ -193,6 +195,14 @@ General timeseries processing
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-removeZeroDays"></a>}}
+\subsection{Method \code{removeZeroDays()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$removeZeroDays(r0Timeseries, valueVar = "value")}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-completeAndRemoveAnomalies"></a>}}
 \subsection{Method \code{completeAndRemoveAnomalies()}}{
 \subsection{Usage}{
@@ -203,7 +213,8 @@ General timeseries processing
   window = 9,
   valueVar = "value",
   originalValueVar = "value.original",
-  precision = 1e-05
+  precision = 1e-05,
+  allowZeroDays = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -218,7 +229,7 @@ Calculate an estimate of rate of change of Rt using a loess
   smoothExpr,
   ...,
   window = 14,
-  leftSided = FALSE
+  leftSided = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -252,6 +263,21 @@ Calculate an estimate of rate of change of Rt using a loess
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate(
   covidTimeseries,
   window = 14,
+  growthRateWindow = 7,
+  leftSided = TRUE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGrowthRate2"></a>}}
+\subsection{Method \code{estimateGrowthRate2()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate2(
+  covidTimeseries,
+  window = 21,
+  weekendEffect = 0.75,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -458,10 +484,11 @@ Plot the EpiEstim output in a standard way
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotRt(
   covidRtTimeseries,
   colour = NULL,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  events = self$datasets$getSignificantDates(1),
   rtlim = c(0.5, 2.5),
   dates = NULL,
-  ribbons = ("Quantile.0.025(R)" \%in\% colnames(covidRtTimeseries)),
+  jepidemicMode = any(self$jepidemicCols \%in\% colnames(covidRtTimeseries)),
+  ribbons = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -494,12 +521,14 @@ Plot the growth rate
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotGrowthRate(
   covidRtTimeseries,
   colour = NULL,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  events = self$datasets$getSignificantDates(1),
   rlim = c(-0.25, 0.25),
   dates = NULL,
   ribbons = TRUE,
   growthVar = "Growth.value",
-  growthSEVar = "Growth.SE.value",
+  growthLowerVar = "Growth.Quantile.0.025.value",
+  growthHigherVar = "Growth.Quantile.0.975.value",
+  growthSEVar = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -521,45 +550,22 @@ Plot the growth rate
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotWindowedGrowthRate"></a>}}
-\subsection{Method \code{plotWindowedGrowthRate()}}{
-Plot the growth rate
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotWindowedGrowthRate(covidRtTimeseries, ...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{df}}{a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim}
-
-\item{\code{colour}}{- the colour aesthetic}
-
-\item{\code{rlim}}{- the max and min or Rt to display}
-
-\item{\code{dates}}{- the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)}
-
-\item{\code{ribbons}}{- display the confidence limit as ribbons}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGrowthIncidence"></a>}}
 \subsection{Method \code{plotGrowthIncidence()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotGrowthIncidence(
   groupedCovidRtTimeseries,
-  plotDates,
+  plotDates = NULL,
   timespan = 15,
   colour = NULL,
-  growthVar = "Growth.windowed.value",
-  incidenceVar = "Est.value",
-  populationExpr = 1e+06,
-  populationPer = 1e+06,
+  populationAdj = TRUE,
+  showConfInt = TRUE,
+  showHistorical = TRUE,
   maxAlpha = 0.6,
   rlim = c(-0.15, 0.15),
-  maxSize = 6
+  ilim = c(0, NA),
+  maxSize = 6,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -591,7 +597,7 @@ Plot the growth rate
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotDefault(
   data,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  events = NULL,
   dates = NULL,
   ylim = NULL,
   labelSize = 7,
@@ -608,7 +614,7 @@ Plot the growth rate
   covidTimeseries,
   denominatorExpr = NULL,
   colour = NULL,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  events = self$datasets$getSignificantDates(1),
   dates = NULL,
   ribbons = TRUE,
   ylim = c(0, NA),
@@ -624,7 +630,7 @@ Plot the growth rate
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotIncidenceRollmean(
   covidTimeseries,
   denominatorExpr = NULL,
-  events = self$datasets$getSignificantDates() \%>\% filter(Significance == 1),
+  events = self$datasets$getSignificantDates(1),
   dates = NULL,
   ylim = c(0, NA),
   ...

@@ -35,16 +35,30 @@ Caching and dataset management
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="unloadCache">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-unloadCache}{\code{ukcovidtools::PassthroughFilesystemCache$unloadCache()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+New provider pipeline
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$new(providerController, ...)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{providerController}}{the provider controller}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-downloadAndUnzip"></a>}}

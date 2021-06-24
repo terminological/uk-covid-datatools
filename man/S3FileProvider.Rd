@@ -34,16 +34,38 @@ Read only file providers
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+SFTP over SSH tunnel file provider
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$new(
   config,
   bucket = config$bucket,
   key = config$accesskey,
   secret = config$secretkey,
-  region = config$region
+  region = config$region,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{config}}{- config object}
+
+\item{\code{bucket}}{- S3 bucket name}
+
+\item{\code{key}}{- S3 access key}
+
+\item{\code{secret}}{- S3 secret key}
+
+\item{\code{region}}{- S3 region}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-finalize"></a>}}

@@ -27,32 +27,34 @@ coxData = coxData \%>\% interpretSGene()
 \item \href{#method-getLatest}{\code{SPIMDatasetProvider$getLatest()}}
 \item \href{#method-getNewerThan}{\code{SPIMDatasetProvider$getNewerThan()}}
 \item \href{#method-getSpecificDates}{\code{SPIMDatasetProvider$getSpecificDates()}}
+\item \href{#method-getLatestRawFile}{\code{SPIMDatasetProvider$getLatestRawFile()}}
 \item \href{#method-getOneOneOne}{\code{SPIMDatasetProvider$getOneOneOne()}}
 \item \href{#method-getOneOneOneLineList}{\code{SPIMDatasetProvider$getOneOneOneLineList()}}
+\item \href{#method-getOneOneOneIncidence}{\code{SPIMDatasetProvider$getOneOneOneIncidence()}}
 \item \href{#method-getDeathsLineList}{\code{SPIMDatasetProvider$getDeathsLineList()}}
+\item \href{#method-getDeathsLineListIncidence}{\code{SPIMDatasetProvider$getDeathsLineListIncidence()}}
 \item \href{#method-getVoc351LineList}{\code{SPIMDatasetProvider$getVoc351LineList()}}
-\item \href{#method-getImmunizationLineList}{\code{SPIMDatasetProvider$getImmunizationLineList()}}
-\item \href{#method-augmentLineListWithLSOA}{\code{SPIMDatasetProvider$augmentLineListWithLSOA()}}
+\item \href{#method-getVAMLineList}{\code{SPIMDatasetProvider$getVAMLineList()}}
 \item \href{#method-getCTASLineList}{\code{SPIMDatasetProvider$getCTASLineList()}}
+\item \href{#method-getImmunizationLineList}{\code{SPIMDatasetProvider$getImmunizationLineList()}}
 \item \href{#method-getImmunizationLineListIncidence}{\code{SPIMDatasetProvider$getImmunizationLineListIncidence()}}
 \item \href{#method-getImmunizationFraction}{\code{SPIMDatasetProvider$getImmunizationFraction()}}
 \item \href{#method-getSGeneLineList}{\code{SPIMDatasetProvider$getSGeneLineList()}}
 \item \href{#method-interpretSGene}{\code{SPIMDatasetProvider$interpretSGene()}}
+\item \href{#method-getSGeneEras}{\code{SPIMDatasetProvider$getSGeneEras()}}
 \item \href{#method-getSDropoutFreqency}{\code{SPIMDatasetProvider$getSDropoutFreqency()}}
 \item \href{#method-getLineList}{\code{SPIMDatasetProvider$getLineList()}}
+\item \href{#method-augmentLineListWithLSOA}{\code{SPIMDatasetProvider$augmentLineListWithLSOA()}}
+\item \href{#method-getLineListIncidence}{\code{SPIMDatasetProvider$getLineListIncidence()}}
+\item \href{#method-getInfectionEpisodes}{\code{SPIMDatasetProvider$getInfectionEpisodes()}}
 \item \href{#method-getNegatives}{\code{SPIMDatasetProvider$getNegatives()}}
 \item \href{#method-getSeroprevalence}{\code{SPIMDatasetProvider$getSeroprevalence()}}
+\item \href{#method-getSeroprevalenceTestIncidence}{\code{SPIMDatasetProvider$getSeroprevalenceTestIncidence()}}
 \item \href{#method-getFF100}{\code{SPIMDatasetProvider$getFF100()}}
-\item \href{#method-getBristolData}{\code{SPIMDatasetProvider$getBristolData()}}
 \item \href{#method-getCHESS}{\code{SPIMDatasetProvider$getCHESS()}}
 \item \href{#method-getSARI}{\code{SPIMDatasetProvider$getSARI()}}
 \item \href{#method-getCHESSSummary}{\code{SPIMDatasetProvider$getCHESSSummary()}}
 \item \href{#method-getSARISummary}{\code{SPIMDatasetProvider$getSARISummary()}}
-\item \href{#method-bristolSurvivalSubset}{\code{SPIMDatasetProvider$bristolSurvivalSubset()}}
-\item \href{#method-getOneOneOneIncidence}{\code{SPIMDatasetProvider$getOneOneOneIncidence()}}
-\item \href{#method-getLineListIncidence}{\code{SPIMDatasetProvider$getLineListIncidence()}}
-\item \href{#method-getDeathsLineListIncidence}{\code{SPIMDatasetProvider$getDeathsLineListIncidence()}}
-\item \href{#method-getSeroprevalenceTestIncidence}{\code{SPIMDatasetProvider$getSeroprevalenceTestIncidence()}}
 \item \href{#method-getFourNationsCases}{\code{SPIMDatasetProvider$getFourNationsCases()}}
 \item \href{#method-getSPIMextract}{\code{SPIMDatasetProvider$getSPIMextract()}}
 \item \href{#method-getTheSPIMFireHose}{\code{SPIMDatasetProvider$getTheSPIMFireHose()}}
@@ -65,6 +67,7 @@ coxData = coxData \%>\% interpretSGene()
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="unloadCache">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-unloadCache}{\code{ukcovidtools::PassthroughFilesystemCache$unloadCache()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
@@ -142,6 +145,14 @@ raw line list data set
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLatestRawFile"></a>}}
+\subsection{Method \code{getLatestRawFile()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLatestRawFile(filter, to = getwd())}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getOneOneOne"></a>}}
 \subsection{Method \code{getOneOneOne()}}{
 Load 111 data
@@ -158,6 +169,14 @@ a covidTimeseriesFormat dataframe
 \subsection{Method \code{getOneOneOneLineList()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneLineList(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOneIncidence"></a>}}
+\subsection{Method \code{getOneOneOneIncidence()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneIncidence(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
 }
 
 }
@@ -181,10 +200,55 @@ raw line list data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getDeathsLineListIncidence"></a>}}
+\subsection{Method \code{getDeathsLineListIncidence()}}{
+Load deaths data from linelist - does not preserve ethnicity
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getDeathsLineListIncidence(
+  ageBreaks = NULL,
+  deathOrReport = "death",
+  cutoff = 28,
+  subgroup = NULL,
+  gender = FALSE,
+  filterExpr = !(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)),
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getVoc351LineList"></a>}}
 \subsection{Method \code{getVoc351LineList()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVoc351LineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getVAMLineList"></a>}}
+\subsection{Method \code{getVAMLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVAMLineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getCTASLineList"></a>}}
+\subsection{Method \code{getCTASLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCTASLineList(...)}\if{html}{\out{</div>}}
 }
 
 }
@@ -199,26 +263,6 @@ Load immunizations line list
 \subsection{Returns}{
 raw line list data set
 }
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-augmentLineListWithLSOA"></a>}}
-\subsection{Method \code{augmentLineListWithLSOA()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$augmentLineListWithLSOA(
-  ll,
-  ltlaCodeCol = "LTLA_code",
-  imdRankCol = "imd_rank"
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getCTASLineList"></a>}}
-\subsection{Method \code{getCTASLineList()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCTASLineList(...)}\if{html}{\out{</div>}}
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getImmunizationLineListIncidence"></a>}}
@@ -278,7 +322,8 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
   S_CT = 30,
   ORF1ab_CT = 30,
   N_CT = 30,
-  Control_CT = Inf
+  Control_CT = Inf,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -310,6 +355,21 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSGeneEras"></a>}}
+\subsection{Method \code{getSGeneEras()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSGeneEras(
+  cutoff = 28,
+  S_CT = 30,
+  ORF1ab_CT = 30,
+  N_CT = 30,
+  Control_CT = Inf,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSDropoutFreqency"></a>}}
 \subsection{Method \code{getSDropoutFreqency()}}{
 \subsection{Usage}{
@@ -322,6 +382,7 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
   equivocal.rm = TRUE,
   window = 7,
   ll = NULL,
+  sgll = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -337,6 +398,85 @@ Load line list
 
 \subsection{Returns}{
 raw line list data set
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-augmentLineListWithLSOA"></a>}}
+\subsection{Method \code{augmentLineListWithLSOA()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$augmentLineListWithLSOA(
+  ll,
+  ltlaCodeCol = "LTLA_code",
+  imdRankCol = "imd_rank"
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLineListIncidence"></a>}}
+\subsection{Method \code{getLineListIncidence()}}{
+Load incidence from line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListIncidence(
+  ll = NULL,
+  ageBreaks = NULL,
+  gender = FALSE,
+  specimenOrReport = "specimen",
+  subgroup = "pillar",
+  filterExpr = NULL,
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getInfectionEpisodes"></a>}}
+\subsection{Method \code{getInfectionEpisodes()}}{
+Combine line list and S-gene line list to get a list of infection episodes
+
+this defines how long between tests before two tests are regarded as a new episode.
+if the tests are sgtf equivocal double this is allowed.
+calculate the individual episodes of covid resulting from runs of sequential positive tests <28 days apart.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getInfectionEpisodes(
+  cutoff = 28,
+  S_CT = 30,
+  ORF1ab_CT = 30,
+  N_CT = 30,
+  Control_CT = Inf,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cutoff}}{- the time gap between sequential tests after which two tests are said to be from a new episode}
+
+\item{\code{S_CT}}{- S gene detected when P2CH3CQ <= this value}
+
+\item{\code{ORF1ab_CT}}{- ORF1ab gene detected when P2CH1CQ <= this value}
+
+\item{\code{N_CT}}{- N gene detected when P2CH2CQ <= this value}
+
+\item{\code{Control_CT}}{- control sample is positive when P2CH4CQ <= this value}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
 }
 }
 \if{html}{\out{<hr>}}
@@ -364,6 +504,25 @@ raw FF100 data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSeroprevalenceTestIncidence"></a>}}
+\subsection{Method \code{getSeroprevalenceTestIncidence()}}{
+Load seroprevalence data from linelist
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSeroprevalenceTestIncidence(ageBreaks = NULL, ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFF100"></a>}}
 \subsection{Method \code{getFF100()}}{
 Load ff100 file
@@ -373,25 +532,6 @@ Load ff100 file
 
 \subsection{Returns}{
 raw FF100 data set
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getBristolData"></a>}}
-\subsection{Method \code{getBristolData()}}{
-Load Bristol data
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getBristolData(path)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{path}}{- path to the bristol data file}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-raw Bristol data set
 }
 }
 \if{html}{\out{<hr>}}
@@ -440,126 +580,15 @@ Load Chess summary file
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCHESSSummary()}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{path}}{- path to the ff100 file}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-raw FF100 data set
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSARISummary"></a>}}
 \subsection{Method \code{getSARISummary()}}{
+Load Sari summary file
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSARISummary(truncate = NULL, ...)}\if{html}{\out{</div>}}
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-bristolSurvivalSubset"></a>}}
-\subsection{Method \code{bristolSurvivalSubset()}}{
-Load Bristol survival subset
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$bristolSurvivalSubset(bristolDf)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{path}}{- path to the ff100 file}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-Bristol survival subset
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getOneOneOneIncidence"></a>}}
-\subsection{Method \code{getOneOneOneIncidence()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneIncidence(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getLineListIncidence"></a>}}
-\subsection{Method \code{getLineListIncidence()}}{
-Load incidence from line list
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListIncidence(
-  ll = NULL,
-  ageBreaks = NULL,
-  specimenOrReport = "specimen",
-  subgroup = "pillar",
-  filterExpr = NULL,
-  codeTypes = c("CTRY", "NHSER"),
-  truncate = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getDeathsLineListIncidence"></a>}}
-\subsection{Method \code{getDeathsLineListIncidence()}}{
-Load deaths data from linelist - does not preserve ethnicity
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getDeathsLineListIncidence(
-  ageBreaks = NULL,
-  deathOrReport = "death",
-  cutoff = 28,
-  subgroup = NULL,
-  filterExpr = !(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)),
-  codeTypes = c("CTRY", "NHSER"),
-  truncate = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getSeroprevalenceTestIncidence"></a>}}
-\subsection{Method \code{getSeroprevalenceTestIncidence()}}{
-Load seroprevalence data from linelist
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSeroprevalenceTestIncidence(ageBreaks = NULL, ...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFourNationsCases"></a>}}

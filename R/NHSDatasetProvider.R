@@ -23,11 +23,8 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     
     #' @description Load curated significant dates file
     #' @return public 111 data including pathways and online, pre and post april. Codes are CCG20 codes.
-    getSignificantDates = function(...) {
-      #ukCovidDates
-      ukCovidDates = readxl::read_excel(devtools::package_file("data-raw/COVID Dates.xlsx"))
-      ukCovidDates = ukCovidDates %>% mutate(`Start date`=as.Date(`Start date`,"1970-01-01"), `End date`=as.Date(`End date`,"1970-01-01"))
-      return(ukCovidDates)
+    getSignificantDates = function(signif = Inf, ...) {
+      return(ukcovidtools::ukCovidDates %>% filter(Significance <= signif))
     },
     
     #' @description Load public 111 summary file

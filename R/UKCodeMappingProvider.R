@@ -326,6 +326,7 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
   },
   
   getODSMappings = function(...) {
+    #TODO: consider whether to include ODS successor codes as synonyms
     self$getSaved("ODS_MAPPINGS",...,orElse = function(...) {
       tmp = self$getODSCodes()
       
@@ -359,20 +360,29 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
       # has all these links plus more
       # particularly wales LHB
       
-      etr = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",
+      etr = readr::read_csv(
+        self$downloadAndUnzip("ODS-ETR","https://files.digital.nhs.uk/assets/ods/current/etr.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/etr.csv",
                             col_names = standardFormat,
                             col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
-      ets =  readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/ets.csv",
+      ets =  readr::read_csv(
+        self$downloadAndUnzip("ODS-ETS","https://files.digital.nhs.uk/assets/ods/current/ets.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/ets.csv",
                              col_names = standardFormat,
                              col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
-      eccg = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",
+      eccg = readr::read_csv(
+        self$downloadAndUnzip("ODS-ECCG","https://files.digital.nhs.uk/assets/ods/current/eccg.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/eccg.csv",
                              col_names = standardFormat,col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
-      eauth = readr::read_csv("https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
+      eauth = readr::read_csv(
+        self$downloadAndUnzip("ODS-EAUTH","https://files.digital.nhs.uk/assets/ods/current/eauth.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
                               col_names = standardFormat,col_types = readr::cols(.default=readr::col_character())) %>% 
         dplyr::select(-starts_with("Null"))
+      
       
       combined = dplyr::bind_rows(
         etr %>% dplyr::mutate(codeType="NHS trust"),
@@ -400,6 +410,38 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
         code,name,pcds,codeType,parent,start,end,status,entity
       )
       browser(expr=self$debug)
+      
+      
+      esucc = readr::read_csv(
+        self$downloadAndUnzip("ODS-SUCC","https://files.digital.nhs.uk/assets/ods/current/succ.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
+        #"04MAA","52RAG","R","20200401","X"
+        col_names = c("fromCode","toCode","rel","fromDate","unk"),
+        col_types = readr::cols(.default=readr::col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
+      esuccarc = readr::read_csv(
+        self$downloadAndUnzip("ODS-SUCCARC","https://files.digital.nhs.uk/assets/ods/current/succarc.zip","csv"),
+        #"https://nhsenglandfilestore.s3.amazonaws.com/ods/eauth.csv",
+        #"04MAA","52RAG","R","20200401","X"
+        col_names = c("fromCode","toCode","rel","fromDate","unk"),
+        col_types = readr::cols(.default=readr::col_character())) %>% 
+        dplyr::select(-starts_with("Null"))
+      
+      
+      successors = bind_rows(esucc,esuccarc)
+      
+      combined = bind_rows(combined,
+        combined %>% 
+          inner_join(successors, by=c("code"="toCode")) %>% 
+          mutate(
+            start = NA,
+            end = as.Date.character(`fromDate`,"%Y%m%d"),
+            status="terminated"
+          ) %>%
+          select(-code,-fromDate,-rel,-unk) %>% 
+          rename(code = fromCode)
+      )
+      
       return(combined)
       
       # lookup long lat using postcodes for sites

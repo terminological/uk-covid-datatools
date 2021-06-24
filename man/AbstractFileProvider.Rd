@@ -22,10 +22,23 @@ File providers
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+New file provider
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{AbstractFileProvider$new(sep = .Platform$file.sep)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sep}}{- platform separator}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}

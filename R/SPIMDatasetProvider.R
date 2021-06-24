@@ -12,87 +12,87 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
   fileProvider=NULL,
     
-    initialize = function(providerController, fileProvider, ...) {
-      self$fileProvider = fileProvider
-      super$initialize(providerController, ...)
-    },
+  initialize = function(providerController, fileProvider, ...) {
+    self$fileProvider = fileProvider
+    super$initialize(providerController, ...)
+  },
   
-    ### filters ----
+  ### filters ----
+  
+  filter=list(
+    chess="CHESS COVID19", #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
+    sari="SARI COVID19 CaseReport",
+    lineList="Anonymised .*Line List [0-9]{8}",
+    rcgp="RCGP",
+    deathsLineList="COVID19 Deaths",
+    ff100="FF100",
+    chessSummary="CHESS Aggregate Report",
+    sariSummaryArchive="SARI Archive Aggregate Report",
+    sariSummaryCurrent="SARI Aggregate Report",
+    oneOneOne = "SPIM-111-999",
+    onsWeekly = "SPIM_ONS",
+    aeSitrep = "AESitrep",
+    trust = "SPIM_trust_[0-9]{3}.xlsx",
+    seroprevalence = "seroprev",
+    negPillar1 = "Negatives pillar1",
+    negPillar2 = "Negatives pillar2",
+    oneOneOneLineList = "111telephony_CLEANSED",
+    fourNationsCases = "Casedata_AllNations",
+    sgene = "SGTF_linelist",
+    immunization = "immunisations SPIM.csv",
+    voc351 = "VOC202012_02_linelist",
+    ctasLineList = "CTAS SGTF data.zip",
+    vamLineList = "VAM line list"
+  ),
     
-    filter=list(
-      chess="CHESS COVID19", #~/S3/encrypted/5Apr/NHS/CHESS COVID19 CaseReport 20200405.csv",
-      sari="SARI COVID19",
-      lineList="Anonymised .*Line List [0-9]{8}",
-      rcgp="RCGP",
-      deathsLineList="COVID19 Deaths",
-      ff100="FF100",
-      chessSummary="CHESS Aggregate Report",
-      sariSummaryArchive="SARI Archive Aggregate Report",
-      sariSummaryCurrent="SARI Aggregate Report",
-      oneOneOne = "SPIM-111-999",
-      onsWeekly = "SPIM_ONS",
-      aeSitrep = "AESitrep",
-      trust = "SPIM_trust_[0-9]{3}.xlsx",
-      seroprevalence = "seroprev",
-      negPillar1 = "Negatives pillar1",
-      negPillar2 = "Negatives pillar2",
-      oneOneOneLineList = "111telephony_CLEANSED",
-      fourNationsCases = "Casedata_AllNations",
-      sgene = "SGTF_linelist",
-      immunization = "immunisations SPIM.csv",
-      voc351 = "VOC202012_02_linelist",
-      ctasLineList = "CTAS SGTF data.zip",
-      vamLineList = "VAM line list"
-    ),
+  #### Get raw file paths ----
+  
+  #' @description Search a file path for the 
+  #' @param path - path to the line list file
+  #' @return raw line list data set
+  
+  getPaths = function(...) {
+    path = self$directory
+    return(self$getDaily("DATAFILES", ..., orElse = function (...) {
+      tmp = self$fileProvider$listAllFiles()
+      return(tmp %>% filter(!isDir) %>% pull(path))
+    }))
+  },
     
-    #### Get raw file paths ----
+  getLatest = function(search) {
+    tmp2 = self$getPaths() %>% stringr::str_subset(search)
+    tmp2Date = tmp2 %>% stringr::str_extract_all("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") 
+    tmp2Date = sapply(tmp2Date, function(x) {
+      x = x %>% stringr::str_remove_all("-")
+      y = unique(x[x==max(x)])
+      return(y)
+    })
+    tmp3 = tmp2[tmp2Date == max(tmp2Date)]
+    if(length(tmp3)==0) {
+      warning("Missing file: ",search)
+      return(NA_character_)
+    }
+    if(length(tmp3)>1) {
+      warning("Multiple matches, using first: ",paste0(tmp3,collapse="; "))
+      tmp3 = tmp3[[1]]
+    }
+    return(paste0(self$directory,"/",tmp3))
+  },
     
-    #' @description Search a file path for the 
-    #' 
-    #' @param path - path to the line list file
+  getNewerThan = function(search, date = as.Date("2020-01-01")) {
+    return(self$getSpecificDates(search,(date+1):Sys.Date()))
+  },
     
-    #' @return raw line list data set
-    
-    getPaths = function(...) {
-      path = self$directory
-      return(self$getDaily("DATAFILES", ..., orElse = function (...) {
-        tmp = self$fileProvider$listAllFiles()
-        return(tmp %>% filter(!isDir) %>% pull(path))
-      }))
-    },
-    
-    getLatest = function(search) {
-      tmp2 = self$getPaths() %>% stringr::str_subset(search)
-      tmp2Date = tmp2 %>% stringr::str_extract_all("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") 
-      tmp2Date = sapply(tmp2Date, function(x) {
-        x = x %>% stringr::str_remove_all("-")
-        y = unique(x[x==max(x)])
-        return(y)
-      })
-      tmp3 = tmp2[tmp2Date == max(tmp2Date)]
-      if(length(tmp3)==0) {
-        warning("Missing file: ",search)
-        return(NA_character_)
-      }
-      return(paste0(self$directory,"/",tmp3))
-    },
-    
-    getNewerThan = function(search, date = as.Date("2020-01-01")) {
-      return(self$getSpecificDates(search,(date+1):Sys.Date()))
-    },
-    
-    getSpecificDates = function(search, dates) {
-      tmp2 = self$getPaths() %>% stringr::str_subset(search)
-      tmp2Date = tmp2 %>% stringr::str_extract("/([^/]+)\\.") %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-") %>% as.Date("%Y%m%d")
-      tmp3 = tmp2[tmp2Date %in% dates]
-      if(length(tmp3)==0) {
-        warning("Missing file: ",search)
-        return(NA_character_)
-      }
-      return(paste0(self$directory,"/",tmp3))
-    },
-    
-    #### Get raw SPIM files ----
+  getSpecificDates = function(search, dates) {
+    tmp2 = self$getPaths() %>% stringr::str_subset(search)
+    tmp2Date = tmp2 %>% stringr::str_extract("/([^/]+)\\.") %>% stringr::str_extract("20[1-2][0-9]-?[0-1][0-9]-?[0-3][0-9]") %>% stringr::str_remove_all("-") %>% as.Date("%Y%m%d")
+    tmp3 = tmp2[tmp2Date %in% dates]
+    if(length(tmp3)==0) {
+      warning("Missing file: ",search)
+      return(NA_character_)
+    }
+    return(paste0(self$directory,"/",tmp3))
+  },
     
   getLatestRawFile = function(filter, to = getwd()) {
     path = self$getLatest(filter)
@@ -108,16 +108,16 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       return(paste0(to,fs::path_file(path)))
     }
   },
+    
+  #### One one one ----
   
   #' @description Load 111 data
   #' 
-  
   #' @return a covidTimeseriesFormat dataframe
-  
   getOneOneOne = function(...) {
     path = self$getLatest(self$filter$oneOneOne)
     message("Using: ",path)
-    self$getSaved("SPIM-111", params = list(path), ..., orElse = function (...) covidTimeseriesFormat({
+    tmp = self$getSaved("SPIM-111", params = list(path), ..., orElse = function (...) covidTimeseriesFormat({
       oneoneone <- readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text")
       
       # make zeros explicit
@@ -187,505 +187,838 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       
       return(ts111 %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
     }))
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
   },
   
- 
-    
-    getOneOneOneLineList = function(dateFrom=Sys.Date()-28, ...) {
-      self$getDaily(id = "SPIM-111-LINE-LIST",params=list(dateFrom),...,orElse= function(...) {
-        paths = self$getNewerThan(search = self$filter$oneOneOneLineList, date = dateFrom)
-        readCsvAsText = function(conn) {readr::read_csv(conn, col_types = readr::cols(.default = readr::col_character()))}
-        
-        tmp = self$fileProvider$processFiles(func = readCsvAsText, paths)
-        tmp2 = tidyr::unnest(tmp) %>% select(-path)
-        tmp3 = tmp2 %>% mutate(
-            date = as.Date(DateVal),
-            name = case_when(
-              CCGName == "NHS Herefordshire and Worcestershire CCG" ~ "NHS Herefordshire CCG", # this name is not in ONS
-              TRUE ~ CCGName
-            ),
-            ageCat = stringr::str_remove(AgeGroup,"age"),
-            source = "111",
-            subgroup = case_when(
-              MetricName %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
-              MetricName %like% "PC Speak to 1h/CAS" ~ "urgent clinical review",
-              MetricName %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
-              MetricName %like% "PC Speak to/Contact 2h" ~ "urgent clinical review",
-              MetricName %like% "%Clinical Assessment%" ~ "clinical review",
-              MetricName %like% "%Contact%" ~ "clinical review",
-              MetricName %like% "%Ambulance%" ~ "emergency ambulance",
-              (MetricName %like% "%Self Care%" | MetricName %like% "%isolate%") ~ "self care",
-              TRUE ~ "other" #as.character(NA)
-            ),
-            gender = NA_character_,
-            note = MetricName
-          ) %>% 
-          select(-MetricCode,-DateVal,-AgeGroup,-CCGName,-MetricName) %>%
-          dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE)) %>%
-          self$codes$findCodesByName(codeTypes = c("CCG","CCG20"))
-        return(tmp3 %>% select(-name.original))
-      })
-      #ccgs = self$codes$getCodes() %>% filter(codeType == "CCG" & status == "live")
-    },
-    
-    #' @description Load line list
-    #' 
-    #' @param path - path to the line list file
-    #' @return raw line list data set
-    getDeathsLineList = function(...) {
-      path = self$getLatest(self$filter$deathsLineList)
-      message("Using: ",path)
-      self$getSaved("DEATHS-LINE-LIST", params = list(path), ..., orElse = function (...) {
-        
-        tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text")
-        datecols = c(colnames(tmp) %>% stringr::str_subset("date"),"dod")
-        
-        for(datecol in datecols) {
-          tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
-        }
-        tmp = tmp %>% 
-          dplyr::mutate(
-            age = as.integer(age),
-            gender = self$normaliseGender(ifelse(is.na(gender),"unknown",gender))
-          )
-        return(tmp %>% dplyr::ungroup())
-      })
-    },
-  
-    getVoc351LineList = function(...) {
-      path = self$getLatest(self$filter$voc351)
-      message("Using: ",path)
-      self$getSaved("VOC351", params = list(path), ...,  orElse = function (...) {
-        tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text", sheet = "Linelist")
-        datecols = c("earliest_specimen_date")
-        
-        for(datecol in datecols) {
-          tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
-        }
-        tmp = tmp %>% 
-          dplyr::mutate(
-            finalid=as.integer(finalid)
-          )
-        return(tmp %>% dplyr::ungroup())
-      })
-    },
-  
-    #' @description Load immunizations line list
-    #' 
-    #' @return raw line list data set
-    getImmunizationLineList = function(...) {
-      path = self$getLatest(self$filter$immunization)
-      message("Using: ",path)
-      self$getSaved("IMMUNIZATIONS", params = list(path), ...,  orElse = function (...) {
-        tmp = readr::read_csv(self$fileProvider$getFile(path))
-        return(tmp %>% mutate(not_FINALID = as.integer(patient_pseudo_id)) %>% dplyr::ungroup())
-      })
-    },
-  
-  
-    augmentLineListWithLSOA = function(ll, ltlaCodeCol = "LTLA_code", imdRankCol="imd_rank") {
-      ltlaCodeCol = ensym(ltlaCodeCol)
-      imdRankCol = ensym(imdRankCol)
-      imd = self$demog$getIMDData() %>% select(
-        !!ltlaCodeCol := `Local Authority District code (2019)`,
-        !!imdRankCol := `Index of Multiple Deprivation (IMD) Rank (where 1 is most deprived)`,
-        LSOA_code = `LSOA code (2011)`,
-        LSOA_name = `LSOA name (2011)`
-      )
-      return(ll %>% left_join(imd, by=c(as_label(ltlaCodeCol),as_label(imdRankCol))))
-    },
-    
-    getVAMLineList = function(...) {
-      path = self$getLatest(self$filter$vamLineList)
-      message("Using: ",path)
-      self$getSaved("VAM", params = list(path), ...,  orElse = function (...) {
-        tmp = self$fileProvider$getFile(path)
-        tmp2 = readr::read_csv(tmp, col_types = readr::cols(.default = readr::col_character()))
-        # tmp2 = tmp2 %>% mutate(genomic_specimen_date = suppressWarnings(as.Date(genomic_specimen_date,"%Y%m%d")))
-        datecols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("date|_at")]
-        for(datecol in datecols) {
-          tmp2[[datecol]] = suppressWarnings(as.Date(tmp2[[datecol]],"%Y-%m-%d"))
-        }
-        idcols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("id")]
-        for(idcol in idcols) {
-          tmp2[[idcol]] = suppressWarnings(as.integer(tmp2[[idcol]]))
-        }
-        tmp2 = tmp2 %>% mutate(
-          age = suppressWarnings(as.integer(age))
-        )
-        if(file.exists(tmp)) unlink(tmp)
-        return(tmp2)
-      })
-    },
-  
-    getCTASLineList = function(...) {
-      #/home/terminological/S3/encrypted/2021-03-29/20210329 CTAS SGTF data.zip
-      path = self$getLatest(self$filter$ctasLineList)
-      message("Using: ",path)
-      self$getSaved("CTAS", params = list(path), ...,  orElse = function (...) {
-        tmp = self$fileProvider$getFile(path)
-        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
-        tmp2 = readr::read_csv(unz(tmp,filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
-        # tmp2 = tmp2 %>% mutate(genomic_specimen_date = suppressWarnings(as.Date(genomic_specimen_date,"%Y%m%d")))
-        datecols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("date|_at")]
-        for(datecol in datecols) {
-          tmp2[[datecol]] = suppressWarnings(as.Date(tmp2[[datecol]],"%Y-%m-%d"))
-        }
-        idcols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("id")]
-        for(idcol in idcols) {
-          tmp2[[idcol]] = suppressWarnings(as.integer(tmp2[[idcol]]))
-        }
-        tmp2 = tmp2 %>% mutate(
-          completed = as.logical(completed),
-          sex = self$normaliseGender(sex),
-          sgtf = as.integer(sgtf),
-          sgtf_under30ct = as.integer(sgtf_under30ct),
-          p2ch1cq = as.double(p2ch1cq),
-          p2ch2cq = as.double(p2ch2cq),
-          p2ch3cq = as.double(p2ch3cq),
-          p2ch4cq = as.double(p2ch4cq),
-          age = as.integer(age)
-        )
-        if(file.exists(tmp)) unlink(tmp)
-        return(tmp2)
-      })
-    },
-  
-    #' @description Load incidence from line list
-    #' 
-    #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
-    #' @return a covidTimeseriesFormat dataframe
-    getImmunizationLineListIncidence = function(ll=NULL, ageBreaks = NULL, filterExpr=NULL, subgroup="string_dose_number", ...) {
-      filterExpr = enexpr(filterExpr)
-      subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
-      # TODO: do we need the ll option here. It is not cached
-      self$getDaily("IMMUNIZATIONS-INCIDENCE", params=list(ageBreaks, as_label(filterExpr), as_label(subgroup)), ..., orElse = function (...) covidTimeseriesFormat({
-        if(!identical(ll,NULL)) {
-          tmp = ll
-        } else {
-          tmp = self$getImmunizationLineList(...) 
-        }
-        
-        if(!identical(filterExpr,NULL)) tmp = tmp %>% filter(!!filterExpr)
-        
-        
-        
-        tmp = tmp %>% dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks), gender=self$normaliseGender(gender,na.value="unknown"))
-        if(!identical(subgroup,NULL)) {
-          tmp = tmp %>% mutate(subgroup=!!subgroup)
-        } else {
-          tmp = tmp %>% mutate(subgroup=NA_character_)
-        }
-        tmp = tmp %>% dplyr::mutate(date = as.Date(vaccination_date))
-        
-        out = tmp %>% dplyr::mutate(code = ltla_code, codeType="LAD", name=ltla_name) %>% 
-            dplyr::mutate(
-              code = ifelse(is.na(code) | code=="Unknown","E99999999",code),
-              name = ifelse(is.na(code) | code=="Unknown","Unknown (England)",name)
-            ) %>%
-            dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
-            dplyr::summarise(value = n())
-        
-        out = out %>% dplyr::mutate(source="immunization",statistic = "immunization", type="incidence")
-        out = out %>% self$fixDatesAndNames(0)
-        out = out %>% self$fillAbsent(completeDates=TRUE)
-        out = out %>% dplyr::ungroup()
-        return(out)
-      }))
-    },
-  
-    getImmunizationFraction = function(ageBreaks = NULL,...) {
-      self$getDaily("IMMUNIZATIONS-FRACTION", params=list(ageBreaks), ..., orElse = function (...) covidTimeseriesFormat({
-        tmp2 = dpc$spim$getImmunizationLineListIncidence(ageBreaks=ageBreaks)
-        tmp3 = tmp2 %>% tsp$aggregateGender()
-        tmp4 = tmp3 %>% tsp$cumulativeFromIncidence()
-        tmp4 = tmp4 %>% self$demog$findDemographics()
-        deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = ageBreaks,codeTypes = "LAD")
-        deathsCum = deaths %>% tsp$aggregateGender() %>% tsp$cumulativeFromIncidence()
-        tmp5 = tmp4 %>% inner_join(deathsCum %>% select(code,date,ageCat,cumdeaths = value), by=c("code","date","ageCat"))
-        tmp5 = tmp5 %>% mutate(vaccPercent = value/(population-cumdeaths)) %>% mutate(vaccPercent = ifelse(vaccPercent>1,1,vaccPercent))
-        tmp5 = tmp5 %>% mutate(immunized = value, value=vaccPercent, type="fraction") %>% select(-vaccPercent)
-        return(tmp5)
-      }))
-    },
-  
-    #' @description Load line list
-    #' 
-    #' @return raw line list data set
-    getSGeneLineList = function(...) {
-      path = self$getLatest(self$filter$sgene)
-      message("Using: ",path)
-      self$getSaved("SGENE-LINE-LIST", params = list(path), ..., orElse = function (...) {
-        if (stringr::str_detect(path,"zip")) {
-          tmpFile = self$fileProvider$getFile(path)
-          zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
-          tmp = readr::read_csv(unz(tmpFile, filename=zipPath))
-        } else {
-          tmp = readr::read_csv(self$fileProvider$getFile(path))
-        }
-        return(tmp %>% dplyr::ungroup())
-      })
-    },
-  
-    #' Interpret S gene status according to various cut off values
-    #' function to help interpret S gene CT values in context of N gene and ORF gene to give S gene status. 
-    #' With the defaults this produces the same result as the sgtf_30 column in the source SGTF line list
-    #' Defaults are S:30,ORF:30,N:30,Control:Inf
-    #'
-    #' @param sGeneLineList - a dataframe includeing 
-    #' @param S_CT - S gene detected when P2CH3CQ <= this value
-    #' @param ORF1ab_CT - ORF1ab gene detected when P2CH1CQ <= this value
-    #' @param N_CT - N gene detected when P2CH2CQ <= this value
-    #' @param Control_CT - control sample is positive when P2CH4CQ <= this value
-    #'
-    #' @return - the same dataframe with additional columns including "sGene" and "result"
-    #'
-    #' @examples coxData = coxData %>% interpretSGene()
-    interpretSGene = function(sGeneLineList, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, Control_CT = Inf) {
-      sGeneLineList %>% 
-        mutate(
-          ORF1ab_CT_threshold = ORF1ab_CT,
-          N_CT_threshold = N_CT,
-          S_CT_threshold = S_CT,
-          S_pos = P2CH3CQ > 0 & P2CH3CQ <= S_CT,
-          S_undetect = P2CH3CQ == 0,
-          N_pos = P2CH2CQ > 0 & P2CH2CQ <= N_CT,
-          ORF1ab_pos = P2CH1CQ > 0 & P2CH1CQ <= ORF1ab_CT,
-          Control_pos = P2CH4CQ > 0 & P2CH4CQ <= Control_CT,
-          sGene = case_when(
-            is.na(P2CH1CQ) ~ "Unknown",
-            S_pos & N_pos & ORF1ab_pos & Control_pos ~ "Positive",
-            S_undetect & N_pos & ORF1ab_pos & Control_pos ~ "Negative",
-            TRUE ~ "Equivocal"
+  getOneOneOneLineList = function(dateFrom=Sys.Date()-28, ...) {
+    paths = self$getNewerThan(search = self$filter$oneOneOneLineList, date = dateFrom)
+    tmp = self$getSaved(id = "SPIM-111-LINE-LIST",params=list(paths,dateFrom),...,orElse= function(...) {
+      
+      readCsvAsText = function(conn) {readr::read_csv(conn, col_types = readr::cols(.default = readr::col_character()))}
+      
+      tmp = self$fileProvider$processFiles(func = readCsvAsText, paths)
+      tmp2 = tidyr::unnest(tmp) %>% select(-path)
+      tmp3 = tmp2 %>% mutate(
+          date = as.Date(DateVal),
+          name = case_when(
+            CCGName == "NHS Herefordshire and Worcestershire CCG" ~ "NHS Herefordshire CCG", # this name is not in ONS
+            TRUE ~ CCGName
           ),
-          CT_N = ifelse(P2CH2CQ > 0, P2CH2CQ, 40)
+          ageCat = stringr::str_remove(AgeGroup,"age"),
+          source = "111",
+          subgroup = case_when(
+            MetricName %like% "%Clinical Assessment service 1 hour%" ~ "urgent clinical review",
+            MetricName %like% "PC Speak to 1h/CAS" ~ "urgent clinical review",
+            MetricName %like% "%Clinical Assessment service 2 hour%" ~ "urgent clinical review",
+            MetricName %like% "PC Speak to/Contact 2h" ~ "urgent clinical review",
+            MetricName %like% "%Clinical Assessment%" ~ "clinical review",
+            MetricName %like% "%Contact%" ~ "clinical review",
+            MetricName %like% "%Ambulance%" ~ "emergency ambulance",
+            (MetricName %like% "%Self Care%" | MetricName %like% "%isolate%") ~ "self care",
+            TRUE ~ "other" #as.character(NA)
+          ),
+          gender = NA_character_,
+          note = MetricName
         ) %>% 
-        mutate(
-          result = case_when(
-            is.na(P2CH1CQ) ~ "Unknown",
-            !Control_pos ~ "No control",
-            TRUE ~ paste0(ifelse(S_pos,"S+","S-"),ifelse(N_pos,"N+","N-"),ifelse(ORF1ab_pos,"ORF+","ORF-")))
-        ) %>%
-        mutate(
-          sGene = sGene %>% forcats::fct_relevel("Positive"),
-          relativeCopyNumber = 2^(median(CT_N,na.rm=TRUE)-CT_N)
+        select(-MetricCode,-DateVal,-AgeGroup,-CCGName,-MetricName) %>%
+        dplyr::mutate(subgroup = factor(subgroup,levels=c("self care", "clinical review", "urgent clinical review", "emergency ambulance", "other"), ordered = TRUE)) %>%
+        self$codes$findCodesByName(codeTypes = c("CCG","CCG20"))
+      return(tmp3 %>% select(-name.original))
+    })
+    #ccgs = self$codes$getCodes() %>% filter(codeType == "CCG" & status == "live")
+    attr(tmp,"paths") = paths
+    return(tmp %>% as_tibble())
+  },
+
+  getOneOneOneIncidence = function(dateFrom=Sys.Date()-28, ...) {
+    tmp3 = self$getOneOneOneLineList(dateFrom,...)
+    out = self$getSaved("SPIM-111-BREAKDOWN", params=list(tmp3,dateFrom), ..., orElse = function(...) covidTimeseriesFormat({
+      tmp4 = tmp3 %>% 
+        dplyr::filter(!is.na(code)) %>%
+        dplyr::group_by(code,codeType,name,date,ageCat, gender,subgroup) %>% 
+        dplyr::summarise(value = n()) %>% 
+        dplyr::mutate(source="111 line list",statistic = "triage", type="incidence") %>%
+        self$fillAbsentAllRegions() %>% 
+        self$completeAllRegions() #self$fixDatesAndNames(1) %>% self$completeAllRegions()
+      return(tmp4)
+    }))
+    attr(out,"paths") = attr(tmp3,"paths")
+    return(out)
+  },
+  
+  #### Deaths ----
+  
+  #' @description Load line list
+  #' 
+  #' @param path - path to the line list file
+  #' @return raw line list data set
+  getDeathsLineList = function(...) {
+    path = self$getLatest(self$filter$deathsLineList)
+    message("Using: ",path)
+    tmp = self$getSaved("DEATHS-LINE-LIST", params = list(path), ..., orElse = function (...) {
+      
+      tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text")
+      datecols = c(colnames(tmp) %>% stringr::str_subset("date"),"dod")
+      
+      for(datecol in datecols) {
+        tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
+      }
+      tmp = tmp %>% 
+        dplyr::mutate(
+          age = as.integer(age),
+          gender = self$normaliseGender(ifelse(is.na(gender),"unknown",gender))
         )
-    },
+      return(tmp %>% dplyr::ungroup())
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  #' @description Load deaths data from linelist - does not preserve ethnicity
+  #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+  #' @return a covidTimeseriesFormat dataframe
+  getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", cutoff=28, subgroup=NULL, gender=FALSE, filterExpr=!(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)), codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
+    filterExpr = enexpr(filterExpr)
+    subgroup = tryCatch(ensym(subgroup), error=function(e) NULL)
+    tmp = self$getDeathsLineList(...)
+    output = self$getSaved(id = "DEATHS-LINE-LIST-INCIDENCE", params=list(tmp,ageBreaks, deathOrReport, gender, cutoff,as_label(subgroup),as_label(filterExpr),codeTypes), ..., orElse = function (...) covidTimeseriesFormat({
+      if (!identical(filterExpr,NULL))
+        tmp = tmp %>% filter(!!filterExpr)
+      tmp = tmp %>% 
+        dplyr::filter(is.na(specimen_date) | as.integer(dod-specimen_date)<=cutoff) %>%
+        dplyr::mutate(
+          ageCat = age %>% self$cutByAge(ageBreaks)
+        )
+      if (!identical(subgroup,NULL)) {
+        tmp = tmp %>% mutate(subgroup=ifelse(is.na(!!subgroup),"unknown",!!subgroup))
+      } else {
+        tmp = tmp %>% mutate(subgroup = NA_character_)
+      }
+      if (!gender) {
+        tmp = tmp %>% dplyr::mutate(gender=NA_character_)
+      }
+      if(deathOrReport == "death") 
+        tmp = tmp %>% dplyr::mutate(date = as.Date(dod))
+      else
+        tmp = tmp %>% dplyr::mutate(date = 
+                                      as.Date(pmin(report_date_earliest,NHSdeathreportdate, DBSdeathreportdate, HPTdeathreportdate, ONS_death_registration_date, na.rm = TRUE),"1970-01-01")
+        ) %>% dplyr::filter(!is.na(date))
+      
+      selectByRegion = function(df, code, codeType, name) {
+        code = ensym(code)
+        name = ensym(name)
+        # check column exists
+        if(!(as_label(code) %in% colnames(df))) return(tibble())
+        df = df %>% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) %>% 
+          dplyr::mutate(
+            code = ifelse(is.na(code),"E99999999",code),
+            name = ifelse(is.na(code),"Unknown (England)",name)
+          ) %>%
+          dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% 
+          dplyr::summarise(value = n()) 
+        return(df)
+      }
+      
+      out = NULL
+      if ("CTRY" %in% codeTypes) {
+        england = tmp %>% 
+          dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
+          dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) %>% 
+          dplyr::summarise(value = n())
+        out = out %>% bind_rows(england)
+      }
+      
+      if ("NHSER" %in% codeTypes) {
+        nhser = tmp %>% selectByRegion(nhser_code, "NHSER", nhser_name)
+        isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+        
+        if(!isNhser) {
+          nhser = tmp %>% selectByRegion(nhser_code, "NHSER19CDH", nhser_name) %>% 
+            dplyr::inner_join(
+              self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
+              by=c("code"="fromCode")
+            ) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
+            dplyr::rename(code = toCode, codeType=toCodeType)
+        }
+        out = out %>% bind_rows(nhser)
+      }
+      
+      if ("PHEC" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(phec_code, "PHEC", phec_name))}
+      if ("UA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(utla_code, "UA", utla_name))}
+      if ("LAD" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(ltla_code, "LAD", ltla_name))}
+      if ("LSOA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(lsoa_code, "LSOA", lsoa_name))}
+      
+      out = out %>% dplyr::mutate(source="deaths line list",statistic = "death", type="incidence")
+      out = out %>% self$codes$findNamesByCode() %>% select(-ends_with(".original"))
+      out = out %>% self$fixDatesAndNames(truncate)
+      out = out %>% self$fillAbsent(completeDates=TRUE)
+      #out = out %>% self$complete()
+      out = out %>% dplyr::ungroup()
+      return(out)
+    }))
+    attr(output,"paths") = attr(tmp,"paths")
+    return(output %>% as_tibble())
+  },
+
+  #### Variants / genomics ----
+  
+  getVoc351LineList = function(...) {
+    path = self$getLatest(self$filter$voc351)
+    message("Using: ",path)
+    tmp = self$getSaved("VOC351", params = list(path), ...,  orElse = function (...) {
+      tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text", sheet = "Linelist")
+      datecols = c("earliest_specimen_date")
+      
+      for(datecol in datecols) {
+        tmp[[datecol]] = suppressWarnings(as.Date(as.numeric(tmp[[datecol]]),"1899-12-30"))
+      }
+      tmp = tmp %>% 
+        dplyr::mutate(
+          finalid=as.integer(finalid)
+        )
+      return(tmp %>% dplyr::ungroup())
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  getVAMLineList = function(...) {
+    path = self$getLatest(self$filter$vamLineList)
+    message("Using: ",path)
+    tmp = self$getSaved("VAM", params = list(path), ...,  orElse = function (...) {
+      tmp = self$fileProvider$getFile(path)
+      tmp2 = readr::read_csv(tmp, col_types = readr::cols(.default = readr::col_character()))
+      # tmp2 = tmp2 %>% mutate(genomic_specimen_date = suppressWarnings(as.Date(genomic_specimen_date,"%Y%m%d")))
+      datecols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("date|_at")]
+      for(datecol in datecols) {
+        tmp2[[datecol]] = suppressWarnings(as.Date(tmp2[[datecol]],"%Y-%m-%d"))
+      }
+      idcols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("id")]
+      for(idcol in idcols) {
+        tmp2[[idcol]] = suppressWarnings(as.integer(tmp2[[idcol]]))
+      }
+      tmp2 = tmp2 %>% mutate(
+        age = suppressWarnings(as.integer(age))
+      )
+      if(file.exists(tmp)) unlink(tmp)
+      return(tmp2)
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+
+  #### Test and trace ----
+  
+  getCTASLineList = function(...) {
+    #/home/terminological/S3/encrypted/2021-03-29/20210329 CTAS SGTF data.zip
+    path = self$getLatest(self$filter$ctasLineList)
+    message("Using: ",path)
+    tmp = self$getSaved("CTAS", params = list(path), ...,  orElse = function (...) {
+      tmpPath = self$fileProvider$getFile(path)
+      zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
+      tmp2 = readr::read_csv(unz(tmpPath,filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
+      # tmp2 = tmp2 %>% mutate(genomic_specimen_date = suppressWarnings(as.Date(genomic_specimen_date,"%Y%m%d")))
+      datecols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("date|_at")]
+      for(datecol in datecols) {
+        tmp2[[datecol]] = suppressWarnings(as.Date(tmp2[[datecol]],"%Y-%m-%d"))
+      }
+      idcols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("id")]
+      for(idcol in idcols) {
+        tmp2[[idcol]] = suppressWarnings(as.integer(tmp2[[idcol]]))
+      }
+      tmp2 = tmp2 %>% mutate(
+        completed = as.logical(completed),
+        sex = self$normaliseGender(sex),
+        sgtf = as.integer(sgtf),
+        sgtf_under30ct = as.integer(sgtf_under30ct),
+        p2ch1cq = as.double(p2ch1cq),
+        p2ch2cq = as.double(p2ch2cq),
+        p2ch3cq = as.double(p2ch3cq),
+        p2ch4cq = as.double(p2ch4cq),
+        age = as.integer(age)
+      )
+      if(file.exists(tmpPath)) unlink(tmpPath)
+      return(tmp2)
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  #### Immunisations ----
+
+  #' @description Load immunizations line list
+  #' 
+  #' @return raw line list data set
+  getImmunizationLineList = function(...) {
+    path = self$getLatest(self$filter$immunization)
+    message("Using: ",path)
+    out = self$getSaved("IMMUNIZATIONS", params = list(path), ...,  orElse = function (...) {
+      tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+      tmp = tmp %>% 
+        as_tibble() %>% 
+        mutate(
+          patient_pseudo_id = as.numeric(patient_pseudo_id),
+          age = suppressWarnings(as.numeric(age)),
+          finalid = as.numeric(finalid),
+          finalid2 = as.numeric(finalid2),
+          vaccination_date = as.Date(vaccination_date, "%d%b%Y")
+        )
+    })
+    attr(out,"paths") = path
+    return(out %>% as_tibble())
+  },
+  
+  #' @description Load incidence from line list
+  #' 
+  #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+  #' @return a covidTimeseriesFormat dataframe
+  getImmunizationLineListIncidence = function(ll=NULL, ageBreaks = NULL, filterExpr=NULL, subgroup="string_dose_number", ...) {
+    filterExpr = enexpr(filterExpr)
+    subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
+    # TODO: do we need the ll option here. It is not cached
+    tmp = self$getDaily("IMMUNIZATIONS-INCIDENCE", params=list(ageBreaks, as_label(filterExpr), as_label(subgroup)), ..., orElse = function (...) covidTimeseriesFormat({
+      if(!identical(ll,NULL)) {
+        tmp = ll
+      } else {
+        tmp = self$getImmunizationLineList(...) 
+      }
+      if(!identical(filterExpr,NULL)) tmp = tmp %>% filter(!!filterExpr)
+      tmp = tmp %>% dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks), gender=self$normaliseGender(gender,na.value="unknown"))
+      if(!identical(subgroup,NULL)) {
+        tmp = tmp %>% mutate(subgroup=!!subgroup)
+      } else {
+        tmp = tmp %>% mutate(subgroup=NA_character_)
+      }
+      tmp = tmp %>% dplyr::mutate(date = as.Date(vaccination_date))
+      
+      out = tmp %>% dplyr::mutate(code = ltla_code, codeType="LAD", name=ltla_name) %>% 
+          dplyr::mutate(
+            code = ifelse(is.na(code) | code=="Unknown","E99999999",code),
+            name = ifelse(is.na(code) | code=="Unknown","Unknown (England)",name)
+          ) %>%
+          dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
+          dplyr::summarise(value = n())
+      
+      out = out %>% dplyr::mutate(source="immunization",statistic = "immunization", type="incidence")
+      out = out %>% self$fixDatesAndNames(0)
+      out = out %>% self$fillAbsent(completeDates=TRUE)
+      out = out %>% dplyr::ungroup()
+      return(out)
+    }))
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  getImmunizationFraction = function(ageBreaks = NULL,...) {
+    self$getDaily("IMMUNIZATIONS-FRACTION", params=list(ageBreaks), ..., orElse = function (...) covidTimeseriesFormat({
+      tmp2 = dpc$spim$getImmunizationLineListIncidence(ageBreaks=ageBreaks)
+      tmp3 = tmp2 %>% tsp$aggregateGender()
+      tmp4 = tmp3 %>% tsp$cumulativeFromIncidence()
+      tmp4 = tmp4 %>% self$demog$findDemographics()
+      deaths = dpc$spim$getDeathsLineListIncidence(ageBreaks = ageBreaks,codeTypes = "LAD")
+      deathsCum = deaths %>% tsp$aggregateGender() %>% tsp$cumulativeFromIncidence()
+      tmp5 = tmp4 %>% inner_join(deathsCum %>% select(code,date,ageCat,cumdeaths = value), by=c("code","date","ageCat"))
+      tmp5 = tmp5 %>% mutate(vaccPercent = value/(population-cumdeaths)) %>% mutate(vaccPercent = ifelse(vaccPercent>1,1,vaccPercent))
+      tmp5 = tmp5 %>% mutate(immunized = value, value=vaccPercent, type="fraction") %>% select(-vaccPercent)
+      return(tmp5)
+    }))
+  },
+  
+  #### S-gene line list ----
+
+  #' @description Load line list
+  #' 
+  #' @return raw line list data set
+  getSGeneLineList = function(...) {
+    path = self$getLatest(self$filter$sgene)
+    message("Using: ",path)
+    tmp = self$getSaved("SGENE-LINE-LIST", params = list(path), ..., orElse = function (...) {
+      if (stringr::str_detect(path,"zip")) {
+        tmpFile = self$fileProvider$getFile(path)
+        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
+        tmp = readr::read_csv(unz(tmpFile, filename=zipPath))
+      } else {
+        tmp = readr::read_csv(self$fileProvider$getFile(path))
+      }
+      return(tmp %>% dplyr::ungroup())
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  #' Interpret S gene status according to various cut off values
+  #' function to help interpret S gene CT values in context of N gene and ORF gene to give S gene status. 
+  #' With the defaults this produces the same result as the sgtf_30 column in the source SGTF line list
+  #' Defaults are S:30,ORF:30,N:30,Control:Inf
+  #'
+  #' @param sGeneLineList - a dataframe includeing 
+  #' @param S_CT - S gene detected when P2CH3CQ <= this value
+  #' @param ORF1ab_CT - ORF1ab gene detected when P2CH1CQ <= this value
+  #' @param N_CT - N gene detected when P2CH2CQ <= this value
+  #' @param Control_CT - control sample is positive when P2CH4CQ <= this value
+  #'
+  #' @return - the same dataframe with additional columns including "sGene" and "result"
+  #'
+  #' @examples coxData = coxData %>% interpretSGene()
+  interpretSGene = function(sGeneLineList, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, Control_CT = Inf, ...) {
+    sGeneLineList %>% 
+      mutate(
+        ORF1ab_CT_threshold = ORF1ab_CT,
+        N_CT_threshold = N_CT,
+        S_CT_threshold = S_CT,
+        S_pos = P2CH3CQ > 0 & P2CH3CQ <= S_CT,
+        S_undetect = P2CH3CQ == 0,
+        N_pos = P2CH2CQ > 0 & P2CH2CQ <= N_CT,
+        ORF1ab_pos = P2CH1CQ > 0 & P2CH1CQ <= ORF1ab_CT,
+        Control_pos = P2CH4CQ > 0 & P2CH4CQ <= Control_CT,
+        sGene = case_when(
+          is.na(P2CH1CQ) ~ "Unknown",
+          S_pos & N_pos & ORF1ab_pos & Control_pos ~ "Positive",
+          S_undetect & N_pos & ORF1ab_pos & Control_pos ~ "Negative",
+          TRUE ~ "Equivocal"
+        ),
+        CT_N = ifelse(P2CH2CQ > 0, P2CH2CQ, 40)
+      ) %>% 
+      mutate(
+        result = case_when(
+          is.na(P2CH1CQ) ~ "Unknown",
+          !Control_pos ~ "No control",
+          TRUE ~ paste0(ifelse(S_pos,"S+","S-"),ifelse(N_pos,"N+","N-"),ifelse(ORF1ab_pos,"ORF+","ORF-")))
+      ) %>%
+      mutate(
+        sGene = sGene %>% ordered(c("Positive","Negative","Equivocal","Unknown")),
+        relativeCopyNumber = 2^(median(CT_N,na.rm=TRUE)-CT_N)
+      )
+  },
   
   
-    getSGeneEras = function(cutoff = 28, ...) {
-      path = self$getLatest(self$filter$sgene)
-      self$getSaved("SGENE-ERAS", params = list(path), ..., orElse = function (...) {
-        sgll = self$getSGeneLineList()
-        # group by patient and find time delay between tests (where there are more than one)
-        tmp = sgll %>% arrange(FINALID,specimen_date) %>% mutate(delay = ifelse(FINALID==lag(FINALID), as.numeric(specimen_date - lag(specimen_date)), NA_real_))
-        # TODO: there is some interesting properties of the delay
-        # ggplot(tmp, aes(x=delay))+geom_density()+scale_x_continuous(trans="log1p",breaks=c(0,10,20,50,100,200,500,1000))+facet_wrap(vars(sgtf_under30CT))
-        # ggplot(tmp, aes(x=delay,y=P2CH1CQ))+geom_density_2d()
-        # apply some heuristics to determine whether a test is part of the same infection or a new one
-        tmp2 = tmp %>% mutate(era = case_when(
+  getSGeneEras = function(cutoff = 28, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, Control_CT = Inf, ...) {
+    path = self$getLatest(self$filter$sgene)
+    tmp = self$getSaved("SGENE-ERAS", params = list(path), ..., orElse = function (...) {
+      sgll = self$getSGeneLineList() %>% self$interpretSGene(S_CT, ORF1ab_CT, N_CT, Control_CT)
+      # group by patient and find time delay between tests (where there are more than one)
+      tmp = sgll %>% arrange(FINALID,specimen_date) %>% mutate(delay = ifelse(FINALID==lag(FINALID), as.numeric(specimen_date - lag(specimen_date)), NA_real_))
+      # TODO: there is some interesting properties of the delay
+      # ggplot(tmp, aes(x=delay))+geom_density()+scale_x_continuous(trans="log1p",breaks=c(0,10,20,50,100,200,500,1000))+facet_wrap(vars(sgtf_under30CT))
+      # ggplot(tmp, aes(x=delay,y=P2CH1CQ))+geom_density_2d()
+      # apply some heuristics to determine whether a test is part of the same infection or a new one
+      tmp2 = tmp %>% mutate(era = case_when(
+        is.na(delay) ~ "new",
+        is.na(sgtf_under30CT) & delay < cutoff*2 ~ "same", # prolonged recovery
+        delay < cutoff ~ "same",
+        TRUE ~ "new"
+      ))
+      # assign an eraIndex - essentially the count of novel infection episodes
+      tmp3 = tmp2 %>% group_by(FINALID) %>% arrange(specimen_date) %>% mutate(eraIndex = cumsum(ifelse(era=="new",1,0)))
+      # summarise sGene data into a single value for each era
+      # TODO: each era may have multiple positive tests there is an opportunity to look at the CT values over time and 
+      # fit some sort of model here
+      tmp4 = tmp3 %>% group_by(FINALID,eraIndex) %>% 
+        mutate(
+          earliest_specimen_date = min(specimen_date,na.rm=TRUE), 
+          latest_specimen_date = max(specimen_date,na.rm=TRUE), 
+          tests=n(), 
+          anyPosSGene = any(sGene == "Positive"),
+          anyNegSGene = any(sGene == "Negative"),
+          anyEquivSGene = any(sGene == "Equivocal"),
+          anyUnknSGene = any(sGene == "Unknown"),
+        ) %>% ungroup() %>% mutate(
+          sGene=case_when(
+            anyPosSGene & !anyNegSGene ~ "Positive",
+            anyNegSGene & !anyPosSGene ~ "Negative",
+            anyEquivSGene ~ "Equivocal",
+            TRUE ~ "Unknown"
+          ) %>% ordered(c("Positive","Negative","Equivocal","Unknown"))
+        )
+      return(tmp4 %>% select(-anyPosSGene, -anyNegSGene, -anyEquivSGene, -anyUnknSGene))
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  getSDropoutFreqency = function(codeTypes = c("NHSER"),  ageBreaks = NULL, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, equivocal.rm=TRUE, window=7, ll=NULL, sgll=NULL, ...) {
+    
+    if (identical(ll,NULL)) ll = self$getLineList() %>% ungroup()
+    if (identical(sgll,NULL)) sgll = self$getSGeneLineList()
+    
+    path = c(attr(ll,"paths"),attr(sgll,"paths"))
+    
+    tmp = self$getDaily("SGENE-DROPOUT",params=list(ORF1ab_CT, N_CT, codeTypes,ageBreaks,equivocal.rm,window,path), ..., orElse = function (...) {
+      
+      groupByVars = ll %>% groups()
+      
+      tmp2 = sgll %>% 
+        left_join(ll, by="FINALID", suffix=c("",".ll")) # %>%
+        # group_by(FINALID) %>% arrange(desc(specimen_date)) %>% filter(row_number()==1)
+      tmp3 = tmp2 %>% ungroup() %>% mutate(
+        ageCat = age %>% self$cutByAge(ageBreaks)
+      ) %>% self$interpretSGene(S_CT,ORF1ab_CT,N_CT)
+      
+      fn = function(tmpDf, codeCol = "NHSER_code", nameCol = "NHSER_name", codeType="NHSER") {
+        codeCol = ensym(codeCol)
+        nameCol = ensym(nameCol)
+        grps = tmpDf %>% groups()
+        joins = unlist(sapply(grps,as_label))
+        
+        tmpDf = tmpDf %>% 
+          rename(code = !!codeCol,name = !!nameCol,date=specimen_date) %>%
+          group_by(!!!grps,code,name,ageCat,date,sGene) %>% 
+          summarise(count = n()) %>% ungroup()
+        tmpDf2 = tmpDf %>% select(code,name) %>% distinct() %>% filter(!is.na(code)) %>% 
+        left_join(
+          tmpDf %>% select(!!!grps) %>% distinct(), by=character()
+        ) %>% left_join(
+          tibble(date = as.Date(min(tmpDf$date):max(tmpDf$date),"1970-01-01")), by=character()
+        ) %>% left_join(
+          tmpDf %>% select(ageCat) %>% distinct(), by=character()
+        ) %>% left_join(
+          tibble(sGene=c("Positive","Negative","Equivocal")), by=character()
+        ) %>% left_join(tmpDf, by=c(joins,"code","name","ageCat","sGene","date")) %>% mutate(count = ifelse(is.na(count),0,count))
+        
+        if (equivocal.rm) tmpDf2 = tmpDf2 %>% filter(sGene != "Equivocal")
+        tmpDf2 = tmpDf2 %>% group_by(!!!grps,code,name,ageCat,sGene) %>% arrange(date) %>%
+          mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
+          filter(!is.na(Roll.count))
+        tmpDf2 = tmpDf2 %>% 
+          group_by(!!!grps,code,name,ageCat,date) %>%
+          mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+          rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
+          mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
+          select(-x,-n,-method) %>% 
+          mutate(codeType = codeType)
+        return(tmpDf2)
+      }
+      
+      tmp3 = tmp3 %>% ungroup() %>% group_by(!!!groupByVars)
+      out = NULL
+      if ("NHSER" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = NHSER_code, nameCol=NHSER_name, codeType = "NHSER"))
+      if ("PHEC" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = PHEC_code, nameCol=PHEC_name, codeType = "PHEC"))
+      if ("UA" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = UTLA_code, nameCol=UTLA_name, codeType = "UA"))
+      if ("LAD" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = LTLA_code, nameCol=LTLA_name, codeType = "LAD"))
+      if ("CTRY" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% mutate(code = "E92000001",name="England") %>% fn(codeCol = code, nameCol=name, codeType = "CTRY"))
+      
+      return(out)
+      
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  #### Cases ----
+
+  #' @description Load line list
+  #' 
+  #' @return raw line list data set
+  getLineList = function(...) {
+    path = self$getLatest(self$filter$lineList)
+    message("Using: ",path)
+    out = self$getSaved("LINE-LIST", params = list(path), ..., orElse = function (...) {
+      if (stringr::str_detect(path,"zip")) {
+        tmpFile = self$fileProvider$getFile(path)
+        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
+        tmp = readr::read_csv(unz(tmpFile, filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
+        tmp = tmp %>% 
+          dplyr::mutate(
+            Onsetdate = maybeDMYorMDY(Onsetdate),
+            specimen_date = maybeDMYorMDY(specimen_date),
+            lab_report_date = maybeDMYorMDY(lab_report_date)
+          ) 
+        
+      } else if (stringr::str_detect(path,"csv")) {
+        tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+        tmp = tmp %>% 
+          dplyr::mutate(
+            Onsetdate = maybeDMYorMDY(Onsetdate),
+            specimen_date = maybeDMYorMDY(specimen_date),
+            lab_report_date = maybeDMYorMDY(lab_report_date)
+          ) 
+        
+      } else {
+        tmp = readxl::read_excel(path.expand(path), 
+                 col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
+        tmp = tmp %>% 
+          dplyr::mutate(
+            Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
+            specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
+            lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30"))
+          )
+      }
+      
+      if(any(is.na(tmp$specimen_date))) warning("NA sprecimen dates in cases file")
+      
+      if ("finalid" %in% colnames(tmp)) tmp = tmp %>% rename(FINALID = finalid)
+      
+      return(tmp %>% mutate(
+        pillar_2_testingkit = tolower(pillar_2_testingkit),
+        age = suppressWarnings(as.numeric(age)),
+        FINALID = as.numeric(FINALID),
+        imd_rank = as.integer(imd_rank),
+        imd_decile = as.integer(imd_decile),
+        ethnicity_final = case_when(
+          ethnicity_final %in% c("African (Black or Black British)","Any other Black background","Caribbean (Black or Black British)") ~ "Afro-caribbean",
+          ethnicity_final %in% c("Any other Asian background","Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)") ~ "Asian",
+          ethnicity_final %in% c("Any other White background","British (White)","Irish (White)") ~ "White",
+          ethnicity_final %in% c("Any other Mixed background","Any other ethnic group","White and Black Caribbean (Mixed)","White and Black African (Mixed)","Chinese (other ethnic group)") ~ "Other",
+          TRUE ~ "Unknown"),
+        residential_category = case_when(
+          cat == 'Residential dwelling (including houses, flats, sheltered accommodation)' ~ "Residential",
+          cat == 'Care/Nursing home' ~ "Care home",
+          cat == 'Undetermined'~"Other/Unknown",
+          cat == 'Medical facilities (including hospitals and hospices, and mental health)'~"Other/Unknown",
+          cat == 'Other property classifications'~"Other/Unknown",
+          cat == 'House in multiple occupancy (HMO)' ~ "Residential",
+          cat == 'Prisons, detention centres, secure units'~"Other/Unknown",
+          cat == 'Residential institution (including residential education)'~"Other/Unknown",
+          cat == 'No fixed abode'~"Other/Unknown",
+          cat == 'Overseas address'~"Other/Unknown",
+          TRUE ~ "Other/Unknown"
+        )
+      ) %>% dplyr::ungroup())
+    })
+    attr(out,"paths") = path
+    return(out %>% as_tibble())
+    # TODO: https://github.com/sarahhbellum/NobBS
+  },
+  
+    
+  augmentLineListWithLSOA = function(ll, ltlaCodeCol = "LTLA_code", imdRankCol="imd_rank") {
+    ltlaCodeCol = ensym(ltlaCodeCol)
+    imdRankCol = ensym(imdRankCol)
+    imd = self$demog$getIMDData() %>% select(
+      !!ltlaCodeCol := `Local Authority District code (2019)`,
+      !!imdRankCol := `Index of Multiple Deprivation (IMD) Rank (where 1 is most deprived)`,
+      LSOA_code = `LSOA code (2011)`,
+      LSOA_name = `LSOA name (2011)`
+    )
+    return(ll %>% left_join(imd, by=c(as_label(ltlaCodeCol),as_label(imdRankCol))))
+  },
+  
+  #' @description Load incidence from line list
+  #' 
+  #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+  #' @return a covidTimeseriesFormat dataframe
+  getLineListIncidence = function(ll=NULL, ageBreaks = NULL, gender=FALSE, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
+    filterExpr = enexpr(filterExpr)
+    subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
+    if(!identical(ll,NULL)) {
+      tmp = ll
+    } else {
+      tmp = self$getLineList(...) 
+    }
+    path = attr(tmp,"paths")
+    out2 = self$getSaved("LINE-LIST-INCIDENCE", params=list(tmp, ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes, gender), ..., orElse = function (...) covidTimeseriesFormat({
+      if(!identical(filterExpr,NULL)) 
+        tmp = tmp %>% filter(!!filterExpr)
+      tmp = tmp %>% dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks)) 
+      if (gender) {
+        tmp = tmp %>% dplyr::mutate(gender=self$normaliseGender(sex))
+      } else {
+        tmp = tmp %>% dplyr::mutate(gender=NA_character_)
+      }
+      if(!identical(subgroup,NULL)) {
+        tmp = tmp %>% dplyr::mutate(subgroup=!!subgroup)
+      } else {
+        tmp = tmp %>% dplyr::mutate(subgroup=NA_character_)
+      }
+      if(specimenOrReport == "report")
+        tmp = tmp %>% dplyr::mutate(date = as.Date(lab_report_date))
+      else
+        tmp = tmp %>% dplyr::mutate(date = as.Date(specimen_date))
+      
+      selectByRegion = function(df, code, codeType, name) {
+        code = ensym(code)
+        name = ensym(name)
+        # check column exists
+        if(!(as_label(code) %in% colnames(df))) return(tibble())
+        df = df %>% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) %>% 
+          dplyr::mutate(
+            code = ifelse(is.na(code),"E99999999",code),
+            name = ifelse(is.na(code),"Unknown (England)",name)
+          ) %>%
+          dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% 
+          dplyr::summarise(value = n()) 
+        return(df)
+      }
+      
+      out = NULL
+      if ("CTRY" %in% codeTypes) {
+        england = tmp %>% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
+          dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) %>% 
+          dplyr::summarise(value = n())
+        out = out %>% bind_rows(england)
+      }
+      
+      if ("NHSER" %in% codeTypes) {
+        nhser = tmp %>% selectByRegion(NHSER_code, "NHSER", NHSER_name)
+        isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+        
+        if(!isNhser) {
+          nhser = tmp %>% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) %>% 
+            dplyr::inner_join(
+              self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
+              by=c("code"="fromCode")
+            ) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
+            dplyr::rename(code = toCode, codeType=toCodeType)
+        }
+        out = out %>% bind_rows(nhser)
+      }
+      
+      if ("PHEC" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(PHEC_code, "PHEC", PHEC_name))}
+      if ("UA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(UTLA_code, "UA", UTLA_name))}
+      if ("LAD" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(LTLA_code, "LAD", LTLA_name))}
+      if ("LSOA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(LSOA_code, "LSOA", LSOA_name))}
+      
+      out = out %>% dplyr::mutate(source="line list",statistic = "case", type="incidence")
+      out = out %>% self$fixDatesAndNames(truncate)
+      out = out %>% self$fillAbsent(completeDates=TRUE)
+      out = out %>% dplyr::ungroup()
+      return(out)
+    }))
+    attr(out2,"paths") = path
+    return(out2 %>% as_tibble())
+  },
+  
+  #### Episodes ----
+  
+  #' @description Combine line list and S-gene line list to get a list of infection episodes
+  #' 
+  #' this defines how long between tests before two tests are regarded as a new episode.
+  #' if the tests are sgtf equivocal double this is allowed.
+  #' calculate the individual episodes of covid resulting from runs of sequential positive tests <28 days apart.
+  #' 
+  #' @param cutoff - the time gap between sequential tests after which two tests are said to be from a new episode
+  #' @param S_CT - S gene detected when P2CH3CQ <= this value
+  #' @param ORF1ab_CT - ORF1ab gene detected when P2CH1CQ <= this value
+  #' @param N_CT - N gene detected when P2CH2CQ <= this value
+  #' @param Control_CT - control sample is positive when P2CH4CQ <= this value
+  #' @return a covidTimeseriesFormat dataframe
+  getInfectionEpisodes = function(cutoff=28, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, Control_CT = Inf, ...) {
+    path1 = self$getLatest(self$filter$sgene)
+    path2 = self$getLatest(self$filter$lineList)
+    message("Using: ",path1," and ",path2)
+    # TODO: this is a bit slow and maybe could be improved
+    # the dtplyr has some sort of bug in it connected with: https://github.com/tidyverse/dtplyr/issues/164
+    # which only appears when wrapped in a function so code below works when 
+    # dtplyr does not seem production ready. maybe need to learn data.table.
+    out = self$getSaved(id = "EPISODES", params = list(cutoff,path1,path2,S_CT,ORF1ab_CT,N_CT), ..., orElse=function(...) {
+      ll = self$getLineList()
+      sgll = self$getSGeneLineList()
+      
+      # Split line list out into normalised parts.
+      llDemog = ll %>% select(FINALID, NHSER_code, NHSER_name, PHEC_code, PHEC_name, UTLA_code, UTLA_name, LTLA_code, LTLA_name, sex, age, ethnicity_final, imd_decile, imd_rank, residential_category, cat) %>% distinct()
+      # llEpisode = ll %>% select(FINALID, specimen_date, asymptomatic_indicator, pillar, lab_report_date, pillar_2_testingkit, testcentreid, case_category) %>% mutate(episode_type="first positive",episode=1) %>% distinct()
+      llTest = ll %>% select(FINALID, specimen_date, case_category,asymptomatic_indicator) %>% mutate(linelist = TRUE)
+      
+      # Split s gene line list out into normalised parts.
+      sgllTest = sgll %>% 
+        self$interpretSGene(S_CT, ORF1ab_CT, N_CT, Control_CT) %>%
+        select(FINALID, specimen_date, sGene, result) %>% 
+        mutate(sglinelist = TRUE)
+      
+      # combine tests from ll (first only) with tests from S-gene files
+      # N.B. this will be a bit of a funny mixture - multiple tests but only for cases that went through taqpath assay.
+      tests = llTest %>% 
+        full_join(
+          sgllTest,
+          by = c("FINALID","specimen_date")  
+        )  %>%
+        mutate(
+          linelist = ifelse(is.na(linelist),FALSE,linelist),
+          sglinelist = ifelse(is.na(sglinelist),FALSE,sglinelist),
+          sGene = ifelse(is.na(sGene),"Unknown",as.character(sGene)),
+          case_category = ifelse(sglinelist,"TaqPath",case_category)
+        )
+      
+      tests2 = tests # dtplyr::lazy_dt(tests) weirdly not working inside a function....
+      # browser()
+      # look for sequential tests with the same id and calulate time difference between them.
+      # we do this avoiding group by as it becomes very slow.
+      tests3 = tests2 %>% arrange(FINALID,specimen_date) %>% 
+        mutate(
+          delay = ifelse(FINALID == lag(FINALID), as.numeric(specimen_date - lag(specimen_date)), NA_integer_)
+        ) %>%
+        mutate(era = case_when(
           is.na(delay) ~ "new",
-          is.na(sgtf_under30CT) & delay < cutoff*2 ~ "same", # prolonged recovery
+          sGene == "Equivocal" & delay < cutoff*2 ~ "same", # prolonged recovery allowed for Equivocal test results
           delay < cutoff ~ "same",
           TRUE ~ "new"
-        ))
+        )) %>%
         # assign an eraIndex - essentially the count of novel infection episodes
-        tmp3 = tmp2 %>% group_by(FINALID) %>% arrange(specimen_date) %>% mutate(eraIndex = cumsum(ifelse(era=="new",1,0)))
-        # summarise sGene data into a single value for each era
-        # TODO: each era may have multiple positive tests there is an opportunity to look at the CT values over time and 
-        # fit some sort of model here
-        tmp4 = tmp3 %>% group_by(FINALID,eraIndex) %>% 
-          summarise(
-            earliest_specimen_date = min(specimen_date,na.rm=TRUE), 
-            latest_specimen_date = max(specimen_date,na.rm=TRUE), 
-            tests=n(), 
-            minSgtf = min(sgtf_under30CT,na.rm = TRUE), 
-            maxSgtf = max(sgtf_under30CT,na.rm = TRUE),
-            min_P2CH1CQ = min(P2CH1CQ,na.rm=TRUE),
-            min_P2CH2CQ = min(P2CH2CQ,na.rm=TRUE),
-            min_P2CH3CQ = min(P2CH3CQ,na.rm=TRUE),
-            min_P2CH4CQ = min(P2CH4CQ,na.rm=TRUE)
-          ) %>% ungroup() %>% mutate(sgtf_under30CT = case_when(
-            minSgtf == maxSgtf ~ minSgtf,
-            TRUE ~ NA_real_
-          ))
-        return(tmp4)
-      })
-    },
-  
-    getSDropoutFreqency = function(codeTypes = c("NHSER"),  ageBreaks = NULL, S_CT = 30, ORF1ab_CT = 30, N_CT = 30, equivocal.rm=TRUE, window=7, ll=NULL, ...) {
-      self$getDaily("SGENE-DROPOUT",params=list(ORF1ab_CT, N_CT, codeTypes,ageBreaks,equivocal.rm,window,ll), ..., orElse = function (...) {
-        
-        if (identical(ll,NULL)) ll = self$getLineList() %>% ungroup()
-        groupByVars = ll %>% groups()
-        
-        
-        tmp2 = self$getSGeneLineList() %>% 
-          left_join(ll, by="FINALID", suffix=c("",".ll")) # %>%
-          # group_by(FINALID) %>% arrange(desc(specimen_date)) %>% filter(row_number()==1)
-        tmp3 = tmp2 %>% ungroup() %>% mutate(
-          ageCat = age %>% self$cutByAge(ageBreaks)
-        ) %>% self$interpretSGene(S_CT,ORF1ab_CT,N_CT)
-        
-        fn = function(tmpDf, codeCol = "NHSER_code", nameCol = "NHSER_name", codeType="NHSER") {
-          codeCol = ensym(codeCol)
-          nameCol = ensym(nameCol)
-          grps = tmpDf %>% groups()
-          joins = unlist(sapply(grps,as_label))
-          
-          tmpDf = tmpDf %>% 
-            rename(code = !!codeCol,name = !!nameCol,date=specimen_date) %>%
-            group_by(!!!grps,code,name,ageCat,date,sGene) %>% 
-            summarise(count = n()) %>% ungroup()
-          tmpDf2 = tmpDf %>% select(code,name) %>% distinct() %>% filter(!is.na(code)) %>% 
-          left_join(
-            tmpDf %>% select(!!!grps) %>% distinct(), by=character()
-          ) %>% left_join(
-            tibble(date = as.Date(min(tmpDf$date):max(tmpDf$date),"1970-01-01")), by=character()
-          ) %>% left_join(
-            tmpDf %>% select(ageCat) %>% distinct(), by=character()
-          ) %>% left_join(
-            tibble(sGene=c("Positive","Negative","Equivocal")), by=character()
-          ) %>% left_join(tmpDf, by=c(joins,"code","name","ageCat","sGene","date")) %>% mutate(count = ifelse(is.na(count),0,count))
-          
-          if (equivocal.rm) tmpDf2 = tmpDf2 %>% filter(sGene != "Equivocal")
-          tmpDf2 = tmpDf2 %>% group_by(!!!grps,code,name,ageCat,sGene) %>% arrange(date) %>%
-            mutate(Roll.count = stats::filter(count,filter=rep(1,window),sides=1)) %>%
-            filter(!is.na(Roll.count))
-          tmpDf2 = tmpDf2 %>% 
-            group_by(!!!grps,code,name,ageCat,date) %>%
-            mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
-            rename(Roll.mean = mean,Roll.lower = lower,Roll.upper=upper) %>%
-            mutate(binom::binom.confint(count, sum(count), conf.level = 0.95, methods = "wilson")) %>% 
-            select(-x,-n,-method) %>% 
-            mutate(codeType = codeType)
-          return(tmpDf2)
-        }
-        
-        
-        tmp3 = tmp3 %>% ungroup() %>% group_by(!!!groupByVars)
-        out = NULL
-        if ("NHSER" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = NHSER_code, nameCol=NHSER_name, codeType = "NHSER"))
-        if ("PHEC" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = PHEC_code, nameCol=PHEC_name, codeType = "PHEC"))
-        if ("UA" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = UTLA_code, nameCol=UTLA_name, codeType = "UA"))
-        if ("LAD" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% fn(codeCol = LTLA_code, nameCol=LTLA_name, codeType = "LAD"))
-        if ("CTRY" %in% codeTypes) out = out %>% bind_rows(tmp3 %>% mutate(code = "E92000001",name="England") %>% fn(codeCol = code, nameCol=name, codeType = "CTRY"))
-        
-        return(out)
-        
-      })
+        group_by(FINALID) %>% arrange(specimen_date) %>% 
+        mutate(eraIndex = cumsum(ifelse(era=="new",1,0)))
       
-    },
-  
-    #' @description Load line list
-    #' 
-    #' @return raw line list data set
-    getLineList = function(...) {
-      path = self$getLatest(self$filter$lineList)
-      message("Using: ",path)
-      self$getSaved("LINE-LIST", params = list(path), ..., orElse = function (...) {
-        if (stringr::str_detect(path,"zip")) {
-          tmpFile = self$fileProvider$getFile(path)
-          zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
-          tmp = readr::read_csv(unz(tmpFile, filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
-          tmp = tmp %>% 
-            dplyr::mutate(
-              Onsetdate = maybeDMYorMDY(Onsetdate),
-              specimen_date = maybeDMYorMDY(specimen_date),
-              lab_report_date = maybeDMYorMDY(lab_report_date)
-            ) 
-          
-        } else if (stringr::str_detect(path,"csv")) {
-          tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
-          tmp = tmp %>% 
-            dplyr::mutate(
-              Onsetdate = maybeDMYorMDY(Onsetdate),
-              specimen_date = maybeDMYorMDY(specimen_date),
-              lab_report_date = maybeDMYorMDY(lab_report_date)
-            ) 
-          
-        } else {
-          tmp = readxl::read_excel(path.expand(path), 
-                   col_types = "text") #c("numeric", "text", "text", "text", "text", "text", "text", "text", "text", "text", "numeric", "date", "date", "date"))
-          tmp = tmp %>% 
-            dplyr::mutate(
-              Onsetdate = suppressWarnings(as.Date(as.numeric(Onsetdate),"1899-12-30")),
-              specimen_date = suppressWarnings(as.Date(as.numeric(specimen_date),"1899-12-30")),
-              lab_report_date = suppressWarnings(as.Date(as.numeric(lab_report_date),"1899-12-30"))
-            )
-        }
-        
-        if(any(is.na(tmp$specimen_date))) warning("NA sprecimen dates in cases file")
-        
-        if ("finalid" %in% colnames(tmp)) tmp = tmp %>% rename(FINALID = finalid)
-        
-        return(tmp %>% mutate(
-          pillar_2_testingkit = tolower(pillar_2_testingkit),
-          age = suppressWarnings(as.numeric(age)),
-          FINALID = as.numeric(FINALID),
-          imd_rank = as.integer(imd_rank),
-          imd_decile = as.integer(imd_decile),
-          ethnicity_final = case_when(
-            ethnicity_final %in% c("African (Black or Black British)","Any other Black background","Caribbean (Black or Black British)") ~ "Afro-caribbean",
-            ethnicity_final %in% c("Any other Asian background","Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)") ~ "Asian",
-            ethnicity_final %in% c("Any other White background","British (White)","Irish (White)") ~ "White",
-            ethnicity_final %in% c("Any other Mixed background","Any other ethnic group","White and Black Caribbean (Mixed)","White and Black African (Mixed)","Chinese (other ethnic group)") ~ "Other",
-            TRUE ~ "Unknown"),
-          residential_category = case_when(
-            cat == 'Residential dwelling (including houses, flats, sheltered accommodation)' ~ "Residential",
-            cat == 'Care/Nursing home' ~ "Care home",
-            cat == 'Undetermined'~"Other/Unknown",
-            cat == 'Medical facilities (including hospitals and hospices, and mental health)'~"Other/Unknown",
-            cat == 'Other property classifications'~"Other/Unknown",
-            cat == 'House in multiple occupancy (HMO)' ~ "Residential",
-            cat == 'Prisons, detention centres, secure units'~"Other/Unknown",
-            cat == 'Residential institution (including residential education)'~"Other/Unknown",
-            cat == 'No fixed abode'~"Other/Unknown",
-            cat == 'Overseas address'~"Other/Unknown",
-            TRUE ~ "Other/Unknown"
-          )
-        ) %>% dplyr::ungroup())
-      })
+      # TODO: each era may have multiple positive tests there is an opportunity to look at the CT values over time and 
+      # fit some sort of model here
+      tests4 = tests3 %>% group_by(FINALID,eraIndex) %>% 
+        summarise(
+          earliest_specimen_date = min(specimen_date,na.rm=TRUE), 
+          latest_specimen_date = max(specimen_date,na.rm=TRUE), 
+          tests=n(),
+          anyPosSGene = any(sGene == "Positive"),
+          anyNegSGene = any(sGene == "Negative"),
+          anyEquivSGene = any(sGene == "Equivocal"),
+          anyUnknSGene = any(sGene == "Unknown"),
+          asymptomatic_indicator = first(na.omit(asymptomatic_indicator),default="U"),
+          lft_only = all(na.omit(case_category=="LFT_Only"))
+        )
       
-      # TODO: https://github.com/sarahhbellum/NobBS
-    },
-    
-    getNegatives = function(codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
-      stop("needs updating as formats changed at some point")
-      path1 = self$getLatest(self$filter$negPillar1)
-      path2 = self$getLatest(self$filter$negPillar2)
-      return(self$getDaily("NEGATIVES-FILTERED", params=list(codeTypes), ..., orElse = function(...) {
-        tmp = self$getDaily("NEGATIVES", ..., orElse = function(...) {
-          neg1 = readr::read_csv(self$fileProvider$getFile(path1))
-          neg2 = readr::read_csv(self$fileProvider$getFile(path2))
-          neg = bind_rows(neg1 %>% mutate(subgroup="Pillar 1"),neg2 %>% mutate(subgroup="Pillar 2"))
-          neg = neg %>% mutate(ageCat = case_when(
-            agegroup == "0 to 4" ~ "<5",
-            agegroup == "5 to 9" ~ "5-14",
-            agegroup == "10 to 14" ~ "5-14",
-            agegroup == "15 to 19" ~ "15-24",
-            agegroup == "20 to 24" ~ "15-24",
-            agegroup == "25 to 29" ~ "25-34",
-            agegroup == "30 to 34" ~ "25-34",
-            agegroup == "35 to 39" ~ "35-44",
-            agegroup == "40 to 44" ~ "35-44",
-            agegroup == "45 to 49" ~ "45-54",
-            agegroup == "50 to 54" ~ "45-54",
-            agegroup == "55 to 59" ~ "55-64",
-            agegroup == "60 to 64" ~ "55-64",
-            agegroup == "65 to 69" ~ "65-74",
-            agegroup == "70 to 74" ~ "65-74",
-            agegroup == "75 to 79" ~ "75-84",
-            agegroup == "80 to 84" ~ "75-84",
-            agegroup == "85 to 89" ~ "85+",
-            agegroup == "90 or older" ~ "85+",
-            TRUE ~ "unknown"
-          ))
-          neg = neg %>% mutate(gender = self$normaliseGender(gender))
-          
-          neg = neg %>% rename(value = negative, date = earliestspecimendate) %>% select(-agegroup)
-        })
-          
+      tests5 = tests4 %>% mutate(
+        sGene=
+          case_when(
+            anyPosSGene & !anyNegSGene ~ "Positive",
+            anyNegSGene & !anyPosSGene ~ "Negative",
+            anyEquivSGene ~ "Equivocal",
+            TRUE ~ "Unknown"
+          ) %>% ordered(c("Positive","Negative","Equivocal","Unknown")),
+        ) %>% as_tibble()
+      
+      return(tests5 %>% inner_join(llDemog, by="FINALID") %>% select(-anyPosSGene, -anyNegSGene, -anyEquivSGene, -anyUnknSGene))
+    })
+    attr(out,"paths") = c(path1,path2)
+    return(out %>% as_tibble()) 
+  },
+  
+  #### Negatives ----
+
+  getNegatives = function(codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
+    # TODO:
+    stop("needs updating as formats changed at some point")
+    path1 = self$getLatest(self$filter$negPillar1)
+    path2 = self$getLatest(self$filter$negPillar2)
+    tmp = self$getSaved("NEGATIVES", params=list(codeTypes, path1, path2), ..., orElse = function(...) {
+        #TODO: extra layer of caching in here?
+        neg1 = readr::read_csv(self$fileProvider$getFile(path1))
+        neg2 = readr::read_csv(self$fileProvider$getFile(path2))
+        neg = bind_rows(neg1 %>% mutate(subgroup="Pillar 1"),neg2 %>% mutate(subgroup="Pillar 2"))
+        neg = neg %>% mutate(ageCat = case_when(
+          agegroup == "0 to 4" ~ "<5",
+          agegroup == "5 to 9" ~ "5-14",
+          agegroup == "10 to 14" ~ "5-14",
+          agegroup == "15 to 19" ~ "15-24",
+          agegroup == "20 to 24" ~ "15-24",
+          agegroup == "25 to 29" ~ "25-34",
+          agegroup == "30 to 34" ~ "25-34",
+          agegroup == "35 to 39" ~ "35-44",
+          agegroup == "40 to 44" ~ "35-44",
+          agegroup == "45 to 49" ~ "45-54",
+          agegroup == "50 to 54" ~ "45-54",
+          agegroup == "55 to 59" ~ "55-64",
+          agegroup == "60 to 64" ~ "55-64",
+          agegroup == "65 to 69" ~ "65-74",
+          agegroup == "70 to 74" ~ "65-74",
+          agegroup == "75 to 79" ~ "75-84",
+          agegroup == "80 to 84" ~ "75-84",
+          agegroup == "85 to 89" ~ "85+",
+          agegroup == "90 or older" ~ "85+",
+          TRUE ~ "unknown"
+        ))
+        neg = neg %>% mutate(gender = self$normaliseGender(gender))
+        neg = neg %>% rename(value = negative, date = earliestspecimendate) %>% select(-agegroup)
         selectByRegion = function(df, code, codeType, name) {
           code = ensym(code)
           name = ensym(name)
@@ -700,7 +1033,6 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dplyr::summarise(value = n()) 
           return(df)
         }
-          
         neg = NULL
         if ("CTRY" %in% codeTypes) {
           england = tmp %>% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
@@ -708,7 +1040,6 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dplyr::summarise(value = sum(value))
           neg = neg %>% bind_rows(england)
         }
-        
         if ("PHEC" %in% codeTypes) {
           phec = tmp %>% dplyr::rename(name=phecentre) %>% 
             dplyr::group_by(name,date,ageCat,gender,subgroup) %>% 
@@ -716,7 +1047,6 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dpc$codes$findCodesByName(codeTypes = "PHEC",outputCodeVar = "code",outputCodeTypeVar = "codeType")
           neg = neg %>% bind_rows(phec)
         }
-        
         if ("NHSER" %in% codeTypes) {
           nhser = tmp %>% dplyr::rename(name=nhsregion) %>% 
             dplyr::group_by(name,date,ageCat,gender,subgroup) %>% 
@@ -724,14 +1054,12 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
             dpc$codes$findCodesByName(codeTypes = "NHSER",outputCodeVar = "code",outputCodeTypeVar = "codeType")
           neg = neg %>% bind_rows(nhser)
         }
-        
         if ("LAD" %in% codeTypes) {
           ltla = neg %>% dplyr::mutate(code = ltla, codeType= "LAD", name=ltlaname) %>% 
             dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
             dplyr::summarise(value = sum(value))
           neg = neg %>% bind_rows(ltla)
         }
-        
         if ("UA" %in% codeTypes) {
           utla = tmp %>% dplyr::mutate(code = utla, codeType= "UA", name=utlaname) %>% 
             dplyr::group_by(code,codeType,name,date,ageCat,gender,subgroup) %>% 
@@ -743,1807 +1071,498 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           select(-any_of("name.original")) %>% 
           mutate(note=NA_character_) %>%
           filter(!is.na(code))
-        
         neg = neg %>% 
           self$fixDatesAndNames(truncate) %>% 
           self$fillAbsent(completeDates = TRUE) %>%
           dplyr::ungroup()
-        
         return(neg)
-          # phecentre,nhsregion,ltla,ltlaname,utla,utlaname,gender,earliestspecimendate,agegroup,negative
-      }))
-    },
+    })
+    attr(tmp,"paths") = c(path1,path2)
+    return(tmp %>% as_tibble())
+  },
     
-    
-    #' @description Load the seroprevalance file
-    #' 
-    #' @return raw FF100 data set
-    getSeroprevalence = function(...) {
-      path = self$getLatest(self$filter$seroprevalence)
-      message("Using: ",path)
-      self$getSaved("SEROPREV", params = list(path), ..., orElse = function (...) {
-        # ID	Barcode	surv	age	age_m	Sex	Region	Location	sample_region	SampleDate	isoweek_sample	EuroImm_outcome	EuroImm_Units	RBD_outcome	RBD_Units
-        
-        #xlsCon = self$fileProvider$getFile(path)
-        
-        
-        for (sheet in readxl::excel_sheets(self$fileProvider$getFile(path))) {
-          a1 = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, range = "A1",col_names = FALSE)
-          if (a1[[1]]=="Barcode") break
-        }
-        
-        data = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, col_types = "text") %>% dplyr::mutate(
-          SampleDate = suppressWarnings(as.Date(as.numeric(SampleDate),"1899-12-30")),
-        ) %>% dplyr::mutate(
-          SampleDate = if_else(is.na(SampleDate) & surv == "NHSBT_Wales_wk17", as.Date("2020-04-20"), SampleDate),
-          age = suppressWarnings((as.numeric(age)))
-        )
-        if ("Abbott_units" %in% colnames(data)) data = data %>% dplyr::mutate(Abbott_units = suppressWarnings(as.numeric(Abbott_units)))
-        if ("EuroImmun_units" %in% colnames(data)) data = data %>% dplyr::mutate(EuroImmun_units = suppressWarnings(as.numeric(EuroImmun_units)))
-        if ("RBD_units" %in% colnames(data)) data = data %>% dplyr::mutate(RBD_units = suppressWarnings(as.numeric(RBD_units)))
-        
-        
-        data2 = data %>% 
-          self$postcodes$lookupWeightedFeatureByOutcode(outcodeVar = Location, onspdVar = ccg) %>% 
-          dplyr::mutate(weight = ifelse(is.na(weight),0,weight)) %>%
-          dplyr::group_by(Barcode) %>% 
-          dplyr::arrange(desc(weight)) %>%
-          dplyr::filter(row_number()==1) %>%
-          dplyr::select(-weight) %>%
-          self$postcodes$lookupWeightedFeatureByOutcode(outcodeVar = Location, onspdVar = nhser) %>% 
-          dplyr::group_by(Barcode) %>% 
-          dplyr::mutate(weight = ifelse(is.na(weight),0,weight)) %>%
-          dplyr::arrange(desc(weight)) %>%
-          dplyr::filter(row_number()==1) %>%
-          dplyr::select(-weight)
-        
-        return(data2 %>% dplyr::filter(!is.na(SampleDate)) %>% dplyr::ungroup())
-      })
-    },
-    
-    #' @description Load ff100 file
-    #' 
-    
-    #' @return raw FF100 data set
-    
-    getFF100 = function() {
-      path = self$getLatest(self$filter$ff100)
-      message("Using: ",path)
-      readr::read_csv(self$fileProvider$getFile(path),
-                      col_types = readr::cols(
-                        FF100_ID = readr::col_integer(),
-                        ContactOf_FF100_ID = readr::col_integer(),
-                        date_reported = readr::col_date(format = "%Y-%m-%d"),
-                        date_labtest = readr::col_date(format = "%Y-%m-%d"),
-                        date_onset = readr::col_date(format = "%Y-%m-%d"),
-                        date_hosp_adm = readr::col_date(format = "%Y-%m-%d"),
-                        date_hosp_dis = readr::col_date(format = "%Y-%m-%d"),
-                        hosp_adm = readr::col_logical(),
-                        date_NHSdirect = readr::col_date(format = "%Y-%m-%d"),
-                        NHSdirect = readr::col_logical(),
-                        date_GP_first = readr::col_date(format = "%Y-%m-%d"),
-                        GP = readr::col_logical(),
-                        date_AEhosp_first = readr::col_date(format = "%Y-%m-%d"),
-                        AEhosp = readr::col_logical(),
-                        age = readr::col_double(),
-                        gender = readr::col_character(),
-                        local_authority = readr::col_character(),
-                        travel_anywhere = readr::col_logical(),
-                        heart_ds = readr::col_logical(),
-                        diabetes = readr::col_logical(),
-                        immunodeficiency = readr::col_logical(),
-                        kidney_ds = readr::col_logical(),
-                        liver_ds = readr::col_logical(),
-                        resp_ds = readr::col_logical(),
-                        asthma = readr::col_logical(),
-                        malignancy = readr::col_logical(),
-                        organ_recipient = readr::col_logical(),
-                        neuro_ds = readr::col_logical(),
-                        pregnant = readr::col_logical(),
-                        fever = readr::col_logical(),
-                        runny_nose = readr::col_logical(),
-                        sneezing = readr::col_logical(),
-                        cough = readr::col_logical(),
-                        short_breath = readr::col_logical(),
-                        sore_throat = readr::col_logical(),
-                        diarrhoea = readr::col_logical(),
-                        nausea = readr::col_logical(),
-                        vomit = readr::col_logical(),
-                        fatigue = readr::col_logical(),
-                        muscle_ache = readr::col_logical(),
-                        joint_ache = readr::col_logical(),
-                        appetite_loss = readr::col_logical(),
-                        headache = readr::col_logical(),
-                        seizure = readr::col_logical(),
-                        alter_consious = readr::col_logical(),
-                        nose_bleed = readr::col_logical(),
-                        rash = readr::col_logical(),
-                        smell_loss = readr::col_logical(),
-                        symptom_other = readr::col_logical(),
-                        any_symptom = readr::col_logical(),
-                        status = readr::col_character(),
-                        case_classification = readr::col_character(),
-                        HCW_exposure = readr::col_logical(),
-                        ARDS = readr::col_logical(),
-                        mech_ventl = readr::col_logical(),
-                        ICU_adm = readr::col_logical(),
-                        date_ICU_adm = readr::col_date(format = "%Y-%m-%d"),
-                        date_recovery = readr::col_date(format = "%Y-%m-%d"),
-                        date_death = readr::col_date(format = "%Y-%m-%d"),
-                        date_exposure_first = readr::col_date(format = "%Y-%m-%d"),
-                        date_exposure_last = readr::col_date(format = "%Y-%m-%d"),
-                        exposure_setting_final = readr::col_character()
-                      ))
-    },
-    
-    #' @description Load Bristol data
-    #' 
-    #' @param path - path to the bristol data file
-    
-    #' @return raw Bristol data set
-    
-    getBristolData = function(path) {#
-      data = readr::read_csv(self$fileProvider$getFile(path), 
-                             col_types = readr::cols(
-                               enrollment_date = readr::col_date(format = "%Y-%m-%d"),
-                               admission_date = readr::col_date(format = "%Y-%m-%d"),
-                               radiology_date = readr::col_date(format = "%Y-%m-%d"),
-                               virology_date_of_assessmen = readr::col_date(format = "%Y-%m-%d"),
-                               ppv23_date = readr::col_date(format = "%Y-%m-%d"),
-                               flu_date = readr::col_date(format = "%Y-%m-%d"),
-                               discharge_date = readr::col_date(format = "%Y-%m-%d"),
-                               radiology_othertest = readr::col_character(),
-                               egfr_result = readr::col_character(),
-                               vitamin_d_during_admission = readr::col_character(),
-                               d_dimer = readr::col_character()
-                             ),
-                             na = c("", "NA", "n/a", "N/A", "Not done")
-      )
+  #### Seroprevalence ----
+
+  #' @description Load the seroprevalance file
+  #' 
+  #' @return raw FF100 data set
+  getSeroprevalence = function(...) {
+    path = self$getLatest(self$filter$seroprevalence)
+    message("Using: ",path)
+    tmp = self$getSaved("SEROPREV", params = list(path), ..., orElse = function (...) {
+      # ID	Barcode	surv	age	age_m	Sex	Region	Location	sample_region	SampleDate	isoweek_sample	EuroImm_outcome	EuroImm_Units	RBD_outcome	RBD_Units
+      #Barcode	Collection	Sex	Location	NHS_Region	SampleDate	sample_region	isoweek_sample	age	age_m	study_id	Abbott_outcome	Abbott_units	EuroImmun_outcome	EuroImmun_units	RBD_outcome	RBD_units	RocheN_outcome	RocheN_units	RocheS_outcome	RocheS_units	Ethnicity	study_visit	firstvaccinationdate	secondvaccinationdate	firstvaccinationbrand	secondvaccinationbrand	ONS_Region
+
+      #xlsCon = self$fileProvider$getFile(path)
       
-      data = data %>% dplyr::mutate(
-        vitamin_d_during_admission = suppressWarnings(vitamin_d_during_admission %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric()),
-        d_dimer = suppressWarnings(d_dimer %>% stringr::str_remove(" \\(readmission\\)") %>% as.numeric()),
-        fio2 = suppressWarnings(fio2 %>% stringr::str_remove_all("%") %>% as.numeric())
+      
+      for (sheet in readxl::excel_sheets(self$fileProvider$getFile(path))) {
+        a1 = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, range = "A1",col_names = FALSE)
+        if (a1[[1]]=="Barcode") break
+      }
+      
+      data = readxl::read_excel(self$fileProvider$getFile(path), sheet = sheet, col_types = "text") %>% dplyr::mutate(
+        SampleDate = suppressWarnings(as.Date(as.numeric(SampleDate),"1899-12-30")),
       ) %>% dplyr::mutate(
-        fio2 = if_else(fio2<21, NA_real_, fio2)
+        age = suppressWarnings((as.numeric(age)))
       )
+      if ("Abbott_units" %in% colnames(data)) data = data %>% dplyr::mutate(Abbott_units = suppressWarnings(as.numeric(Abbott_units)))
+      if ("EuroImmun_units" %in% colnames(data)) data = data %>% dplyr::mutate(EuroImmun_units = suppressWarnings(as.numeric(EuroImmun_units)))
+      if ("RBD_units" %in% colnames(data)) data = data %>% dplyr::mutate(RBD_units = suppressWarnings(as.numeric(RBD_units)))
+      if ("RocheN_units" %in% colnames(data)) data = data %>% dplyr::mutate(RocheN_units = suppressWarnings(as.numeric(RocheN_units)))
+      if ("RocheS_units" %in% colnames(data)) data = data %>% dplyr::mutate(RocheS_units = suppressWarnings(as.numeric(RocheS_units)))
       
-      data = data %>% dplyr::filter((is.na(discharge_date) | (discharge_date < Sys.Date() & admission_date < discharge_date)))
+      data2 = data %>% 
+        self$postcodes$lookupWeightedFeatureByOutcode(outcodeVar = Location, onspdVar = ccg) %>% 
+        dplyr::mutate(weight = ifelse(is.na(weight),0,weight)) %>%
+        dplyr::group_by(Barcode) %>% 
+        dplyr::arrange(desc(weight)) %>%
+        dplyr::filter(row_number()==1) %>%
+        dplyr::select(-weight) %>%
+        self$postcodes$lookupWeightedFeatureByOutcode(outcodeVar = Location, onspdVar = nhser) %>% 
+        dplyr::group_by(Barcode) %>% 
+        dplyr::mutate(weight = ifelse(is.na(weight),0,weight)) %>%
+        dplyr::arrange(desc(weight)) %>%
+        dplyr::filter(row_number()==1) %>%
+        dplyr::select(-weight)
+      
+      return(data2 %>% dplyr::filter(!is.na(SampleDate)) %>% dplyr::ungroup())
+    })
+    attr(tmp,"paths") = path
+    return(tmp %>% as_tibble())
+  },
+  
+  #' @description Load seroprevalence data from linelist
+  #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+  #' @return a covidTimeseriesFormat dataframe
+  getSeroprevalenceTestIncidence = function(ageBreaks = NULL, ...) {
+    stop("Need to update this for newer seroprevalence data")
+    data2 = self$getSeroprevalence(...)
+    self$getSaved("SEROPREVALENCE-INCIDENCE", params=list(data2, ageBreaks), ..., orElse = function (...) covidTimeseriesFormat({
       
       
-      #Setting Factors(will create new variable for factors)
-      data$redcap_repeat_instrument.factor = factor(data$redcap_repeat_instrument,levels=c("radiology_results","bacterialfungal_culture","virology_results"))
-      data$covid19.factor = factor(data$covid19,levels=c("1","0"))
-      data$acute_illness.factor = factor(data$acute_illness,levels=c("1","2"))
-      data$evidence_1___1.factor = factor(data$evidence_1___1,levels=c("0","1"))
-      data$evidence_1___2.factor = factor(data$evidence_1___2,levels=c("0","1"))
-      data$evidence_1___3.factor = factor(data$evidence_1___3,levels=c("0","1"))
-      data$lrti_symptoms___1.factor = factor(data$lrti_symptoms___1,levels=c("0","1"))
-      data$lrti_symptoms___2.factor = factor(data$lrti_symptoms___2,levels=c("0","1"))
-      data$lrti_symptoms___3.factor = factor(data$lrti_symptoms___3,levels=c("0","1"))
-      data$lrti_symptoms___4.factor = factor(data$lrti_symptoms___4,levels=c("0","1"))
-      data$lrti_symptoms___5.factor = factor(data$lrti_symptoms___5,levels=c("0","1"))
-      data$lrti_symptoms___6.factor = factor(data$lrti_symptoms___6,levels=c("0","1"))
-      data$lrti_symptoms___7.factor = factor(data$lrti_symptoms___7,levels=c("0","1"))
-      data$lrti_symptoms___8.factor = factor(data$lrti_symptoms___8,levels=c("0","1"))
-      data$exclusion_criteria.factor = factor(data$exclusion_criteria,levels=c("1","0"))
-      data$previous_enrolled_particip.factor = factor(data$previous_enrolled_particip,levels=c("1","0"))
-      data$lrtd_diagnosis_excluded.factor = factor(data$lrtd_diagnosis_excluded,levels=c("1","0"))
-      data$hosp.factor = factor(data$hosp,levels=c("1","2","3"))
-      data$gender.factor = factor(data$gender,levels=c("1","2"))
-      data$referral_source.factor = factor(data$referral_source,levels=c("1","0"))
-      data$ethnicity.factor = factor(data$ethnicity,levels=c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19"))
-      data$smoking.factor = factor(data$smoking,levels=c("1","2","3","4"))
-      data$vaping.factor = factor(data$vaping,levels=c("1","2","3"))
-      data$bris_cap_consent_obtained.factor = factor(data$bris_cap_consent_obtained,levels=c("1","2"))
-      data$demographics_and_screening_complete.factor = factor(data$demographics_and_screening_complete,levels=c("0","1","2"))
-      data$resp_disease2___1.factor = factor(data$resp_disease2___1,levels=c("0","1"))
-      data$resp_disease2___2.factor = factor(data$resp_disease2___2,levels=c("0","1"))
-      data$resp_disease2___3.factor = factor(data$resp_disease2___3,levels=c("0","1"))
-      data$resp_disease2___4.factor = factor(data$resp_disease2___4,levels=c("0","1"))
-      data$resp_disease2___5.factor = factor(data$resp_disease2___5,levels=c("0","1"))
-      data$resp_disease2___6.factor = factor(data$resp_disease2___6,levels=c("0","1"))
-      data$chd___1.factor = factor(data$chd___1,levels=c("0","1"))
-      data$chd___2.factor = factor(data$chd___2,levels=c("0","1"))
-      data$chd___3.factor = factor(data$chd___3,levels=c("0","1"))
-      data$chd___4.factor = factor(data$chd___4,levels=c("0","1"))
-      data$chd___5.factor = factor(data$chd___5,levels=c("0","1"))
-      data$chd___6.factor = factor(data$chd___6,levels=c("0","1"))
-      data$ckd.factor = factor(data$ckd,levels=c("1","2","3"))
-      data$liver_disease.factor = factor(data$liver_disease,levels=c("1","2","3"))
-      data$diabetes.factor = factor(data$diabetes,levels=c("1","2","3","4","5"))
-      data$dementia___1.factor = factor(data$dementia___1,levels=c("0","1"))
-      data$dementia___2.factor = factor(data$dementia___2,levels=c("0","1"))
-      data$dementia___3.factor = factor(data$dementia___3,levels=c("0","1"))
-      data$dementia___4.factor = factor(data$dementia___4,levels=c("0","1"))
-      data$dementia___5.factor = factor(data$dementia___5,levels=c("0","1"))
-      data$hemiplegia.factor = factor(data$hemiplegia,levels=c("1","0"))
-      data$pvd.factor = factor(data$pvd,levels=c("1","0"))
-      data$immsup.factor = factor(data$immsup,levels=c("1","0"))
-      data$immunodeficiency.factor = factor(data$immunodeficiency,levels=c("1","0"))
-      data$ctd.factor = factor(data$ctd,levels=c("1","0"))
-      data$hiv___1.factor = factor(data$hiv___1,levels=c("0","1"))
-      data$hiv___2.factor = factor(data$hiv___2,levels=c("0","1"))
-      data$hiv___3.factor = factor(data$hiv___3,levels=c("0","1"))
-      data$cancer.factor = factor(data$cancer,levels=c("1","2","3"))
-      data$haem_malig___1.factor = factor(data$haem_malig___1,levels=c("0","1"))
-      data$haem_malig___2.factor = factor(data$haem_malig___2,levels=c("0","1"))
-      data$haem_malig___3.factor = factor(data$haem_malig___3,levels=c("0","1"))
-      data$transplant.factor = factor(data$transplant,levels=c("1","0"))
-      data$pregnancy.factor = factor(data$pregnancy,levels=c("1","2","3","4","5","6"))
-      data$pud.factor = factor(data$pud,levels=c("1","0"))
-      data$drugs___1.factor = factor(data$drugs___1,levels=c("0","1"))
-      data$drugs___2.factor = factor(data$drugs___2,levels=c("0","1"))
-      data$drugs___3.factor = factor(data$drugs___3,levels=c("0","1"))
-      data$drugs___4.factor = factor(data$drugs___4,levels=c("0","1"))
-      data$drugs___5.factor = factor(data$drugs___5,levels=c("0","1"))
-      data$rockall_frailty_score1.factor = factor(data$rockall_frailty_score1,levels=c("1","2","3","4","5","6","7","8","9","10"))
-      data$abx_14d_prior.factor = factor(data$abx_14d_prior,levels=c("1","2","3"))
-      data$comorbidities_complete.factor = factor(data$comorbidities_complete,levels=c("0","1","2"))
-      data$temperature.factor = factor(data$temperature,levels=c("1","2","3"))
-      data$ox_on_admission.factor = factor(data$ox_on_admission,levels=c("1","0"))
-      data$crb65_age.factor = factor(data$crb65_age,levels=c("1","0"))
-      data$confusion.factor = factor(data$confusion,levels=c("1","0"))
-      data$resp_rate.factor = factor(data$resp_rate,levels=c("1","0"))
-      data$blood_pressure.factor = factor(data$blood_pressure,levels=c("1","0"))
-      data$fever.factor = factor(data$fever,levels=c("1","2","3"))
-      data$hypothermia.factor = factor(data$hypothermia,levels=c("1","2","3"))
-      data$chills.factor = factor(data$chills,levels=c("1","2","3"))
-      data$rigors.factor = factor(data$rigors,levels=c("1","2","3"))
-      data$cough.factor = factor(data$cough,levels=c("1","2","3"))
-      data$wheeze.factor = factor(data$wheeze,levels=c("1","2","3"))
-      data$sputum.factor = factor(data$sputum,levels=c("1","2","3"))
-      data$sob.factor = factor(data$sob,levels=c("1","2","3"))
-      data$pleurisy.factor = factor(data$pleurisy,levels=c("1","2","3"))
-      data$tachypnoea.factor = factor(data$tachypnoea,levels=c("1","2","3"))
-      data$maliase.factor = factor(data$maliase,levels=c("1","2","3"))
-      data$oe_cap.factor = factor(data$oe_cap,levels=c("1","2","3"))
-      data$oe_lrtd.factor = factor(data$oe_lrtd,levels=c("1","2","3"))
-      data$nhya.factor = factor(data$nhya,levels=c("1","2","3","4","5"))
-      data$admission_data_complete.factor = factor(data$admission_data_complete,levels=c("0","1","2"))
-      data$patient_blood_group.factor = factor(data$patient_blood_group,levels=c("1","2","3","4","5","6","7","8","9"))
-      data$admission_blood_results_complete.factor = factor(data$admission_blood_results_complete,levels=c("0","1","2"))
-      data$radio_test.factor = factor(data$radio_test,levels=c("1","2","3","4"))
-      data$radiology_result.factor = factor(data$radiology_result,levels=c("1","2","3","4","5","6"))
-      data$radiology_results_complete.factor = factor(data$radiology_results_complete,levels=c("0","1","2"))
-      data$micro_test_done.factor = factor(data$micro_test_done,levels=c("1","0"))
-      data$micro_test.factor = factor(data$micro_test,levels=c("1","2","3","4","5","6"))
-      data$micro_isolates.factor = factor(data$micro_isolates,levels=c("1","2","3"))
-      data$isolate_identified___1.factor = factor(data$isolate_identified___1,levels=c("0","1"))
-      data$isolate_identified___2.factor = factor(data$isolate_identified___2,levels=c("0","1"))
-      data$isolate_identified___3.factor = factor(data$isolate_identified___3,levels=c("0","1"))
-      data$isolate_identified___4.factor = factor(data$isolate_identified___4,levels=c("0","1"))
-      data$isolate_identified___5.factor = factor(data$isolate_identified___5,levels=c("0","1"))
-      data$isolate_identified___6.factor = factor(data$isolate_identified___6,levels=c("0","1"))
-      data$isolate_identified___7.factor = factor(data$isolate_identified___7,levels=c("0","1"))
-      data$isolate_identified___8.factor = factor(data$isolate_identified___8,levels=c("0","1"))
-      data$isolate_identified___9.factor = factor(data$isolate_identified___9,levels=c("0","1"))
-      data$isolate_identified___10.factor = factor(data$isolate_identified___10,levels=c("0","1"))
-      data$isolate_identified___11.factor = factor(data$isolate_identified___11,levels=c("0","1"))
-      data$isolate_identified___12.factor = factor(data$isolate_identified___12,levels=c("0","1"))
-      data$isolate_identified___13.factor = factor(data$isolate_identified___13,levels=c("0","1"))
-      data$isolate_identified___14.factor = factor(data$isolate_identified___14,levels=c("0","1"))
-      data$isolate_identified___15.factor = factor(data$isolate_identified___15,levels=c("0","1"))
-      data$isolate_identified___16.factor = factor(data$isolate_identified___16,levels=c("0","1"))
-      data$isolate_identified___17.factor = factor(data$isolate_identified___17,levels=c("0","1"))
-      data$isolate_identified___18.factor = factor(data$isolate_identified___18,levels=c("0","1"))
-      data$isolate_identified___19.factor = factor(data$isolate_identified___19,levels=c("0","1"))
-      data$isolate_identified___20.factor = factor(data$isolate_identified___20,levels=c("0","1"))
-      data$isolate_identified___21.factor = factor(data$isolate_identified___21,levels=c("0","1"))
-      data$isolate_identified___22.factor = factor(data$isolate_identified___22,levels=c("0","1"))
-      data$isolate_identified___23.factor = factor(data$isolate_identified___23,levels=c("0","1"))
-      data$isolate_identified___24.factor = factor(data$isolate_identified___24,levels=c("0","1"))
-      data$isolate_identified___25.factor = factor(data$isolate_identified___25,levels=c("0","1"))
-      data$isolate_identified___26.factor = factor(data$isolate_identified___26,levels=c("0","1"))
-      data$isolate_identified___27.factor = factor(data$isolate_identified___27,levels=c("0","1"))
-      data$isolate_identified___28.factor = factor(data$isolate_identified___28,levels=c("0","1"))
-      data$isolate_identified___29.factor = factor(data$isolate_identified___29,levels=c("0","1"))
-      data$isolate_identified___30.factor = factor(data$isolate_identified___30,levels=c("0","1"))
-      data$isolate_identified___31.factor = factor(data$isolate_identified___31,levels=c("0","1"))
-      data$isolate_identified___32.factor = factor(data$isolate_identified___32,levels=c("0","1"))
-      data$isolate_identified___33.factor = factor(data$isolate_identified___33,levels=c("0","1"))
-      data$isolate_identified___34.factor = factor(data$isolate_identified___34,levels=c("0","1"))
-      data$isolate_identified___35.factor = factor(data$isolate_identified___35,levels=c("0","1"))
-      data$isolate_identified___36.factor = factor(data$isolate_identified___36,levels=c("0","1"))
-      data$isolate_identified___37.factor = factor(data$isolate_identified___37,levels=c("0","1"))
-      data$isolate_identified___38.factor = factor(data$isolate_identified___38,levels=c("0","1"))
-      data$isolate_identified___39.factor = factor(data$isolate_identified___39,levels=c("0","1"))
-      data$isolate_identified___40.factor = factor(data$isolate_identified___40,levels=c("0","1"))
-      data$isolate_identified___41.factor = factor(data$isolate_identified___41,levels=c("0","1"))
-      data$isolate_identified___42.factor = factor(data$isolate_identified___42,levels=c("0","1"))
-      data$isolate_identified___43.factor = factor(data$isolate_identified___43,levels=c("0","1"))
-      data$isolate_identified___44.factor = factor(data$isolate_identified___44,levels=c("0","1"))
-      data$isolate_identified___45.factor = factor(data$isolate_identified___45,levels=c("0","1"))
-      data$isolate_identified___46.factor = factor(data$isolate_identified___46,levels=c("0","1"))
-      data$isolate_identified___47.factor = factor(data$isolate_identified___47,levels=c("0","1"))
-      data$isolate_identified___48.factor = factor(data$isolate_identified___48,levels=c("0","1"))
-      data$isolate_identified___49.factor = factor(data$isolate_identified___49,levels=c("0","1"))
-      data$isolate_identified___50.factor = factor(data$isolate_identified___50,levels=c("0","1"))
-      data$isolate_identified___51.factor = factor(data$isolate_identified___51,levels=c("0","1"))
-      data$isolate_identified___52.factor = factor(data$isolate_identified___52,levels=c("0","1"))
-      data$isolate_identified___53.factor = factor(data$isolate_identified___53,levels=c("0","1"))
-      data$isolate_identified___54.factor = factor(data$isolate_identified___54,levels=c("0","1"))
-      data$isolate_identified___55.factor = factor(data$isolate_identified___55,levels=c("0","1"))
-      data$isolate_identified___56.factor = factor(data$isolate_identified___56,levels=c("0","1"))
-      data$isolate_identified___57.factor = factor(data$isolate_identified___57,levels=c("0","1"))
-      data$isolate_identified___58.factor = factor(data$isolate_identified___58,levels=c("0","1"))
-      data$isolate_identified___59.factor = factor(data$isolate_identified___59,levels=c("0","1"))
-      data$isolate_identified___60.factor = factor(data$isolate_identified___60,levels=c("0","1"))
-      data$isolate_identified___61.factor = factor(data$isolate_identified___61,levels=c("0","1"))
-      data$isolate_class.factor = factor(data$isolate_class,levels=c("1","2","3","4"))
-      data$micro_lab.factor = factor(data$micro_lab,levels=c("1","2","3"))
-      data$pn_result.factor = factor(data$pn_result,levels=c("1","2","3"))
-      data$pen_susceptibility___1.factor = factor(data$pen_susceptibility___1,levels=c("0","1"))
-      data$pen_susceptibility___2.factor = factor(data$pen_susceptibility___2,levels=c("0","1"))
-      data$pen_susceptibility___3.factor = factor(data$pen_susceptibility___3,levels=c("0","1"))
-      data$pen_susceptibility___4.factor = factor(data$pen_susceptibility___4,levels=c("0","1"))
-      data$pen_susceptibility___5.factor = factor(data$pen_susceptibility___5,levels=c("0","1"))
-      data$pen_susceptibility___6.factor = factor(data$pen_susceptibility___6,levels=c("0","1"))
-      data$pen_susceptibility___7.factor = factor(data$pen_susceptibility___7,levels=c("0","1"))
-      data$septrin_susceptibility___1.factor = factor(data$septrin_susceptibility___1,levels=c("0","1"))
-      data$septrin_susceptibility___2.factor = factor(data$septrin_susceptibility___2,levels=c("0","1"))
-      data$septrin_susceptibility___3.factor = factor(data$septrin_susceptibility___3,levels=c("0","1"))
-      data$septrin_susceptibility___4.factor = factor(data$septrin_susceptibility___4,levels=c("0","1"))
-      data$septrin_susceptibility___5.factor = factor(data$septrin_susceptibility___5,levels=c("0","1"))
-      data$septrin_susceptibility___6.factor = factor(data$septrin_susceptibility___6,levels=c("0","1"))
-      data$septrin_susceptibility___7.factor = factor(data$septrin_susceptibility___7,levels=c("0","1"))
-      data$doxy_susceptibility___1.factor = factor(data$doxy_susceptibility___1,levels=c("0","1"))
-      data$doxy_susceptibility___2.factor = factor(data$doxy_susceptibility___2,levels=c("0","1"))
-      data$doxy_susceptibility___3.factor = factor(data$doxy_susceptibility___3,levels=c("0","1"))
-      data$doxy_susceptibility___4.factor = factor(data$doxy_susceptibility___4,levels=c("0","1"))
-      data$doxy_susceptibility___5.factor = factor(data$doxy_susceptibility___5,levels=c("0","1"))
-      data$doxy_susceptibility___6.factor = factor(data$doxy_susceptibility___6,levels=c("0","1"))
-      data$doxy_susceptibility___7.factor = factor(data$doxy_susceptibility___7,levels=c("0","1"))
-      data$levoflox_suscept___1.factor = factor(data$levoflox_suscept___1,levels=c("0","1"))
-      data$levoflox_suscept___2.factor = factor(data$levoflox_suscept___2,levels=c("0","1"))
-      data$levoflox_suscept___3.factor = factor(data$levoflox_suscept___3,levels=c("0","1"))
-      data$levoflox_suscept___4.factor = factor(data$levoflox_suscept___4,levels=c("0","1"))
-      data$levoflox_suscept___5.factor = factor(data$levoflox_suscept___5,levels=c("0","1"))
-      data$levoflox_suscept___6.factor = factor(data$levoflox_suscept___6,levels=c("0","1"))
-      data$levoflox_suscept___7.factor = factor(data$levoflox_suscept___7,levels=c("0","1"))
-      data$cef_susceptibility___1.factor = factor(data$cef_susceptibility___1,levels=c("0","1"))
-      data$cef_susceptibility___2.factor = factor(data$cef_susceptibility___2,levels=c("0","1"))
-      data$cef_susceptibility___3.factor = factor(data$cef_susceptibility___3,levels=c("0","1"))
-      data$cef_susceptibility___4.factor = factor(data$cef_susceptibility___4,levels=c("0","1"))
-      data$cef_susceptibility___5.factor = factor(data$cef_susceptibility___5,levels=c("0","1"))
-      data$cef_susceptibility___6.factor = factor(data$cef_susceptibility___6,levels=c("0","1"))
-      data$cef_susceptibility___7.factor = factor(data$cef_susceptibility___7,levels=c("0","1"))
-      data$bacterialfungal_culture_complete.factor = factor(data$bacterialfungal_culture_complete,levels=c("0","1","2"))
-      data$viral_testing_performed.factor = factor(data$viral_testing_performed,levels=c("1","0"))
-      data$specimen_type.factor = factor(data$specimen_type,levels=c("1","2","3","4","5"))
-      data$virus_isolated.factor = factor(data$virus_isolated,levels=c("1","0"))
-      data$specimen_sample_location.factor = factor(data$specimen_sample_location,levels=c("1","2","3","4","5"))
-      data$test_type.factor = factor(data$test_type,levels=c("1","2"))
-      data$virus_pathogen___1.factor = factor(data$virus_pathogen___1,levels=c("0","1"))
-      data$virus_pathogen___2.factor = factor(data$virus_pathogen___2,levels=c("0","1"))
-      data$virus_pathogen___3.factor = factor(data$virus_pathogen___3,levels=c("0","1"))
-      data$virus_pathogen___4.factor = factor(data$virus_pathogen___4,levels=c("0","1"))
-      data$virus_pathogen___5.factor = factor(data$virus_pathogen___5,levels=c("0","1"))
-      data$virus_pathogen___6.factor = factor(data$virus_pathogen___6,levels=c("0","1"))
-      data$virus_pathogen___7.factor = factor(data$virus_pathogen___7,levels=c("0","1"))
-      data$virus_pathogen___8.factor = factor(data$virus_pathogen___8,levels=c("0","1"))
-      data$virus_pathogen___9.factor = factor(data$virus_pathogen___9,levels=c("0","1"))
-      data$virus_pathogen___10.factor = factor(data$virus_pathogen___10,levels=c("0","1"))
-      data$virus_pathogen___11.factor = factor(data$virus_pathogen___11,levels=c("0","1"))
-      data$virus_pathogen___12.factor = factor(data$virus_pathogen___12,levels=c("0","1"))
-      data$virology_results_complete.factor = factor(data$virology_results_complete,levels=c("0","1","2"))
-      data$pneumovax_ppv23.factor = factor(data$pneumovax_ppv23,levels=c("1","2","3"))
-      data$flu_vaccine.factor = factor(data$flu_vaccine,levels=c("1","2","3"))
-      data$covid19_vax.factor = factor(data$covid19_vax,levels=c("1","2","3"))
-      data$vaccination_status_complete.factor = factor(data$vaccination_status_complete,levels=c("0","1","2"))
-      data$inpatient_admission.factor = factor(data$inpatient_admission,levels=c("1","0"))
-      data$covid_19_diagnosis.factor = factor(data$covid_19_diagnosis,levels=c("1","2","3"))
-      data$final_standard_of_care_lrt___1.factor = factor(data$final_standard_of_care_lrt___1,levels=c("0","1"))
-      data$final_standard_of_care_lrt___2.factor = factor(data$final_standard_of_care_lrt___2,levels=c("0","1"))
-      data$final_standard_of_care_lrt___3.factor = factor(data$final_standard_of_care_lrt___3,levels=c("0","1"))
-      data$final_standard_of_care_lrt___4.factor = factor(data$final_standard_of_care_lrt___4,levels=c("0","1"))
-      data$final_standard_of_care_lrt___5.factor = factor(data$final_standard_of_care_lrt___5,levels=c("0","1"))
-      data$final_standard_of_care_lrt___6.factor = factor(data$final_standard_of_care_lrt___6,levels=c("0","1"))
-      data$final_standard_of_care_lrt___7.factor = factor(data$final_standard_of_care_lrt___7,levels=c("0","1"))
-      data$final_standard_of_care_lrt___8.factor = factor(data$final_standard_of_care_lrt___8,levels=c("0","1"))
-      data$final_standard_of_care_lrt___9.factor = factor(data$final_standard_of_care_lrt___9,levels=c("0","1"))
-      data$final_standard_of_care_lrt___10.factor = factor(data$final_standard_of_care_lrt___10,levels=c("0","1"))
-      data$dlrtd_outcome_at_30_days.factor = factor(data$dlrtd_outcome_at_30_days,levels=c("1","2","3","4","5","6"))
-      data$highest_level_care_require.factor = factor(data$highest_level_care_require,levels=c("1","2","3"))
-      data$did_the_patient_receive_ec.factor = factor(data$did_the_patient_receive_ec,levels=c("1","0"))
-      data$inotropic_support_required.factor = factor(data$inotropic_support_required,levels=c("1","2","3"))
-      data$did_the_patient_have_respi.factor = factor(data$did_the_patient_have_respi,levels=c("1","0"))
-      data$ventilatory_support.factor = factor(data$ventilatory_support,levels=c("1","2","3","4","5"))
-      data$renal_replacement_therapy.factor = factor(data$renal_replacement_therapy,levels=c("1","0"))
-      data$complications___1.factor = factor(data$complications___1,levels=c("0","1"))
-      data$complications___2.factor = factor(data$complications___2,levels=c("0","1"))
-      data$complications___3.factor = factor(data$complications___3,levels=c("0","1"))
-      data$complications___4.factor = factor(data$complications___4,levels=c("0","1"))
-      data$complications___5.factor = factor(data$complications___5,levels=c("0","1"))
-      data$complications___6.factor = factor(data$complications___6,levels=c("0","1"))
-      data$complications___7.factor = factor(data$complications___7,levels=c("0","1"))
-      data$complications___8.factor = factor(data$complications___8,levels=c("0","1"))
-      data$complications___9.factor = factor(data$complications___9,levels=c("0","1"))
-      data$complications___10.factor = factor(data$complications___10,levels=c("0","1"))
-      data$complications___11.factor = factor(data$complications___11,levels=c("0","1"))
-      data$complications___12.factor = factor(data$complications___12,levels=c("0","1"))
-      data$complications___13.factor = factor(data$complications___13,levels=c("0","1"))
-      data$complications___14.factor = factor(data$complications___14,levels=c("0","1"))
-      data$complications___15.factor = factor(data$complications___15,levels=c("0","1"))
-      data$ip_death.factor = factor(data$ip_death,levels=c("1","0"))
-      data$outcome_data_complete.factor = factor(data$outcome_data_complete,levels=c("0","1","2"))
+      # data2 %>% group_by(EuroImm_outcome) %>% summarise(low_cutoff = min(EuroImm_Units,na.rm=TRUE),high_cutoff = max(EuroImm_Units,na.rm=TRUE))
+      # cut offs are: Negative > Borderline > Positive; 0.8 -> 1.1 
+      # data2 %>% group_by(RBD_outcome) %>% summarise(low_cutoff = min(RBD_Units,na.rm=TRUE),high_cutoff = max(RBD_Units,na.rm=TRUE))
+      # cut offs are: Negative > Borderline > Positive; 3.3 -> 4.9 
       
-      levels(data$redcap_repeat_instrument.factor)=c("Radiology Results","Bacterial/Fungal Culture","Virology Results")
-      levels(data$covid19.factor)=c("Yes","No")
-      levels(data$acute_illness.factor)=c("Yes","No")
-      levels(data$evidence_1___1.factor)=c("Unchecked","Checked")
-      levels(data$evidence_1___2.factor)=c("Unchecked","Checked")
-      levels(data$evidence_1___3.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___1.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___2.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___3.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___4.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___5.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___6.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___7.factor)=c("Unchecked","Checked")
-      levels(data$lrti_symptoms___8.factor)=c("Unchecked","Checked")
-      levels(data$exclusion_criteria.factor)=c("Yes","No")
-      levels(data$previous_enrolled_particip.factor)=c("Yes","No")
-      levels(data$lrtd_diagnosis_excluded.factor)=c("Yes","No")
-      levels(data$hosp.factor)=c("Southmead","BRI","RUH")
-      levels(data$gender.factor)=c("Male","Female")
-      levels(data$referral_source.factor)=c("Yes","No")
-      levels(data$ethnicity.factor)=c("White British","White Irish","White - Gypsy or Irish Traveller","Any other white background","White and black Caribbean","White and black African","White and Asian","Any other mixed/multiple ethnic background","Indian","Pakistani","Bangladeshi","Chinese","Other Asian","African","Caribbean","Any other black/African/Caribbean background","Arab","Other ethnic group","Unknown ethnic group")
-      levels(data$smoking.factor)=c("Current smoker","Ex-smoker","Non-smoker","Unknown")
-      levels(data$vaping.factor)=c("Yes","No","Unknown")
-      levels(data$bris_cap_consent_obtained.factor)=c("Yes","No")
-      levels(data$demographics_and_screening_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$resp_disease2___1.factor)=c("Unchecked","Checked")
-      levels(data$resp_disease2___2.factor)=c("Unchecked","Checked")
-      levels(data$resp_disease2___3.factor)=c("Unchecked","Checked")
-      levels(data$resp_disease2___4.factor)=c("Unchecked","Checked")
-      levels(data$resp_disease2___5.factor)=c("Unchecked","Checked")
-      levels(data$resp_disease2___6.factor)=c("Unchecked","Checked")
-      levels(data$chd___1.factor)=c("Unchecked","Checked")
-      levels(data$chd___2.factor)=c("Unchecked","Checked")
-      levels(data$chd___3.factor)=c("Unchecked","Checked")
-      levels(data$chd___4.factor)=c("Unchecked","Checked")
-      levels(data$chd___5.factor)=c("Unchecked","Checked")
-      levels(data$chd___6.factor)=c("Unchecked","Checked")
-      levels(data$ckd.factor)=c("No","Mild","Moderate or Severe CKD")
-      levels(data$liver_disease.factor)=c("None","Mild","Moderate or Severe")
-      levels(data$diabetes.factor)=c("No","Type 1 DM - no complications","Type 1 DM - complications","Type 2 DM - no complications","Type 2 DM - complications")
-      levels(data$dementia___1.factor)=c("Unchecked","Checked")
-      levels(data$dementia___2.factor)=c("Unchecked","Checked")
-      levels(data$dementia___3.factor)=c("Unchecked","Checked")
-      levels(data$dementia___4.factor)=c("Unchecked","Checked")
-      levels(data$dementia___5.factor)=c("Unchecked","Checked")
-      levels(data$hemiplegia.factor)=c("Yes","No")
-      levels(data$pvd.factor)=c("Yes","No")
-      levels(data$immsup.factor)=c("Yes","No")
-      levels(data$immunodeficiency.factor)=c("Yes","No")
-      levels(data$ctd.factor)=c("Yes","No")
-      levels(data$hiv___1.factor)=c("Unchecked","Checked")
-      levels(data$hiv___2.factor)=c("Unchecked","Checked")
-      levels(data$hiv___3.factor)=c("Unchecked","Checked")
-      levels(data$cancer.factor)=c("None","Solid Organ Cancer - no mets","Solid Organ Cancer - Metastatic Disease")
-      levels(data$haem_malig___1.factor)=c("Unchecked","Checked")
-      levels(data$haem_malig___2.factor)=c("Unchecked","Checked")
-      levels(data$haem_malig___3.factor)=c("Unchecked","Checked")
-      levels(data$transplant.factor)=c("Yes","No")
-      levels(data$pregnancy.factor)=c("Not pregnant","First Trimester","Second Trimester","Third Trimester","Pregnant, unsure of trimester","Post-partum")
-      levels(data$pud.factor)=c("Yes","No")
-      levels(data$drugs___1.factor)=c("Unchecked","Checked")
-      levels(data$drugs___2.factor)=c("Unchecked","Checked")
-      levels(data$drugs___3.factor)=c("Unchecked","Checked")
-      levels(data$drugs___4.factor)=c("Unchecked","Checked")
-      levels(data$drugs___5.factor)=c("Unchecked","Checked")
-      levels(data$rockall_frailty_score1.factor)=c(" 1 - Very Fit  People who are robust, active, energetic and motivated. These people commonly exercise regularly. They are among the fittest for their age."," 2 - Well  People who have no active disease symptoms but are less fit than category 1. Often, they exercise or are very active occasionally, e.g. seasonally."," 3 - Managing Well People whose medical problems are well controlled, but are not regularly active beyond routine walking.","4 - Vulnerable While not dependent on others for daily help, often symptoms limit activities. A common complaint is being slowed up, and/or being tired during the day.","5 - Mildly Frail  These people often have more evident slowing, and need help in high order IADLs (finances, transportation, heavy housework, medications). Typically, mild frailty progressively impairs shopping and walking outside alone, meal preparation and housework.","6 - Moderately Frail People need help with all outside activities and with keeping house. Inside, they often have problems with stairs and need help with bathing and might need minimal assistance (cuing, standby) with dressing.","7 - Severely Frail Completely dependent for personal care, from whatever cause (physical or cognitive). Even so, they seem stable and not at high risk of dying (within ~ 6 months).","8 - Very Severely Frail  Completely dependent, approaching the end of life. Typically, they could not recover even from a minor illness.","9 - Approaching the end of life This category applies to people with a life expectancy < 6 months, who are not otherwise evidently frail.","NOT RECORDED IN CLERKING/Unassessed")
-      levels(data$abx_14d_prior.factor)=c("Yes","No","Unknown")
-      levels(data$comorbidities_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$temperature.factor)=c("Fever (T>38.5°C)","Hypothermia (T< 35.5°C)","Normal")
-      levels(data$ox_on_admission.factor)=c("Yes","No")
-      levels(data$crb65_age.factor)=c("Yes","No")
-      levels(data$confusion.factor)=c("Yes","No")
-      levels(data$resp_rate.factor)=c("Yes","No")
-      levels(data$blood_pressure.factor)=c("Yes","No")
-      levels(data$fever.factor)=c("Absent","Present","Unknown")
-      levels(data$hypothermia.factor)=c("Absent","Present","Unknown")
-      levels(data$chills.factor)=c("Absent","Present","Unknown")
-      levels(data$rigors.factor)=c("Absent","Present","Unknown")
-      levels(data$cough.factor)=c("Absent","Present","Unknown")
-      levels(data$wheeze.factor)=c("Absent","Present","Unknown")
-      levels(data$sputum.factor)=c("Absent","Present","Unknown")
-      levels(data$sob.factor)=c("Absent","Present","Unknown")
-      levels(data$pleurisy.factor)=c("Absent","Present","Unknown")
-      levels(data$tachypnoea.factor)=c("Absent","Present","Unknown")
-      levels(data$maliase.factor)=c("Absent","Present","Unknown")
-      levels(data$oe_cap.factor)=c("Absent","Present","Unknown")
-      levels(data$oe_lrtd.factor)=c("Absent","Present","Unknown")
-      levels(data$nhya.factor)=c("Unable to determine/unknown","Class I No symptoms","Class II Mild symptoms (eg mild SOB)","Class III Marked limitation in activity due to symptoms (eg walking 20-100m). Comfortable only at rest","Class IV Severe limitations, symptoms at rest, bedbound")
-      levels(data$admission_data_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$patient_blood_group.factor)=c("A+","A-","B+","B-","AB+","AB-","O+","O-","Unknown")
-      levels(data$admission_blood_results_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$radio_test.factor)=c("CXR","CT scan","US thorax","Other")
-      levels(data$radiology_result.factor)=c("Normal","Consistent with Pneumonia","Consistent with heart failure","Consistent with pleural effusion","Consistent with COVID-19","Other abnormal finding")
-      levels(data$radiology_results_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$micro_test_done.factor)=c("Yes","No")
-      levels(data$micro_test.factor)=c("Blood culture","Sputum","Pleural fluid","Bronchoalveolar lavage","Tracheal Aspirate","Urinary antigen (pn/lg)")
-      levels(data$micro_isolates.factor)=c("Yes","No","Unknown")
-      levels(data$isolate_identified___1.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___2.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___3.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___4.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___5.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___6.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___7.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___8.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___9.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___10.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___11.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___12.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___13.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___14.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___15.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___16.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___17.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___18.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___19.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___20.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___21.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___22.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___23.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___24.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___25.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___26.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___27.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___28.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___29.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___30.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___31.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___32.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___33.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___34.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___35.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___36.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___37.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___38.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___39.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___40.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___41.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___42.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___43.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___44.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___45.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___46.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___47.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___48.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___49.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___50.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___51.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___52.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___53.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___54.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___55.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___56.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___57.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___58.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___59.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___60.factor)=c("Unchecked","Checked")
-      levels(data$isolate_identified___61.factor)=c("Unchecked","Checked")
-      levels(data$isolate_class.factor)=c("Pathogen","Contaminant","Normal Flora","Coloniser")
-      levels(data$micro_lab.factor)=c("Yes","No","Unknown")
-      levels(data$pn_result.factor)=c("Not tested/no result","Non-typable","Serotype obtained")
-      levels(data$pen_susceptibility___1.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___2.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___3.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___4.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___5.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___6.factor)=c("Unchecked","Checked")
-      levels(data$pen_susceptibility___7.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___1.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___2.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___3.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___4.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___5.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___6.factor)=c("Unchecked","Checked")
-      levels(data$septrin_susceptibility___7.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___1.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___2.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___3.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___4.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___5.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___6.factor)=c("Unchecked","Checked")
-      levels(data$doxy_susceptibility___7.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___1.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___2.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___3.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___4.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___5.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___6.factor)=c("Unchecked","Checked")
-      levels(data$levoflox_suscept___7.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___1.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___2.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___3.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___4.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___5.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___6.factor)=c("Unchecked","Checked")
-      levels(data$cef_susceptibility___7.factor)=c("Unchecked","Checked")
-      levels(data$bacterialfungal_culture_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$viral_testing_performed.factor)=c("Yes","No")
-      levels(data$specimen_type.factor)=c("Sputum","Saliva","Mucus","Pleural Fluid","Swabbed material")
-      levels(data$virus_isolated.factor)=c("Yes","No")
-      levels(data$specimen_sample_location.factor)=c("Nasal cavity","Oropharynx","Nasopharynx","Other Upper Respiratory System","Lower Respiratory System")
-      levels(data$test_type.factor)=c("PCR viral panel","Viral culture")
-      levels(data$virus_pathogen___1.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___2.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___3.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___4.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___5.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___6.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___7.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___8.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___9.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___10.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___11.factor)=c("Unchecked","Checked")
-      levels(data$virus_pathogen___12.factor)=c("Unchecked","Checked")
-      levels(data$virology_results_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$pneumovax_ppv23.factor)=c("Received PneumoVax","Not received","Unknown")
-      levels(data$flu_vaccine.factor)=c("Received Seasonal Flu vaccine","Not received","Unknown")
-      levels(data$covid19_vax.factor)=c("Received COVID19 vaccine","Not received","Unknown")
-      levels(data$vaccination_status_complete.factor)=c("Incomplete","Unverified","Complete")
-      levels(data$inpatient_admission.factor)=c("Yes","No")
-      levels(data$covid_19_diagnosis.factor)=c("COVID-19 - laboratory confirmed","COVID-19 - clinical diagnosis","COVID-19 excluded")
-      levels(data$final_standard_of_care_lrt___1.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___2.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___3.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___4.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___5.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___6.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___7.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___8.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___9.factor)=c("Unchecked","Checked")
-      levels(data$final_standard_of_care_lrt___10.factor)=c("Unchecked","Checked")
-      levels(data$dlrtd_outcome_at_30_days.factor)=c("Deceased","Recovered","Recovered, with sequelae","Ongoing recovery","Not recovered","Unknown")
-      levels(data$highest_level_care_require.factor)=c("General Medical Ward","Intensive Care/HDU","CCU or high-care area")
-      levels(data$did_the_patient_receive_ec.factor)=c("Yes","No")
-      levels(data$inotropic_support_required.factor)=c("Yes","No","Unknown")
-      levels(data$did_the_patient_have_respi.factor)=c("Yes","No")
-      levels(data$ventilatory_support.factor)=c("Intubation","BiPAP","CPAP","High-Flow Nasal Cannulae","None")
-      levels(data$renal_replacement_therapy.factor)=c("Yes","No")
-      levels(data$complications___1.factor)=c("Unchecked","Checked")
-      levels(data$complications___2.factor)=c("Unchecked","Checked")
-      levels(data$complications___3.factor)=c("Unchecked","Checked")
-      levels(data$complications___4.factor)=c("Unchecked","Checked")
-      levels(data$complications___5.factor)=c("Unchecked","Checked")
-      levels(data$complications___6.factor)=c("Unchecked","Checked")
-      levels(data$complications___7.factor)=c("Unchecked","Checked")
-      levels(data$complications___8.factor)=c("Unchecked","Checked")
-      levels(data$complications___9.factor)=c("Unchecked","Checked")
-      levels(data$complications___10.factor)=c("Unchecked","Checked")
-      levels(data$complications___11.factor)=c("Unchecked","Checked")
-      levels(data$complications___12.factor)=c("Unchecked","Checked")
-      levels(data$complications___13.factor)=c("Unchecked","Checked")
-      levels(data$complications___14.factor)=c("Unchecked","Checked")
-      levels(data$complications___15.factor)=c("Unchecked","Checked")
-      levels(data$ip_death.factor)=c("Yes","No")
-      levels(data$outcome_data_complete.factor)=c("Incomplete","Unverified","Complete")
+      data3 = data2 %>%
+        dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks), gender=self$normaliseGender(Sex), date = SampleDate)
+      if ("EuroImm_outcome" %in% colnames(data3)) data3 %>% rename(EuroImmun_outcome = EuroImm_outcome)
+      if ("EuroImm_Units" %in% colnames(data3)) data3 %>% rename(EuroImmun_units = EuroImm_Units)
+      if ("RBD_Units" %in% colnames(data3)) data3 %>% rename(RBD_units = RBD_Units)
       
-      # data = data %>% dplyr::rename(
-      #   `Record ID Number`=record_number,
-      #   `Repeat Instrument`=redcap_repeat_instrument,
-      #   `Repeat Instance`=redcap_repeat_instance,
-      #   `Enrollment Date`=enrollment_date,
-      #   `Admission Date`=admission_date,
-      #   `Date of Birth`=dob_1,
-      #   `Age at admission`=age_at_admission,
-      #   `Does this patient have suspected or proven COVID-19 infection? (current or previous infection)`=covid19,
-      #   `Is this an acute illness?  (Ie, Under 21 days)`=acute_illness,
-      #   `Evidence of acute respiratory illness or HF   (choice=Clinical or radiological diagnosis)`=evidence_1___1,
-      #   `Evidence of acute respiratory illness or HF   (choice=New/worsening symptoms or findings)`=evidence_1___2,
-      #   `Evidence of acute respiratory illness or HF   (choice=None)`=evidence_1___3,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Fever)`=lrti_symptoms___1,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Cough)`=lrti_symptoms___2,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Sputum)`=lrti_symptoms___3,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Dyspnea (SOB))`=lrti_symptoms___4,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Tachypnea (RR≥20/min))`=lrti_symptoms___5,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Pleurisy)`=lrti_symptoms___6,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Auscultatory findings (crackles, bronchial breathing, dullness on percussion))`=lrti_symptoms___7,
-      #   `Symptoms   Requires ≥ 2 to be included if no clinical/radiological diagnosis  (choice=Radiological findings)`=lrti_symptoms___8,
-      #   `Signs/Symptoms develop over 48 hours into admission`=exclusion_criteria,
-      #   `Previous enrolled participants readmitted ≤ 7 days after discharge `=previous_enrolled_particip,
-      #   `LRTD diagnosis excluded`=lrtd_diagnosis_excluded,
-      #   `Hospital`=hosp,
-      #   `Gender`=gender,
-      #   `Care home resident`=referral_source,
-      #   `Ethnicity`=ethnicity,
-      #   `Smoking status`=smoking,
-      #   `Vaping (in last 30 days)`=vaping,
-      #   `Days of symptoms before admission`=days_of_symptoms_before_ad,
-      #   `Written AVON-CAP Consent Obtained`=bris_cap_consent_obtained,
-      #   `Date of BRISTOL-CAP Consent`=date_of_briscap_consent,
-      #   `Complete?`=demographics_and_screening_complete,
-      #   `Respiratory Disease (choice=None)`=resp_disease2___1,
-      #   `Respiratory Disease (choice=COPD (Chronic Obstructive Pulmonary Disease/Emphysema))`=resp_disease2___2,
-      #   `Respiratory Disease (choice=Asthma)`=resp_disease2___3,
-      #   `Respiratory Disease (choice=Bronchiectasis)`=resp_disease2___4,
-      #   `Respiratory Disease (choice=Pulmonary Fibrosis/Interstitial Lung Disease)`=resp_disease2___5,
-      #   `Respiratory Disease (choice=Other)`=resp_disease2___6,
-      #   `Other Respiratory Disease`=other_respiratory_disease,
-      #   `Chronic Heart Disease (choice=None)`=chd___1,
-      #   `Chronic Heart Disease (choice=Hypertension)`=chd___2,
-      #   `Chronic Heart Disease (choice=Atrial Fibrillation)`=chd___3,
-      #   `Chronic Heart Disease (choice=Ischaemic heart disease)`=chd___4,
-      #   `Chronic Heart Disease (choice=Heart failure/CCF)`=chd___5,
-      #   `Chronic Heart Disease (choice=Other)`=chd___6,
-      #   `Other Chronic Heart Disease`=other_respiratory_disease_2,
-      #   `Chronic Kidney Disease (CKD) Mod-Severe =eGFR< 30, Cr>265 umol/L, dialysis, transplantation, uremic syndrome`=ckd,
-      #   `Liver Disease Mild = cirrhosis without portal HTN, chronic hepatitis  Mod-Severe = cirrhosis with portal HTN +/- variceal bleeding`=liver_disease,
-      #   `Diabetes`=diabetes,
-      #   `Cognitive Impairment/Dementia (choice=None)`=dementia___1,
-      #   `Cognitive Impairment/Dementia (choice=Dementia)`=dementia___2,
-      #   `Cognitive Impairment/Dementia (choice=Cognitive Impairment)`=dementia___3,
-      #   `Cognitive Impairment/Dementia (choice=CVA (stroke))`=dementia___4,
-      #   `Cognitive Impairment/Dementia (choice=TIA (mini-stroke))`=dementia___5,
-      #   `Hemiplegiahemiplegia or paraplegia `=hemiplegia,
-      #   `Peripheral Vascular Disease Intermittent claudication, periph. arterial bypass for insufficiency, gangrene, acute arterial insufficiency, untreated aneurysm (>=6cm) `=pvd,
-      #   `Immunosuppressive Medication(includes oral steroids, biologics, chemotherapy)`=immsup,
-      #   `Immunodeficiency(eg SCID, hypogammaglobulinaemia, splenectomy)`=immunodeficiency,
-      #   `Connective Tissue Disease (SLE, polymyositis, mixed Connective Tissue Disease, polymyalgia rheumatica, moderate to severe Rheumatoid Arthritis)`=ctd,
-      #   `HIV status (choice=Negative (no HIV), or not tested)`=hiv___1,
-      #   `HIV status (choice=HIV)`=hiv___2,
-      #   `HIV status (choice=AIDS)`=hiv___3,
-      #   `Solid Organ Cancer/Malignancy Initially treated in the last 5 years exclude non-melanomatous skin cancers and in situ cervical carcinoma`=cancer,
-      #   `Haematological Malignancy Leukaemia = CML, CLL, AML, ALL, Polycythaemia Vera Lymphoma = NHL, Hodgkins, Waldenström, multiple myeloma  (choice=None)`=haem_malig___1,
-      #   `Haematological Malignancy Leukaemia = CML, CLL, AML, ALL, Polycythaemia Vera Lymphoma = NHL, Hodgkins, Waldenström, multiple myeloma  (choice=Leukaemia)`=haem_malig___2,
-      #   `Haematological Malignancy Leukaemia = CML, CLL, AML, ALL, Polycythaemia Vera Lymphoma = NHL, Hodgkins, Waldenström, multiple myeloma  (choice=Lymphoma)`=haem_malig___3,
-      #   `Organ Transplantation`=transplant,
-      #   `Pregnancy/Post partum`=pregnancy,
-      #   `Gastric/Duodenal Ulcer Disease Patients who have required treatment for PUD `=pud,
-      #   `Drug Misuse (choice=None)`=drugs___1,
-      #   `Drug Misuse (choice=Alcohol excess)`=drugs___2,
-      #   `Drug Misuse (choice=IVDU (Intravenous Drug Usage))`=drugs___3,
-      #   `Drug Misuse (choice=Marijuana)`=drugs___4,
-      #   `Drug Misuse (choice=Other smoked drugs)`=drugs___5,
-      #   `Rockwood Frailty Score`=rockall_frailty_score1,
-      #   `Used Antibiotics in 14 days prior to Hospitalisation`=abx_14d_prior,
-      #   `Antibiotic Used`=antibiotic_used,
-      #   `Comorbidities complete?`=comorbidities_complete,
-      #   `Date of tests`=date_of_tests,
-      #   `Heart Rate`=hr,
-      #   `Systolic BP (mmHg)`=systolic_bp,
-      #   `Diastolic BP (mmHg)`=diastolic_bp,
-      #   `Temperature`=temperature,
-      #   `Respiratory Rate`=rr,
-      #   `Oxygen Saturation`=pulse_ox,
-      #   `FiO2 RA = 21%`=fio2,
-      #   `Did the patient require oxygen supplementation < 4 hours of admission?`=ox_on_admission,
-      #   `NEWS-2 Score`=news2,
-      #   `Age for reference (≥65)`=age_over65,
-      #   `Age ≥65`=crb65_age,
-      #   `Confusion (AMTS ≤8)`=confusion,
-      #   `Respiratory Rate (≥30)`=resp_rate,
-      #   `BP (systolic < 90mmHg or diastolic ≤60 mmHg)`=blood_pressure,
-      #   `CRB65 Score`=autocalc_65score,
-      #   `Fever`=fever,
-      #   `Hypothermia`=hypothermia,
-      #   `Chills`=chills,
-      #   `Rigors`=rigors,
-      #   `New or Increased Cough`=cough,
-      #   `New or Increased Wheeze`=wheeze,
-      #   `New or Increased Sputum Production`=sputum,
-      #   `New of Increased Shortness of Breath`=sob,
-      #   `New or Increased Pleuritic chest pain`=pleurisy,
-      #   `New or Increased Tachypnea`=tachypnoea,
-      #   `New or Increased Malaise`=maliase,
-      #   `Abnormal Auscultatory Findings Suggestive of Pneumonia`=oe_cap,
-      #   `Abnormal Auscultatory Findings Suggestive of other LRTD`=oe_lrtd,
-      #   `NYHA - Heart Failure  `=nhya,
-      #   `Admission data complete?`=admission_data_complete,
-      #   `Glucose`=glucose,
-      #   `Albumin`=albumin_result,
-      #   `White cell count `=wcc_result,
-      #   `Haemoglobin`=hb,
-      #   `Neutrophils`=pmn_result,
-      #   `Lymphocytes`=lo_result,
-      #   `CRP`=crp_result,
-      #   `Sodium (Na)`=na_result,
-      #   `Urea (Ur)`=ur_result,
-      #   `eGFR`=egfr_result,
-      #   `NT-proBNP`=nt_probnp,
-      #   `Ferritin`=vitamin_d_during_admission,
-      #   `D-dimer`=d_dimer,
-      #   `Patient Blood Group`=patient_blood_group,
-      #   `Admission blood results complete?`=admission_blood_results_complete,
-      #   `Date of Radiological Investigation`=radiology_date,
-      #   `Type of Radiological Test`=radio_test,
-      #   `If other, please specify`=radiology_othertest,
-      #   `Radiology Result`=radiology_result,
-      #   `If other, please specify`=radiology_other_result,
-      #   `Radiology results complete?`=radiology_results_complete,
-      #   `Bacterial/Fungal Investigations performed`=micro_test_done,
-      #   `Date of Microbiology Test`=micro_test_date,
-      #   `Microbiology Test Type`=micro_test,
-      #   `Isolates Identified?`=micro_isolates,
-      #   `Isolate Name (choice=Aspergillus)`=isolate_identified___1,
-      #   `Isolate Name (choice=Streptococcus Agalactiae)`=isolate_identified___2,
-      #   `Isolate Name (choice=Candida)`=isolate_identified___3,
-      #   `Isolate Name (choice=Achromobacter Xylosoxidans)`=isolate_identified___4,
-      #   `Isolate Name (choice=Bacteroides)`=isolate_identified___5,
-      #   `Isolate Name (choice=Bacteroides fragilis)`=isolate_identified___6,
-      #   `Isolate Name (choice=Bacteroides ovatus)`=isolate_identified___7,
-      #   `Isolate Name (choice=Bacteroides uniformis)`=isolate_identified___8,
-      #   `Isolate Name (choice=Burholderia cepacia)`=isolate_identified___9,
-      #   `Isolate Name (choice=Citrobacter freundii complex)`=isolate_identified___10,
-      #   `Isolate Name (choice=Citrobacter koseri)`=isolate_identified___11,
-      #   `Isolate Name (choice=Clostridium perfringens)`=isolate_identified___12,
-      #   `Isolate Name (choice=Eggerthella lenta)`=isolate_identified___13,
-      #   `Isolate Name (choice=Enterobacter aerogenes)`=isolate_identified___14,
-      #   `Isolate Name (choice=Enterobacter cloacae)`=isolate_identified___15,
-      #   `Isolate Name (choice=Enterococcus faecalis)`=isolate_identified___16,
-      #   `Isolate Name (choice=Enterococcus faecium)`=isolate_identified___17,
-      #   `Isolate Name (choice=Escherichia coli)`=isolate_identified___18,
-      #   `Isolate Name (choice=Haemophilus influenzae)`=isolate_identified___19,
-      #   `Isolate Name (choice=Haemophilus parainfluenzae)`=isolate_identified___20,
-      #   `Isolate Name (choice=Klebsiella oxytoca)`=isolate_identified___21,
-      #   `Isolate Name (choice=Klebsiella pneumoniae)`=isolate_identified___22,
-      #   `Isolate Name (choice=Morganella morganii)`=isolate_identified___23,
-      #   `Isolate Name (choice=Peptostreptococcus anaerobius)`=isolate_identified___24,
-      #   `Isolate Name (choice=Proteus mirabilis)`=isolate_identified___25,
-      #   `Isolate Name (choice=Pseudomonas aeruginosa)`=isolate_identified___26,
-      #   `Isolate Name (choice=Serratia marcescens)`=isolate_identified___27,
-      #   `Isolate Name (choice=Staphylcoccus aureus)`=isolate_identified___28,
-      #   `Isolate Name (choice=Streptococcus anginosus)`=isolate_identified___29,
-      #   `Isolate Name (choice=Streptococcus pneumoniae)`=isolate_identified___30,
-      #   `Isolate Name (choice=Streptococcus salivarius group)`=isolate_identified___31,
-      #   `Isolate Name (choice=Stenotrophomonas maltophilia)`=isolate_identified___32,
-      #   `Isolate Name (choice=Acinetobacter)`=isolate_identified___33,
-      #   `Isolate Name (choice=Aspergillus niger)`=isolate_identified___34,
-      #   `Isolate Name (choice=Bacillus)`=isolate_identified___35,
-      #   `Isolate Name (choice=Candida albicans)`=isolate_identified___36,
-      #   `Isolate Name (choice=Candida glabrata)`=isolate_identified___37,
-      #   `Isolate Name (choice=Candida tropicalis)`=isolate_identified___38,
-      #   `Isolate Name (choice=Coagulase negative staphylcoccus)`=isolate_identified___39,
-      #   `Isolate Name (choice=Corynebacterium)`=isolate_identified___40,
-      #   `Isolate Name (choice=Enterococcus)`=isolate_identified___41,
-      #   `Isolate Name (choice=Gram positive coccus)`=isolate_identified___42,
-      #   `Isolate Name (choice=Klebsiella)`=isolate_identified___43,
-      #   `Isolate Name (choice=Legionella pneumoniae)`=isolate_identified___44,
-      #   `Isolate Name (choice=MRSA)`=isolate_identified___45,
-      #   `Isolate Name (choice=MSSA)`=isolate_identified___46,
-      #   `Isolate Name (choice=Moraxella catarrhalis)`=isolate_identified___47,
-      #   `Isolate Name (choice=Mycobacterium tuberculosis)`=isolate_identified___48,
-      #   `Isolate Name (choice=Pneumocytis jirovecii)`=isolate_identified___49,
-      #   `Isolate Name (choice=Pseudomonas)`=isolate_identified___50,
-      #   `Isolate Name (choice=Pseudomonas fluorescens)`=isolate_identified___51,
-      #   `Isolate Name (choice=Staphylcoccus)`=isolate_identified___52,
-      #   `Isolate Name (choice=Staphylococcus capitis)`=isolate_identified___53,
-      #   `Isolate Name (choice=Staphylococcus epidermidis)`=isolate_identified___54,
-      #   `Isolate Name (choice=Staphylococcus hominis)`=isolate_identified___55,
-      #   `Isolate Name (choice=Streptococcus)`=isolate_identified___56,
-      #   `Isolate Name (choice=Streptococcus beta-hemolytic)`=isolate_identified___57,
-      #   `Isolate Name (choice=Streptococcus pyogenes)`=isolate_identified___58,
-      #   `Isolate Name (choice=Streptococcus viridans)`=isolate_identified___59,
-      #   `Isolate Name (choice=Yeast)`=isolate_identified___60,
-      #   `Isolate Name (choice=Other)`=isolate_identified___61,
-      #   `If other, please specify`=micro_other,
-      #   `Isolate Classification`=isolate_class,
-      #   `Sent to Central Lab`=micro_lab,
-      #   `Pneumococcal result`=pn_result,
-      #   `Serotype`=pn_st,
-      #   `Penicillin Susceptibility (choice=Unknown)`=pen_susceptibility___1,
-      #   `Penicillin Susceptibility (choice=Not susceptible)`=pen_susceptibility___2,
-      #   `Penicillin Susceptibility (choice=Not applicable)`=pen_susceptibility___3,
-      #   `Penicillin Susceptibility (choice=Resistant)`=pen_susceptibility___4,
-      #   `Penicillin Susceptibility (choice=Intermediate)`=pen_susceptibility___5,
-      #   `Penicillin Susceptibility (choice=Susceptible)`=pen_susceptibility___6,
-      #   `Penicillin Susceptibility (choice=Susceptible (dose dependent))`=pen_susceptibility___7,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Unknown)`=septrin_susceptibility___1,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Not susceptible)`=septrin_susceptibility___2,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Not applicable)`=septrin_susceptibility___3,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Resistant)`=septrin_susceptibility___4,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Intermediate)`=septrin_susceptibility___5,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Susceptible)`=septrin_susceptibility___6,
-      #   `Co-trimoxazole (Trimethorpim/Sulfamethoxazole) Susceptibility (choice=Susceptible (dose dependent))`=septrin_susceptibility___7,
-      #   `Doxycycline Susceptibility (choice=Unknown)`=doxy_susceptibility___1,
-      #   `Doxycycline Susceptibility (choice=Not susceptible)`=doxy_susceptibility___2,
-      #   `Doxycycline Susceptibility (choice=Not applicable)`=doxy_susceptibility___3,
-      #   `Doxycycline Susceptibility (choice=Resistant)`=doxy_susceptibility___4,
-      #   `Doxycycline Susceptibility (choice=Intermediate)`=doxy_susceptibility___5,
-      #   `Doxycycline Susceptibility (choice=Susceptible)`=doxy_susceptibility___6,
-      #   `Doxycycline Susceptibility (choice=Susceptible (dose dependent))`=doxy_susceptibility___7,
-      #   `Levofloxacin Susceptibility (choice=Unknown)`=levoflox_suscept___1,
-      #   `Levofloxacin Susceptibility (choice=Not susceptible)`=levoflox_suscept___2,
-      #   `Levofloxacin Susceptibility (choice=Not applicable)`=levoflox_suscept___3,
-      #   `Levofloxacin Susceptibility (choice=Resistant)`=levoflox_suscept___4,
-      #   `Levofloxacin Susceptibility (choice=Intermediate)`=levoflox_suscept___5,
-      #   `Levofloxacin Susceptibility (choice=Susceptible)`=levoflox_suscept___6,
-      #   `Levofloxacin Susceptibility (choice=Susceptible (dose dependent))`=levoflox_suscept___7,
-      #   `Ceftriaxone Susceptibility (choice=Unknown)`=cef_susceptibility___1,
-      #   `Ceftriaxone Susceptibility (choice=Not susceptible)`=cef_susceptibility___2,
-      #   `Ceftriaxone Susceptibility (choice=Not applicable)`=cef_susceptibility___3,
-      #   `Ceftriaxone Susceptibility (choice=Resistant)`=cef_susceptibility___4,
-      #   `Ceftriaxone Susceptibility (choice=Intermediate)`=cef_susceptibility___5,
-      #   `Ceftriaxone Susceptibility (choice=Susceptible)`=cef_susceptibility___6,
-      #   `Ceftriaxone Susceptibility (choice=Susceptible (dose dependent))`=cef_susceptibility___7,
-      #   `Bacterial fungal culture complete?`=bacterialfungal_culture_complete,
-      #   `Viral testing performed`=viral_testing_performed,
-      #   `Virology Date of Assessment`=virology_date_of_assessmen,
-      #   `Specimen Type`=specimen_type,
-      #   `Virus Isolated`=virus_isolated,
-      #   `Specimen Sample Location`=specimen_sample_location,
-      #   `Test Type`=test_type,
-      #   `Virus Pathogen (choice=Influenza A)`=virus_pathogen___1,
-      #   `Virus Pathogen (choice=Influenza B)`=virus_pathogen___2,
-      #   `Virus Pathogen (choice=RSV)`=virus_pathogen___3,
-      #   `Virus Pathogen (choice=Adenovirus)`=virus_pathogen___4,
-      #   `Virus Pathogen (choice=Human metapneumovirus)`=virus_pathogen___5,
-      #   `Virus Pathogen (choice=Rhinovirus)`=virus_pathogen___6,
-      #   `Virus Pathogen (choice=Parainfluenza Type 1)`=virus_pathogen___7,
-      #   `Virus Pathogen (choice=Parainfluenza Type 2)`=virus_pathogen___8,
-      #   `Virus Pathogen (choice=Parainfluenza Type 3)`=virus_pathogen___9,
-      #   `Virus Pathogen (choice=Parainfluenza Type 4)`=virus_pathogen___10,
-      #   `Virus Pathogen (choice=COVID-19)`=virus_pathogen___11,
-      #   `Virus Pathogen (choice=Other)`=virus_pathogen___12,
-      #   `If other, please specify:`=viral_other,
-      #   `Virology results complete?`=virology_results_complete,
-      #   `PneumoVax (PPV23)`=pneumovax_ppv23,
-      #   `Date of PneumoVax Vaccination`=ppv23_date,
-      #   `Seasonal Influenza Vaccination (in last 12 months)`=flu_vaccine,
-      #   `Date of Last Flu Vaccination`=flu_date,
-      #   `COVID-19 Vaccination`=covid19_vax,
-      #   `Date of COVID19 Vaccination`=covidvax_date,
-      #   `Brand of COVID19 vaccination`=brand_of_covid19_vaccinati,
-      #   `Vaccination complete?`=vaccination_status_complete,
-      #   `Inpatient admission`=inpatient_admission,
-      #   `COVID-19 diagnosis`=covid_19_diagnosis,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=CAP - radiologically confirmed)`=final_standard_of_care_lrt___1,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=CAP - clinically confirmed (but not on radiology))`=final_standard_of_care_lrt___2,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=CAP - no radiology performed)`=final_standard_of_care_lrt___3,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Acute bronchitis)`=final_standard_of_care_lrt___4,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Exacerbation of COPD)`=final_standard_of_care_lrt___5,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Empyema/lung abscess)`=final_standard_of_care_lrt___6,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=LRTI - not further specified)`=final_standard_of_care_lrt___7,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Other LRTI specified)`=final_standard_of_care_lrt___8,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Congestive heart failure)`=final_standard_of_care_lrt___9,
-      #   `Final Standard-of-Care LRTD-related diagnosis (choice=Non-infectious process)`=final_standard_of_care_lrt___10,
-      #   `LRTD Outcome (at 30 days)`=dlrtd_outcome_at_30_days,
-      #   `Highest Level Care Required`=highest_level_care_require,
-      #   `Days in ICU`=days_in_icu,
-      #   `Did the patient receive ECMO?`=did_the_patient_receive_ec,
-      #   `Inotropic Support required`=inotropic_support_required,
-      #   `Did the patient have Respiratory Failure during admission? Sats < 90% with ≥6L/min Oxygen OR Resp rate > 30/min`=did_the_patient_have_respi,
-      #   `Ventilatory Support`=ventilatory_support,
-      #   `Number of Days of Ventilatory Support`=number_of_days_of_ventilat,
-      #   `Renal replacement therapy required (haemofiltration and/or new dialysis)`=renal_replacement_therapy,
-      #   `Complications   (choice=Acute renal failure)`=complications___1,
-      #   `Complications   (choice=Liver dysfunction)`=complications___2,
-      #   `Complications   (choice=Hospital acquired infection)`=complications___3,
-      #   `Complications   (choice=ARDS (acute respiratory distress syndrome))`=complications___4,
-      #   `Complications   (choice=NSTEMI (non-ST elevation MI))`=complications___5,
-      #   `Complications   (choice=STEMI (ST elevation MI))`=complications___6,
-      #   `Complications   (choice=New episode of atrial fibrillation)`=complications___7,
-      #   `Complications   (choice=Stroke or brain haemorrhage)`=complications___8,
-      #   `Complications   (choice=DVT (deep vein thrombus))`=complications___9,
-      #   `Complications   (choice=PE (pulmonary embolus))`=complications___10,
-      #   `Complications   (choice=New or worsening congestive heart failure)`=complications___11,
-      #   `Complications   (choice=Fall in hospital)`=complications___12,
-      #   `Complications   (choice=Reduced mobility)`=complications___13,
-      #   `Complications   (choice=Increasing care requirement on discharge)`=complications___14,
-      #   `Complications   (choice=None)`=complications___15,
-      #   `Did patient die in hospital?`=ip_death,
-      #   `Discharge Date (or date of death)`=discharge_date,
-      #   `Hospital Length of Stay`=hospital_length_of_stay,
-      #   `Outcome data complete?`=outcome_data_complete
-      # )
+      data3 = data3 %>% mutate(
+        subgroup = case_when(
+          (!is.na(RBD_outcome) & RBD_outcome=="Failed QC") | (!is.na(EuroImmun_outcome) & EuroImmun_outcome == "Insufficient") ~ "no result", # if either insufficient then insufficient
+          (is.na(RBD_units) & is.na(EuroImmun_units)) ~ "no result", # if both NA then some problem
+          (!is.na(RBD_units) & RBD_units > 3.3 & RBD_units <= 4.9) | (!is.na(EuroImmun_units) & EuroImmun_units > 0.8 & EuroImmun_units < 1.1) ~ "borderline", # if either is borderline its borderline
+          (is.na(RBD_units) | RBD_units > 4.9) & (is.na(EuroImmun_units) | EuroImmun_units > 1.1) ~ "positive", # if both either positive or one NA and one positive its positive
+          (is.na(RBD_units) | RBD_units <= 3.3) & (is.na(EuroImmun_units) | EuroImmun_units <= 0.8 ) ~ "negative", # if both either negative or one NA and one negative its positive
+          (RBD_units <= 3.3 & EuroImmun_units > 1.1 | RBD_units > 4.9 & EuroImmun_units <= 0.8) ~ "no result", # if one positive and one negative there is a disagreement
+          TRUE ~ "no result"
+        ),
+        Region= ifelse(is.na(Region),sample_region,Region)
+      ) %>%
+        self$codes$findCodesByName(nameVar = Region, codeTypes = c("CTRY","NHSER")) %>%
+        self$codes$findNamesByCode(codeVar = ccg, outputNameVar = ccgName, outputCodeTypeVar = ccgCodeType, codeTypes = "CCG")
       
-      return(data)
-    },
+      
+      out = bind_rows(
+        data3 %>% dplyr::mutate(code = ccg, codeType = ccgCodeType, name = ccgName) %>% dplyr::filter(!is.na(code)) %>% dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% dplyr::summarise(value = n()), 
+        data3 %>% dplyr::mutate(code = code, codeType = codeType, name = Region) %>% dplyr::filter(!is.na(code)) %>% dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% dplyr::summarise(value = n())
+      ) %>% 
+        dplyr::mutate(statistic = "serology", type = "incidence", source="SPIM seroprevalence") %>%
+        self$complete() %>%
+        #tidyr::complete(tidy::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
+        dplyr::ungroup()
+      
+      return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
+    }))
+  },
     
-    #' @description Load the CHESS dataset from a path
-    #' 
-    #' @param path - a path to the chess csv file
-    #' @return raw CHESS data set
-    getCHESS = function() {
-      path = self$getLatest(self$filter$chess)
-      message("Using: ",path)
-      out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = col_character()))
-      for (col in colnames(out)) {
-        if (stringr::str_detect(col, "date")) {
-          out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
-        } else {
-          out = out %>% mutate(!!col := type.convert(out[[col]], as.is=TRUE))
-        }
-      }
-      return(out)
-    },
+  #### FF 100 ----
+  
+  #' @description Load ff100 file
+  #' 
+  #' @return raw FF100 data set
+  getFF100 = function() {
+    path = self$getLatest(self$filter$ff100)
+    message("Using: ",path)
+    tmp = readr::read_csv(self$fileProvider$getFile(path),
+                    col_types = readr::cols(
+                      FF100_ID = readr::col_integer(),
+                      ContactOf_FF100_ID = readr::col_integer(),
+                      date_reported = readr::col_date(format = "%Y-%m-%d"),
+                      date_labtest = readr::col_date(format = "%Y-%m-%d"),
+                      date_onset = readr::col_date(format = "%Y-%m-%d"),
+                      date_hosp_adm = readr::col_date(format = "%Y-%m-%d"),
+                      date_hosp_dis = readr::col_date(format = "%Y-%m-%d"),
+                      hosp_adm = readr::col_logical(),
+                      date_NHSdirect = readr::col_date(format = "%Y-%m-%d"),
+                      NHSdirect = readr::col_logical(),
+                      date_GP_first = readr::col_date(format = "%Y-%m-%d"),
+                      GP = readr::col_logical(),
+                      date_AEhosp_first = readr::col_date(format = "%Y-%m-%d"),
+                      AEhosp = readr::col_logical(),
+                      age = readr::col_double(),
+                      gender = readr::col_character(),
+                      local_authority = readr::col_character(),
+                      travel_anywhere = readr::col_logical(),
+                      heart_ds = readr::col_logical(),
+                      diabetes = readr::col_logical(),
+                      immunodeficiency = readr::col_logical(),
+                      kidney_ds = readr::col_logical(),
+                      liver_ds = readr::col_logical(),
+                      resp_ds = readr::col_logical(),
+                      asthma = readr::col_logical(),
+                      malignancy = readr::col_logical(),
+                      organ_recipient = readr::col_logical(),
+                      neuro_ds = readr::col_logical(),
+                      pregnant = readr::col_logical(),
+                      fever = readr::col_logical(),
+                      runny_nose = readr::col_logical(),
+                      sneezing = readr::col_logical(),
+                      cough = readr::col_logical(),
+                      short_breath = readr::col_logical(),
+                      sore_throat = readr::col_logical(),
+                      diarrhoea = readr::col_logical(),
+                      nausea = readr::col_logical(),
+                      vomit = readr::col_logical(),
+                      fatigue = readr::col_logical(),
+                      muscle_ache = readr::col_logical(),
+                      joint_ache = readr::col_logical(),
+                      appetite_loss = readr::col_logical(),
+                      headache = readr::col_logical(),
+                      seizure = readr::col_logical(),
+                      alter_consious = readr::col_logical(),
+                      nose_bleed = readr::col_logical(),
+                      rash = readr::col_logical(),
+                      smell_loss = readr::col_logical(),
+                      symptom_other = readr::col_logical(),
+                      any_symptom = readr::col_logical(),
+                      status = readr::col_character(),
+                      case_classification = readr::col_character(),
+                      HCW_exposure = readr::col_logical(),
+                      ARDS = readr::col_logical(),
+                      mech_ventl = readr::col_logical(),
+                      ICU_adm = readr::col_logical(),
+                      date_ICU_adm = readr::col_date(format = "%Y-%m-%d"),
+                      date_recovery = readr::col_date(format = "%Y-%m-%d"),
+                      date_death = readr::col_date(format = "%Y-%m-%d"),
+                      date_exposure_first = readr::col_date(format = "%Y-%m-%d"),
+                      date_exposure_last = readr::col_date(format = "%Y-%m-%d"),
+                      exposure_setting_final = readr::col_character()
+                    ))
+    attr(tmp,"paths") = c(path1,path2)
+    return(tmp %>% as_tibble())
+  },
     
-    #' @description Load the CHESS dataset from a path
-    #' 
-    #' @param path - a path to the chess csv file
-    #' @return raw CHESS data set
-    getSARI = function() {
-      path = self$getLatest(self$filter$sari)
-      message("Using: ",path)
-      out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = col_character()))
-      for (col in colnames(out)) {
-        if (stringr::str_detect(col, "date")) {
-          out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
-        } else {
-          out = out %>% mutate(!!col := type.convert(out[[col]], as.is=TRUE))
-        }
-      }
-      return(out)
-    },
-    
-    #' @description Load Chess summary file
-    #' 
-    #' @param path - path to the ff100 file
-    
-    #' @return raw FF100 data set
-    
-    getCHESSSummary = function() {
-      path = self$getLatest(self$filter$chessSummary)
-      message("Using: ",path)
-      chessSummary = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
-        DateRange = readr::col_date("%d-%m-%Y"),
-        DateOfAdmission = readr::col_date("%d-%m-%Y"),
-        YearofAdmission = readr::col_integer(),
-        TrustName = readr::col_character(),
-        Code = readr::col_character(),
-        .default = readr::col_integer()))
-      chessSummary = chessSummary %>% dplyr::select(-X67) %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code","Total"))), names_to = "variable", values_to = "count")
-      chessSummary = chessSummary %>% dplyr::filter(Code != "Total")
-      tmp = chessSummary %>% dplyr::mutate(
-        toAge = str_replace(variable,"^.*_([^_]+)$","\\1"),
-        fromAge = str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1"),
-        variable = str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
-      )
-      tmp = tmp %>% dplyr::mutate(fromAge = ifelse(fromAge=="GreaterThanEqual", toAge, fromAge))
-      tmp = tmp %>% dplyr::mutate(fromAge = ifelse(fromAge=="LessThan", 0, fromAge))
-      chessSummary = tmp %>% dplyr::mutate(toAge = ifelse(fromAge==toAge, 120, toAge))
-      return(chessSummary)
-    },
-    
-    getSARISummary = function(truncate = NULL,...) {
-      path1 = self$getLatest(self$filter$sariSummaryArchive)
-      path2 = self$getLatest(self$filter$sariSummaryCurrent)
-      self$getSaved(id = "SARI-SUMMARY", params = list(path1,path2), ..., orElse = function (...) covidTimeseriesFormat({
-        fn = function (path) {
-          return(readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
-            DateRange = readr::col_date("%d-%m-%Y"),
-            DateOfAdmission = readr::col_date("%d-%m-%Y"),
-            YearofAdmission = readr::col_integer(),
-            TrustName = readr::col_character(),
-            Code = readr::col_character(),
-            .default = readr::col_integer()))
-          )}
-        tmp1 = fn(path1)
-        tmp2 = fn(path2)
-        sariSummary = bind_rows(tmp1 %>% anti_join(tmp2,by=c("DateOfAdmission","TrustName","Code")),tmp2)
-        #sariSummary = sariSummary %>% group_by(DateOfAdmission,TrustName,Code) %>% arrange(desc(DateRange)) %>% filter(row_number() == 1) %>% ungroup()
-        #browser()
-        sariSummary = sariSummary %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code"))), names_to = "variable", values_to = "count")
-        sariSummary = sariSummary  %>% mutate(variable = stringr::str_to_lower(variable)) %>% group_by(DateOfAdmission,TrustName,Code,variable) %>% arrange(desc(count)) %>% filter(row_number() == 1) %>% ungroup()
-        sariSummary = sariSummary %>% dplyr::filter(Code != "Total") #%>% mutate(count = ifelse(is.na(count),0,count))
-        tmp = sariSummary %>% dplyr::mutate(
-          toAge = str_replace(variable,"^.*_([^_]+)$","\\1"),
-          fromAge = str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1") #,
-          #variable = str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
-        )
-        tmp = tmp %>% dplyr::mutate(ageCat = case_when(
-            fromAge %>% stringr::str_detect("mos") ~ "<1",
-            toAge %>% stringr::str_detect("mos") ~ "<1",
-            fromAge=="greaterthanequal" ~ paste0(toAge,"+"), 
-            fromAge=="lessthan" ~  paste0("<",toAge),
-            fromAge=="45" ~ "45-54",
-            toAge=="54" ~ "45-54", # 3 combinations in data 45-49, 45-54, 50-54 - merged into one category
-            TRUE ~  paste0(fromAge,"-",toAge)
-            ))
-        tmp = tmp %>% dplyr::select(-fromAge,-toAge)
-        sariSummary = tmp %>% mutate(
-          type = case_when(
-            stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "background",
-            stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "background",
-            stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "incidence",
-            stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "background",
-            stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "incidence",
-            stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "prevalence",
-            TRUE ~ NA_character_
-          ),
-          statistic = case_when(
-            stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "hospital admission",
-            stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "test",
-            stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "hospital admission",
-            stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "icu admission",
-            stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "icu admission",
-            stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "icu admission",
-            TRUE ~ NA_character_
-          ),
-          subgroup = case_when(
-            stringr::str_detect(variable,"icu") ~ "icu",
-            TRUE ~ "hospital"
-          ),
-          note = variable
-        )
-        sariSummary = sariSummary %>% select(date = DateOfAdmission, name = TrustName, code = Code, value=count, ageCat,type,statistic,subgroup, note) %>% mutate(codeType = "NHS trust",gender=NA,source = "sari summary")
-        sariSummary = sariSummary %>% group_by(date,code,name,codeType,ageCat,gender,source,subgroup,type,statistic) %>% summarise(note = paste0(note,collapse = "|"), value=sum(value,na.rm=TRUE), tmpCount = n())
-        if (any(sariSummary$tmpCount > 1 & (sariSummary$ageCat != "<1" & sariSummary$ageCat != "45-54"))) warning("duplicates present in sari output where none were expected")
-        sariSummary = sariSummary %>% self$fillAbsent() %>% self$fixDatesAndNames(truncate) # do;nt have any good info for reporting delay
-        return(sariSummary %>% select(-tmpCount))
-      }))
-    },
-    
-    #### Get processed SPIM data ----
-    
-    #' @description Load Bristol survival subset
-    #' 
-    #' @param path - path to the ff100 file
-    
-    #' @return Bristol survival subset
-    
-    bristolSurvivalSubset = function(bristolDf) {
-      bristolDf %>% 
-        filter(is.na(redcap_repeat_instrument)) %>% 
-        select(
-          record_number,
-          enrollment_date, 
-          admission_date, 
-          age = age_at_admission, 
-          sex = gender.factor, 
-          ip_death.factor, discharge_date, 
-          outcome_data_complete.factor, 
-          days_of_symptoms_before_ad)
-    },
-    
-    getOneOneOneIncidence = function(dateFrom=Sys.Date()-28, ...) {
-      self$getDaily("SPIM-111-BREAKDOWN", params=list(dateFrom), ..., orElse = function(...) covidTimeseriesFormat({
-        tmp3 = self$getOneOneOneLineList(dateFrom,...)
-        tmp4 = tmp3 %>% 
-          dplyr::filter(!is.na(code)) %>%
-          dplyr::group_by(code,codeType,name,date,ageCat, gender,subgroup) %>% 
-          dplyr::summarise(value = n()) %>% 
-          dplyr::mutate(source="111 line list",statistic = "triage", type="incidence") %>%
-          self$fillAbsentAllRegions() %>% 
-          self$completeAllRegions() #self$fixDatesAndNames(1) %>% self$completeAllRegions()
-        return(tmp4)
-      })) 
-    },
-    
-    #' @description Load incidence from line list
-    #' 
-    #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
-    
-    #' @return a covidTimeseriesFormat dataframe
-    
-    getLineListIncidence = function(ll=NULL, ageBreaks = NULL, gender=FALSE, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
-      filterExpr = enexpr(filterExpr)
-      subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
-      if(!identical(ll,NULL)) {
-        tmp = ll
+  #### CHESS / SARI ----
+  
+  #' @description Load the CHESS dataset from a path
+  #' 
+  #' @param path - a path to the chess csv file
+  #' @return raw CHESS data set
+  getCHESS = function() {
+    path = self$getLatest(self$filter$chess)
+    message("Using: ",path)
+    out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+    for (col in colnames(out)) {
+      if (stringr::str_detect(col, "date")) {
+        out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
       } else {
-        tmp = self$getLineList(...) 
+        out = out %>% mutate(!!col := type.convert(out[[col]], as.is=TRUE))
       }
-      self$getSaved("LINE-LIST-INCIDENCE", params=list(tmp, ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes, gender), ..., orElse = function (...) covidTimeseriesFormat({
-        if(!identical(filterExpr,NULL)) 
-          tmp = tmp %>% filter(!!filterExpr)
-        tmp = tmp %>% dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks)) 
-        if (gender) {
-          tmp = tmp %>% dplyr::mutate(gender=self$normaliseGender(sex))
-        } else {
-          tmp = tmp %>% dplyr::mutate(gender=NA_character_)
-        }
-        if(!identical(subgroup,NULL)) {
-          tmp = tmp %>% dplyr::mutate(subgroup=!!subgroup)
-        } else {
-          tmp = tmp %>% dplyr::mutate(subgroup=NA_character_)
-        }
-        if(specimenOrReport == "report")
-          tmp = tmp %>% dplyr::mutate(date = as.Date(lab_report_date))
-        else
-          tmp = tmp %>% dplyr::mutate(date = as.Date(specimen_date))
-        
-        selectByRegion = function(df, code, codeType, name) {
-          code = ensym(code)
-          name = ensym(name)
-          # check column exists
-          if(!(as_label(code) %in% colnames(df))) return(tibble())
-          df = df %>% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) %>% 
-            dplyr::mutate(
-              code = ifelse(is.na(code),"E99999999",code),
-              name = ifelse(is.na(code),"Unknown (England)",name)
-            ) %>%
-            dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% 
-            dplyr::summarise(value = n()) 
-          return(df)
-        }
-        
-        out = NULL
-        if ("CTRY" %in% codeTypes) {
-          england = tmp %>% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
-            dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) %>% 
-            dplyr::summarise(value = n())
-          out = out %>% bind_rows(england)
-        }
-        
-        if ("NHSER" %in% codeTypes) {
-          nhser = tmp %>% selectByRegion(NHSER_code, "NHSER", NHSER_name)
-          isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
-          
-          if(!isNhser) {
-            nhser = tmp %>% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) %>% 
-              dplyr::inner_join(
-                self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
-                by=c("code"="fromCode")
-              ) %>%
-              dplyr::ungroup() %>%
-              dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
-              dplyr::rename(code = toCode, codeType=toCodeType)
-          }
-          out = out %>% bind_rows(nhser)
-        }
-        
-        if ("PHEC" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(PHEC_code, "PHEC", PHEC_name))}
-        if ("UA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(UTLA_code, "UA", UTLA_name))}
-        if ("LAD" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(LTLA_code, "LAD", LTLA_name))}
-        if ("LSOA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(LSOA_code, "LSOA", LSOA_name))}
-        
-        out = out %>% dplyr::mutate(source="line list",statistic = "case", type="incidence")
-        out = out %>% self$fixDatesAndNames(truncate)
-        out = out %>% self$fillAbsent(completeDates=TRUE)
-        out = out %>% dplyr::ungroup()
-        return(out)
-      }))
-    },
+    }
+    attr(out,"paths") = c(path)
+    return(out)
+  },
     
-    #' @description Load deaths data from linelist - does not preserve ethnicity
-    #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
-    #' @return a covidTimeseriesFormat dataframe
-    getDeathsLineListIncidence = function(ageBreaks = NULL, deathOrReport="death", cutoff=28, subgroup=NULL, filterExpr=!(is.na(death_type28) & is.na(death_type60cod) & is.na(covidcod)), codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
-      filterExpr = enexpr(filterExpr)
-      subgroup = tryCatch(ensym(subgroup), error=function(e) NULL)
-      tmp = self$getDeathsLineList(...)
-      self$getSaved(id = "DEATHS-LINE-LIST-INCIDENCE", params=list(tmp,ageBreaks, deathOrReport,cutoff,as_label(subgroup),as_label(filterExpr),codeTypes), ..., orElse = function (...) covidTimeseriesFormat({
-        if (!identical(filterExpr,NULL))
-          tmp = tmp %>% filter(!!filterExpr)
-        tmp = tmp %>% 
-          dplyr::filter(is.na(specimen_date) | as.integer(dod-specimen_date)<=cutoff) %>%
-          dplyr::mutate(
-            ageCat = age %>% self$cutByAge(ageBreaks)
-          )
-        if (!identical(subgroup,NULL)) {
-          tmp = tmp %>% mutate(subgroup=ifelse(is.na(!!subgroup),"unknown",!!subgroup))
-        } else {
-          tmp = tmp %>% mutate(subgroup = NA_character_)
-        }
-        if(deathOrReport == "death") 
-          tmp = tmp %>% dplyr::mutate(date = as.Date(dod))
-        else
-          tmp = tmp %>% dplyr::mutate(date = 
-            as.Date(pmin(report_date_earliest,NHSdeathreportdate, DBSdeathreportdate, HPTdeathreportdate, ONS_death_registration_date, na.rm = TRUE),"1970-01-01")
-          ) %>% dplyr::filter(!is.na(date))
-        
-        selectByRegion = function(df, code, codeType, name) {
-          code = ensym(code)
-          name = ensym(name)
-          # check column exists
-          if(!(as_label(code) %in% colnames(df))) return(tibble())
-          df = df %>% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) %>% 
-            dplyr::mutate(
-              code = ifelse(is.na(code),"E99999999",code),
-              name = ifelse(is.na(code),"Unknown (England)",name)
-            ) %>%
-            dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% 
-            dplyr::summarise(value = n()) 
-          return(df)
-        }
-        
-        out = NULL
-        if ("CTRY" %in% codeTypes) {
-          england = tmp %>% 
-            dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") %>% 
-            dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) %>% 
-            dplyr::summarise(value = n())
-          out = out %>% bind_rows(england)
-        }
-        
-        if ("NHSER" %in% codeTypes) {
-          nhser = tmp %>% selectByRegion(nhser_code, "NHSER", nhser_name)
-          isNhser = nhser %>% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
-          
-          if(!isNhser) {
-            nhser = tmp %>% selectByRegion(nhser_code, "NHSER19CDH", nhser_name) %>% 
-              dplyr::inner_join(
-                self$codes$getMappings() %>% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
-                by=c("code"="fromCode")
-              ) %>%
-              dplyr::ungroup() %>%
-              dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) %>%
-              dplyr::rename(code = toCode, codeType=toCodeType)
-          }
-          out = out %>% bind_rows(nhser)
-        }
-        
-        if ("PHEC" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(phec_code, "PHEC", phec_name))}
-        if ("UA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(utla_code, "UA", utla_name))}
-        if ("LAD" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(ltla_code, "LAD", ltla_name))}
-        if ("LSOA" %in% codeTypes) {out = out %>% bind_rows(tmp %>% selectByRegion(lsoa_code, "LSOA", lsoa_name))}
-        
-        out = out %>% dplyr::mutate(source="deaths line list",statistic = "death", type="incidence")
-        out = out %>% self$codes$findNamesByCode() %>% select(-ends_with(".original"))
-        out = out %>% self$fixDatesAndNames(truncate)
-        out = out %>% self$fillAbsent(completeDates=TRUE)
-        #out = out %>% self$complete()
-        out = out %>% dplyr::ungroup()
-        return(out)
-      }))
-    },
+  #' @description Load the CHESS dataset from a path
+  #' 
+  #' @param path - a path to the chess csv file
+  #' @return raw CHESS data set
+  getSARI = function() {
+    path = self$getLatest(self$filter$sari)
+    message("Using: ",path)
+    out = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+    for (col in colnames(out)) {
+      if (stringr::str_detect(col, "date")) {
+        out = out %>% mutate(!!col := as.Date(stringr::str_extract(out[[col]], "[0-9]{4}-[0-9]{2}-[0-9]{2}"), format = "%Y-%m-%d"))
+      } else {
+        out = out %>% mutate(!!col := type.convert(out[[col]], as.is=TRUE))
+      }
+    }
+    attr(out,"paths") = c(path)
+    return(out)
+  },
     
-    #' @description Load seroprevalence data from linelist
-    #' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
-    #' @return a covidTimeseriesFormat dataframe
-    getSeroprevalenceTestIncidence = function(ageBreaks = NULL, ...) {
-      stop("Need to update this for newer seroprevalence data")
-      data2 = self$getSeroprevalence(...)
-      self$getSaved("SEROPREVALENCE-INCIDENCE", params=list(data2, ageBreaks), ..., orElse = function (...) covidTimeseriesFormat({
-        
-        
-        # data2 %>% group_by(EuroImm_outcome) %>% summarise(low_cutoff = min(EuroImm_Units,na.rm=TRUE),high_cutoff = max(EuroImm_Units,na.rm=TRUE))
-        # cut offs are: Negative > Borderline > Positive; 0.8 -> 1.1 
-        # data2 %>% group_by(RBD_outcome) %>% summarise(low_cutoff = min(RBD_Units,na.rm=TRUE),high_cutoff = max(RBD_Units,na.rm=TRUE))
-        # cut offs are: Negative > Borderline > Positive; 3.3 -> 4.9 
-        
-        data3 = data2 %>%
-          dplyr::mutate(ageCat = age %>% self$cutByAge(ageBreaks), gender=self$normaliseGender(Sex), date = SampleDate)
-        if ("EuroImm_outcome" %in% colnames(data3)) data3 %>% rename(EuroImmun_outcome = EuroImm_outcome)
-        if ("EuroImm_Units" %in% colnames(data3)) data3 %>% rename(EuroImmun_units = EuroImm_Units)
-        if ("RBD_Units" %in% colnames(data3)) data3 %>% rename(RBD_units = RBD_Units)
-        
-        data3 = data3 %>% mutate(
-          subgroup = case_when(
-            (!is.na(RBD_outcome) & RBD_outcome=="Failed QC") | (!is.na(EuroImmun_outcome) & EuroImmun_outcome == "Insufficient") ~ "no result", # if either insufficient then insufficient
-            (is.na(RBD_units) & is.na(EuroImmun_units)) ~ "no result", # if both NA then some problem
-            (!is.na(RBD_units) & RBD_units > 3.3 & RBD_units <= 4.9) | (!is.na(EuroImmun_units) & EuroImmun_units > 0.8 & EuroImmun_units < 1.1) ~ "borderline", # if either is borderline its borderline
-            (is.na(RBD_units) | RBD_units > 4.9) & (is.na(EuroImmun_units) | EuroImmun_units > 1.1) ~ "positive", # if both either positive or one NA and one positive its positive
-            (is.na(RBD_units) | RBD_units <= 3.3) & (is.na(EuroImmun_units) | EuroImmun_units <= 0.8 ) ~ "negative", # if both either negative or one NA and one negative its positive
-            (RBD_units <= 3.3 & EuroImmun_units > 1.1 | RBD_units > 4.9 & EuroImmun_units <= 0.8) ~ "no result", # if one positive and one negative there is a disagreement
-            TRUE ~ "no result"
-          ),
-          Region= ifelse(is.na(Region),sample_region,Region)
-        ) %>%
-          self$codes$findCodesByName(nameVar = Region, codeTypes = c("CTRY","NHSER")) %>%
-          self$codes$findNamesByCode(codeVar = ccg, outputNameVar = ccgName, outputCodeTypeVar = ccgCodeType, codeTypes = "CCG")
-        
-        
-        out = bind_rows(
-          data3 %>% dplyr::mutate(code = ccg, codeType = ccgCodeType, name = ccgName) %>% dplyr::filter(!is.na(code)) %>% dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% dplyr::summarise(value = n()), 
-          data3 %>% dplyr::mutate(code = code, codeType = codeType, name = Region) %>% dplyr::filter(!is.na(code)) %>% dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) %>% dplyr::summarise(value = n())
-        ) %>% 
-          dplyr::mutate(statistic = "serology", type = "incidence", source="SPIM seroprevalence") %>%
-          self$complete() %>%
-          #tidyr::complete(tidy::nesting(code,codeType,name,source,statistic,type),subgroup,gender,ageCat,date = as.Date(min(date):max(date),"1970-01-01"), fill=list(value=0)) %>%
-          dplyr::ungroup()
-        
-        return(out %>% self$fillAbsent() %>% self$fixDatesAndNames(0) %>% self$complete())
-      }))
-    },
+  #' @description Load Chess summary file
+  #' 
+  getCHESSSummary = function() {
+    path = self$getLatest(self$filter$chessSummary)
+    message("Using: ",path)
+    chessSummary = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
+      DateRange = readr::col_date("%d-%m-%Y"),
+      DateOfAdmission = readr::col_date("%d-%m-%Y"),
+      YearofAdmission = readr::col_integer(),
+      TrustName = readr::col_character(),
+      Code = readr::col_character(),
+      .default = readr::col_integer()))
+    chessSummary = chessSummary %>% dplyr::select(-X67) %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code","Total"))), names_to = "variable", values_to = "count")
+    chessSummary = chessSummary %>% dplyr::filter(Code != "Total")
+    tmp = chessSummary %>% dplyr::mutate(
+      toAge = stringr::str_replace(variable,"^.*_([^_]+)$","\\1"),
+      fromAge = stringr::str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1"),
+      variable = stringr::str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
+    )
+    tmp = tmp %>% dplyr::mutate(fromAge = ifelse(fromAge=="GreaterThanEqual", toAge, fromAge))
+    tmp = tmp %>% dplyr::mutate(fromAge = ifelse(fromAge=="LessThan", 0, fromAge))
+    chessSummary = tmp %>% dplyr::mutate(toAge = ifelse(fromAge==toAge, 120, toAge))
+    attr(chessSummary,"paths") = c(path)
+    return(chessSummary)
+  },
     
-    getFourNationsCases = function(truncate=NULL, ...) {
-      path = self$getLatest(self$filter$fourNationsCases)
-      message("Using: ",path)
-      self$getSaved("SPIM-4-NATIONS", params = list(path), ..., orElse = function(...)  covidTimeseriesFormat({
-        tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
-        tmp2 = tmp %>% 
-          tidyr::pivot_longer(
-            cols=c(-DateVal,-Day,-Month,-Year,-Geography),
-            names_to = "variable",
-            values_to = "value"
-          ) %>% dplyr::mutate(
-            date = suppressWarnings(as.Date(DateVal)),
-            value = suppressWarnings(as.numeric(value))
-          ) %>% dplyr::select(-Day,-Month,-Year) %>%
-          dplyr::mutate(Geography = ifelse(Geography %in% c("England: Unknown","England: Other"), "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
-          dplyr::rename(name= Geography) %>% 
-          self$codes$findCodesByName(codeTypes = c("CTRY","PSEUDO")) %>%
-          dplyr::mutate(
-            statistic = "case",
-            type = case_when(
-              stringr::str_detect(variable,"umula") ~ "cumulative",
-              TRUE ~ "incidence"
-            ),
-            source = "casedata allnations",
-            subgroup = variable
-          )
-        tmp3 = tmp2 %>% dplyr::select(-DateVal,-name.original, -variable) %>% mutate(ageCat=NA_character_,gender=NA_character_)
-        tmp4 = tmp3 %>% filter(!is.na(value)) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(truncate) %>% self$complete()
-        return(tmp4)
-        
-        # CHESS_LL_lab_date_cases_P1
-        # CHESS_LL_specimen_date_cases_P1
-        # CHESS_LL_lab_date_cases_P2
-        # CHESS_LL_specimen_date_cases_P2
-        # RCGP_Pos_cases
-        # RCGP_Neg_cases
-        # Admitted Patients with Lab Confirmed COVID19
-        # Dashboard_daily_confirmed - wales
-        # Dashboard_cumulative_confirmed - wales
-        # Positives_Spec_Date - scotland
-        # Positives_Cumulative_Spec_Date - scotland
-        # SitRep_Daily_Positive_tests - n ireland
-        # SitRep_Cumulative_Positive_tests - n ireland
-        
-      }))
-    },
+  #' @description Load Sari summary file
+  #' 
+  getSARISummary = function(truncate = NULL,...) {
+    path1 = self$getLatest(self$filter$sariSummaryArchive)
+    path2 = self$getLatest(self$filter$sariSummaryCurrent)
+    out = self$getSaved(id = "SARI-SUMMARY", params = list(path1,path2), ..., orElse = function (...) covidTimeseriesFormat({
+      fn = function (path) {
+        return(readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(
+          DateRange = readr::col_date("%d-%m-%Y"),
+          DateOfAdmission = readr::col_date("%d-%m-%Y"),
+          YearofAdmission = readr::col_integer(),
+          TrustName = readr::col_character(),
+          Code = readr::col_character(),
+          .default = readr::col_integer()))
+        )}
+      tmp1 = fn(path1)
+      tmp2 = fn(path2)
+      sariSummary = bind_rows(tmp1 %>% anti_join(tmp2,by=c("DateOfAdmission","TrustName","Code")),tmp2)
+      #sariSummary = sariSummary %>% group_by(DateOfAdmission,TrustName,Code) %>% arrange(desc(DateRange)) %>% filter(row_number() == 1) %>% ungroup()
+      #browser()
+      sariSummary = sariSummary %>% tidyr::pivot_longer(cols = c(everything(),-all_of(c("DateRange","DateOfAdmission","YearofAdmission","TrustName","Code"))), names_to = "variable", values_to = "count")
+      sariSummary = sariSummary  %>% mutate(variable = stringr::str_to_lower(variable)) %>% group_by(DateOfAdmission,TrustName,Code,variable) %>% arrange(desc(count)) %>% filter(row_number() == 1) %>% ungroup()
+      sariSummary = sariSummary %>% dplyr::filter(Code != "Total") #%>% mutate(count = ifelse(is.na(count),0,count))
+      tmp = sariSummary %>% dplyr::mutate(
+        toAge = stringr::str_replace(variable,"^.*_([^_]+)$","\\1"),
+        fromAge = stringr::str_replace(variable,"^.*_([^_]+)_[^_]+$","\\1") #,
+        #variable = str_replace(variable,"^(.*)_[^_]+_[^_]+$","\\1")
+      )
+      tmp = tmp %>% dplyr::mutate(ageCat = case_when(
+          fromAge %>% stringr::str_detect("mos") ~ "<1",
+          toAge %>% stringr::str_detect("mos") ~ "<1",
+          fromAge=="greaterthanequal" ~ paste0(toAge,"+"), 
+          fromAge=="lessthan" ~  paste0("<",toAge),
+          fromAge=="45" ~ "45-54",
+          toAge=="54" ~ "45-54", # 3 combinations in data 45-49, 45-54, 50-54 - merged into one category
+          TRUE ~  paste0(fromAge,"-",toAge)
+          ))
+      tmp = tmp %>% dplyr::select(-fromAge,-toAge)
+      sariSummary = tmp %>% mutate(
+        type = case_when(
+          stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "background",
+          stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "background",
+          stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "incidence",
+          stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "background",
+          stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "incidence",
+          stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "prevalence",
+          TRUE ~ NA_character_
+        ),
+        statistic = case_when(
+          stringr::str_detect(variable,"newhospitaladmissionswithacuterespiratoryinfection") ~ "hospital admission",
+          stringr::str_detect(variable,"alladmittedpatientstestedforcovid19") ~ "test",
+          stringr::str_detect(variable,"alladmittedpatientswithnewlabconfirmed") ~ "hospital admission",
+          stringr::str_detect(variable,"newicu_hduadmissionswithacuterespiratoryinfection") ~ "icu admission",
+          stringr::str_detect(variable,"newlabconfirmedcovid19patientsonicu_hdu") ~ "icu admission",
+          stringr::str_detect(variable,"alllabconfirmedcovid19patientscurrentlyonicu_hdu") ~ "icu admission",
+          TRUE ~ NA_character_
+        ),
+        subgroup = case_when(
+          stringr::str_detect(variable,"icu") ~ "icu",
+          TRUE ~ "hospital"
+        ),
+        note = variable
+      )
+      sariSummary = sariSummary %>% select(date = DateOfAdmission, name = TrustName, code = Code, value=count, ageCat,type,statistic,subgroup, note) %>% mutate(codeType = "NHS trust",gender=NA,source = "sari summary")
+      sariSummary = sariSummary %>% group_by(date,code,name,codeType,ageCat,gender,source,subgroup,type,statistic) %>% summarise(note = paste0(note,collapse = "|"), value=sum(value,na.rm=TRUE), tmpCount = n())
+      if (any(sariSummary$tmpCount > 1 & (sariSummary$ageCat != "<1" & sariSummary$ageCat != "45-54"))) warning("duplicates present in sari output where none were expected")
+      sariSummary = sariSummary %>% self$fillAbsent() %>% self$fixDatesAndNames(truncate) # do;nt have any good info for reporting delay
+      return(sariSummary %>% select(-tmpCount))
+    }))
+    attr(out,"paths") = c(path1,path2)
+    return(out)
+  },
     
+  #### Get processed SPIM data ----
     
-    #' @description Load the SPI-M aggregated data spreadsheet
-    #' @return a covidTimeseriesFormat dataframe
-    # TODO: fix Couldn't match the following names: England: Unknown, England: Other, Golden Jubilee National Hospital, Velindre University NHS Trust
-    getSPIMextract = function(truncate=NULL,...) {
-      path = self$getLatest(self$filter$trust)
-      message("Using: ",path)
-      self$getSaved("SPIM-TRUST", params = list(path), ..., orElse = function (...) covidTimeseriesFormat({
-        tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
-        tmp2 = tmp %>% 
-          tidyr::pivot_longer(
-            cols=c(-DateVal,-Day,-Month,-Year,-ReportLevel,-Geography,-TrustCode,-TrustName),
-            names_to = "variable",
-            values_to = "value"
-          ) %>% 
-          dplyr::filter(!is.na(value)) %>% dplyr::mutate(
-            variable = variable %>% stringr::str_replace("acute1","acuteOne")
-          ) %>% 
-          dplyr::mutate(
-            ageCat = stringr::str_extract(variable,"(<|>|Under )?[0-9]?[0-9]-?[0-9]?[0-9]?\\+?( age| year)?$") %>% stringr::str_trim(),
-            source = stringr::str_remove(variable,"(<|>|Under )?[0-9]?[0-9]-?[0-9]?[0-9]?\\+?( age| year)?$")
-          ) %>% 
-          dplyr::mutate(
-            ageCat = ifelse(stringr::str_detect(variable,"unknown age"),"unknown",ageCat %>% stringr::str_remove("age|year") %>% stringr::str_trim()),
-            gender = self$normaliseGender(variable %>% stringr::str_extract("male|female")),
-            source = source %>% stringr::str_remove("unknown age") %>% stringr::str_remove_all("males?|females?") %>% stringr::str_remove_all("[^a-zA-Z]+$") %>% stringr::str_to_lower()
-          ) 
-        #TODO: fix >84 in ageCat instead of 85+
-        tmp3 = tmp2 %>% dplyr::mutate(
+  
+    
+  #### DSTL files ----
+  
+  getFourNationsCases = function(truncate=NULL, ...) {
+    path = self$getLatest(self$filter$fourNationsCases)
+    message("Using: ",path)
+    out = self$getSaved("SPIM-4-NATIONS", params = list(path), ..., orElse = function(...)  covidTimeseriesFormat({
+      tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+      tmp2 = tmp %>% 
+        tidyr::pivot_longer(
+          cols=c(-DateVal,-Day,-Month,-Year,-Geography),
+          names_to = "variable",
+          values_to = "value"
+        ) %>% dplyr::mutate(
           date = suppressWarnings(as.Date(DateVal)),
           value = suppressWarnings(as.numeric(value))
-        ) %>% dplyr::select(-Day,-Month,-Year)
-        
-        tmp4 = tmp3 %>% dplyr::mutate(
+        ) %>% dplyr::select(-Day,-Month,-Year) %>%
+        dplyr::mutate(Geography = ifelse(Geography %in% c("England: Unknown","England: Other"), "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
+        dplyr::rename(name= Geography) %>% 
+        self$codes$findCodesByName(codeTypes = c("CTRY","PSEUDO")) %>%
+        dplyr::mutate(
+          statistic = "case",
           type = case_when(
-            stringr::str_detect(source,"cum") ~ "cumulative",
-            stringr::str_detect(source,"total") ~ "cumulative",
-            stringr::str_detect(source,"inc") ~ "incidence",
-            stringr::str_detect(source,"prev") ~ "prevalence",
-            stringr::str_detect(source,"weekly") ~ "incidence",
-            stringr::str_detect(source,"admissions") ~ "incidence",
-            stringr::str_detect(source,"daily") ~ "incidence",
-            stringr::str_detect(source,"test") ~ "incidence",
-            stringr::str_detect(source,"case") ~ "incidence",
-            stringr::str_detect(source,"discharges") ~ "incidence",
-            TRUE ~ NA_character_
+            stringr::str_detect(variable,"umula") ~ "cumulative",
+            TRUE ~ "incidence"
           ),
-          statistic = case_when(
-            stringr::str_detect(source,"eath") ~ "death",
-            stringr::str_detect(source,"icu") ~ "icu admission",
-            stringr::str_detect(source,"osp") ~ "hospital admission",
-            stringr::str_detect(source,"test") ~ "test",
-            stringr::str_detect(source,"case") ~ "case",
-            stringr::str_detect(source,"carehome") ~ "case",
-            stringr::str_detect(source,"discharges") ~ "discharge",
-            source == "positive_admissions_inpatients" ~ "hospital admission",
-            TRUE ~ NA_character_
-          ),
-          subgroup=NA_character_,
-          
+          source = "casedata allnations",
+          subgroup = variable
         )
-        
-        # scotland weekly NRS has age breakdowm, and gender breakdown which causes duplication issues....
-        # here we exclude them...
-        tmp4 = tmp4 %>% filter(
-            !(source == "nrs_weeklydeath" & (!is.na(ageCat) | !is.na(gender)))
-          ) %>% filter(
-            !is.na(statistic) &
-              !is.na(type)
-          )
-        
-        browser(expr=self$debug)
-        
-        # Trusts
-        tmp5 = tmp4 %>% 
-          dplyr::filter(!is.na(TrustCode)) %>%
-          self$codes$findNamesByCode(TrustCode,outputNameVar = name) %>%
-          dplyr::mutate(name= ifelse(is.na(name), "Unknown NHS trust", name)) %>% 
-          dplyr::select(-TrustName, -Geography,-ReportLevel,-DateVal) %>%
-          dplyr::rename(note=variable,code = TrustCode)
-        
-        
-        tmp6 = tmp4 %>% 
-          dplyr::filter(is.na(TrustCode)) %>%
-          dplyr::mutate(Geography = ifelse(Geography %in% c("England: Unknown","England: Other"), "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
-          dplyr::mutate(name= Geography) %>% 
-          dplyr::select(-TrustName) %>%
-          self$codes$findCodesByName(codeTypes = c("LHB","HB","NHSER","CTRY","PSEUDO")) %>%
-          dplyr::select(-name.original, -TrustCode,-Geography,-ReportLevel,-DateVal) %>%
-          dplyr::rename(note=variable) %>%
-          dplyr::filter(!is.na(code)) # 2 missing hospital trusts - Velindre and Golden jubilee
-        #browser()
-        tmp7 = dplyr::bind_rows(tmp5,tmp6) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(truncate) %>% self$complete()
-        
-        return(tmp7)
-      })) 
-    },
+      tmp3 = tmp2 %>% dplyr::select(-DateVal,-name.original, -variable) %>% mutate(ageCat=NA_character_,gender=NA_character_)
+      tmp4 = tmp3 %>% filter(!is.na(value)) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(truncate) %>% self$complete()
+      return(tmp4)
+      
+      # CHESS_LL_lab_date_cases_P1
+      # CHESS_LL_specimen_date_cases_P1
+      # CHESS_LL_lab_date_cases_P2
+      # CHESS_LL_specimen_date_cases_P2
+      # RCGP_Pos_cases
+      # RCGP_Neg_cases
+      # Admitted Patients with Lab Confirmed COVID19
+      # Dashboard_daily_confirmed - wales
+      # Dashboard_cumulative_confirmed - wales
+      # Positives_Spec_Date - scotland
+      # Positives_Cumulative_Spec_Date - scotland
+      # SitRep_Daily_Positive_tests - n ireland
+      # SitRep_Cumulative_Positive_tests - n ireland
+      
+    }))
+    attr(out,"paths") = c(path)
+    return(out)
+  },
     
-    #' @description Load the SPI-M and public data
-    #' @return a covidTimeseriesFormat dataframe
-    getTheSPIMFireHose = function(...) {
-      self$getDaily("SPIM-FIRE-HOSE", ..., orElse = function (...) covidTimeseriesFormat({
-        bind_rows(
-          self$datasets$getTheFireHose(),
-          self$getOneOneOne(),
-          self$getSPIMextract(),
-          self$getLineListIncidence(...),
-          self$getDeathsLineListIncidence(...),
-          self$getSeroprevalenceTestIncidence(...)
+  #' @description Load the SPI-M aggregated data spreadsheet
+  #' @return a covidTimeseriesFormat dataframe
+  # TODO: fix Couldn't match the following names: England: Unknown, England: Other, Golden Jubilee National Hospital, Velindre University NHS Trust
+  getSPIMextract = function(truncate=NULL,...) {
+    path = self$getLatest(self$filter$trust)
+    message("Using: ",path)
+    out = self$getSaved("SPIM-TRUST", params = list(path), ..., orElse = function (...) covidTimeseriesFormat({
+      tmp = readxl::read_excel(self$fileProvider$getFile(path), sheet = "Extracted Data", col_types = "text", na = c("n/a",""))
+      tmp2 = tmp %>% 
+        tidyr::pivot_longer(
+          cols=c(-DateVal,-Day,-Month,-Year,-ReportLevel,-Geography,-TrustCode,-TrustName),
+          names_to = "variable",
+          values_to = "value"
+        ) %>% 
+        dplyr::filter(!is.na(value)) %>% dplyr::mutate(
+          variable = variable %>% stringr::str_replace("acute1","acuteOne")
+        ) %>% 
+        dplyr::mutate(
+          ageCat = stringr::str_extract(variable,"(<|>|Under )?[0-9]?[0-9]-?[0-9]?[0-9]?\\+?( age| year)?$") %>% stringr::str_trim(),
+          source = stringr::str_remove(variable,"(<|>|Under )?[0-9]?[0-9]-?[0-9]?[0-9]?\\+?( age| year)?$")
+        ) %>% 
+        dplyr::mutate(
+          ageCat = ifelse(stringr::str_detect(variable,"unknown age"),"unknown",ageCat %>% stringr::str_remove("age|year") %>% stringr::str_trim()),
+          gender = self$normaliseGender(variable %>% stringr::str_extract("male|female")),
+          source = source %>% stringr::str_remove("unknown age") %>% stringr::str_remove_all("males?|females?") %>% stringr::str_remove_all("[^a-zA-Z]+$") %>% stringr::str_to_lower()
+        ) 
+      #TODO: fix >84 in ageCat instead of 85+
+      tmp3 = tmp2 %>% dplyr::mutate(
+        date = suppressWarnings(as.Date(DateVal)),
+        value = suppressWarnings(as.numeric(value))
+      ) %>% dplyr::select(-Day,-Month,-Year)
+      
+      tmp4 = tmp3 %>% dplyr::mutate(
+        type = case_when(
+          stringr::str_detect(source,"cum") ~ "cumulative",
+          stringr::str_detect(source,"total") ~ "cumulative",
+          stringr::str_detect(source,"inc") ~ "incidence",
+          stringr::str_detect(source,"prev") ~ "prevalence",
+          stringr::str_detect(source,"weekly") ~ "incidence",
+          stringr::str_detect(source,"admissions") ~ "incidence",
+          stringr::str_detect(source,"daily") ~ "incidence",
+          stringr::str_detect(source,"test") ~ "incidence",
+          stringr::str_detect(source,"case") ~ "incidence",
+          stringr::str_detect(source,"discharges") ~ "incidence",
+          TRUE ~ NA_character_
+        ),
+        statistic = case_when(
+          stringr::str_detect(source,"eath") ~ "death",
+          stringr::str_detect(source,"icu") ~ "icu admission",
+          stringr::str_detect(source,"osp") ~ "hospital admission",
+          stringr::str_detect(source,"test") ~ "test",
+          stringr::str_detect(source,"case") ~ "case",
+          stringr::str_detect(source,"carehome") ~ "case",
+          stringr::str_detect(source,"discharges") ~ "discharge",
+          source == "positive_admissions_inpatients" ~ "hospital admission",
+          TRUE ~ NA_character_
+        ),
+        subgroup=NA_character_,
+      )
+      
+      # scotland weekly NRS has age breakdowm, and gender breakdown which causes duplication issues....
+      # here we exclude them...
+      tmp4 = tmp4 %>% filter(
+          !(source == "nrs_weeklydeath" & (!is.na(ageCat) | !is.na(gender)))
+        ) %>% filter(
+          !is.na(statistic) &
+            !is.na(type)
         )
-      }))
-    }
+      
+      browser(expr=self$debug)
+      
+      # Trusts
+      tmp5 = tmp4 %>% 
+        dplyr::filter(!is.na(TrustCode)) %>%
+        self$codes$findNamesByCode(TrustCode,outputNameVar = name) %>%
+        dplyr::mutate(name= ifelse(is.na(name), "Unknown NHS trust", name)) %>% 
+        dplyr::select(-TrustName, -Geography,-ReportLevel,-DateVal) %>%
+        dplyr::rename(note=variable,code = TrustCode)
+      
+      tmp6 = tmp4 %>% 
+        dplyr::filter(is.na(TrustCode)) %>%
+        dplyr::mutate(Geography = ifelse(Geography %in% c("England: Unknown","England: Other"), "Unknown (England)", Geography)) %>% #TODO fix this ugly hack.
+        dplyr::mutate(name= Geography) %>% 
+        dplyr::select(-TrustName) %>%
+        self$codes$findCodesByName(codeTypes = c("LHB","HB","NHSER","CTRY","PSEUDO")) %>%
+        dplyr::select(-name.original, -TrustCode,-Geography,-ReportLevel,-DateVal) %>%
+        dplyr::rename(note=variable) %>%
+        dplyr::filter(!is.na(code)) # 2 missing hospital trusts - Velindre and Golden jubilee
+      #browser()
+      tmp7 = dplyr::bind_rows(tmp5,tmp6) %>% self$fillAbsentByRegion() %>% self$fixDatesAndNames(truncate) %>% self$complete()
+      
+      return(tmp7)
+    }))
+    attr(out,"paths") = c(path)
+    return(out)
+  },
+    
+  #' @description Load the SPI-M and public data
+  #' @return a covidTimeseriesFormat dataframe
+  getTheSPIMFireHose = function(...) {
+    self$getDaily("SPIM-FIRE-HOSE", ..., orElse = function (...) covidTimeseriesFormat({
+      bind_rows(
+        self$datasets$getTheFireHose(),
+        self$getOneOneOne(),
+        self$getSPIMextract(),
+        self$getLineListIncidence(...),
+        self$getDeathsLineListIncidence(...),
+        self$getSeroprevalenceTestIncidence(...)
+      )
+    }))
+  }
 ))
 
 
-#### SPIM specific function ----
-
-#' reformats an Rt data set to SPI-M template
-#' 
-#' @param df - the dataframe with Rt estimates
-#' @param geographyExpr - the derivation of the geographic name
-#' @param modelName - the model
-#' @param modelTypeExpr: ModelType - Multiple, Deaths, Cases, Survey, Emergency, Pillar Two Testing
-#' @param dateVar - the column with dates
-#' @param groupName - the group submitting the estimate
-#' @return a tibble of the formatted estimates
-#' @export
-convertRtToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, dateVar = "date", groupName = "Exeter", version="0.1") {
-  dateVar = ensym(dateVar)
-  geographyExpr = enexpr(geographyExpr)
-  modelExpr = enexpr(modelExpr)
-  modelTypeExpr = enexpr(modelTypeExpr)
-  out = df %>% mutate(
-      `Group`=groupName,
-      `Model`=!!modelExpr,
-      `Scenario`="Nowcast",
-      `ModelType`=!!modelTypeExpr,
-      `Version`=version,
-      `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
-      `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
-      `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
-      `Day of Value` = !!dateVar %>% format("%d") %>% as.integer(),
-      `Month of Value` = !!dateVar %>% format("%m") %>% as.integer(),
-      `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
-      `AgeBand` = "All",
-      `Geography` = !!geographyExpr,
-      `ValueType` = "R",
-      `Value` = `Mean(R)`,# %>% round(2),
-      `Quantile 0.05` = `Quantile.0.05(R)`,# %>% round(2),
-      `Quantile 0.1` = NA_real_,
-      `Quantile 0.15` = NA_real_,	
-      `Quantile 0.2` = NA_real_,	
-      `Quantile 0.25` = `Quantile.0.25(R)`,# %>% round(2),
-      `Quantile 0.3` = NA_real_,
-      `Quantile 0.35` = NA_real_,	
-      `Quantile 0.4` = NA_real_,	
-      `Quantile 0.45` = NA_real_,
-      `Quantile 0.5` = `Median(R)`,# %>% round(2),
-      `Quantile 0.55` = NA_real_,
-      `Quantile 0.6` = NA_real_,	
-      `Quantile 0.65` = NA_real_,	
-      `Quantile 0.7` = NA_real_,	
-      `Quantile 0.75` = `Quantile.0.75(R)`,# %>% round(2),
-      `Quantile 0.8` = NA_real_,	
-      `Quantile 0.85` = NA_real_,	
-      `Quantile 0.9` = NA_real_,	
-      `Quantile 0.95` = `Quantile.0.95(R)`,# %>% round(2)
-    ) %>% select(
-      `Group`,`Model`,`Scenario`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
-      `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,`AgeBand`,
-      `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
-      `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
-      `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
-      `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
-      `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
-    )
-  #out = out %>% bind_rows(out %>% mutate(Scenario="Timeseries"))
-  return(out)
-  
-}
-
-#' reformats an Rt data set to SPI-M template
-#' 
-#' @param df - the dataframe with Rt estimates
-#' @param geographyExpr - the derivation of the geographic name
-#' @param modelName - the model
-#' @param dateVar - the column with dates
-#' @param groupName - the group submitting the estimate
-
-#' @return a tibble of the formatted estimates
-#' @export
-convertGrowthRateToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, growthVar = "Growth.windowed.value", growthSEVar = "Growth.windowed.SE.value",  dateVar = "date", groupName = "Exeter", version="0.1") {
-  dateVar = ensym(dateVar)
-  growthVar = ensym(growthVar)
-  growthSEVar = ensym(growthSEVar)
-  geographyExpr = enexpr(geographyExpr)
-  modelExpr = enexpr(modelExpr)
-  modelTypeExpr = enexpr(modelTypeExpr)
-  out = df %>% mutate(
-    `Group`=groupName,
-    `Model`=!!modelExpr,
-    `Scenario`="Nowcast",
-    `ModelType`=!!modelTypeExpr,
-    `Version`=version,
-    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
-    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
-    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
-    `Day of Value` = !!dateVar %>% format("%d") %>% as.integer(),
-    `Month of Value` = !!dateVar %>% format("%m") %>% as.integer(),
-    `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
-    `AgeBand` = "All",
-    `Geography` = !!geographyExpr,
-    `ValueType` = "growth_rate",
-    `Value` = !!growthVar,# %>% round(2),
-    `Quantile 0.05` = qnorm(0.05, !!growthVar, !!growthSEVar),# %>% round(2),
-    `Quantile 0.1` = NA_real_,
-    `Quantile 0.15` = NA_real_,	
-    `Quantile 0.2` = NA_real_,	
-    `Quantile 0.25` = qnorm(0.25, !!growthVar, !!growthSEVar),# %>% round(2),
-    `Quantile 0.3` = NA_real_,	
-    `Quantile 0.35` = NA_real_,	
-    `Quantile 0.4` = NA_real_,	
-    `Quantile 0.45` = NA_real_,
-    `Quantile 0.5` = qnorm(0.5, !!growthVar, !!growthSEVar),# %>% round(2),
-    `Quantile 0.55` = NA_real_,
-    `Quantile 0.6` = NA_real_,	
-    `Quantile 0.65` = NA_real_,	
-    `Quantile 0.7` = NA_real_,	
-    `Quantile 0.75` = qnorm(0.75, !!growthVar, !!growthSEVar),# %>% round(2),
-    `Quantile 0.8` = NA_real_,	
-    `Quantile 0.85` = NA_real_,	
-    `Quantile 0.9` = NA_real_,	
-    `Quantile 0.95` = qnorm(0.95, !!growthVar, !!growthSEVar),# %>% round(2)
-  ) %>% select(
-    `Group`,`Model`,`Scenario`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
-    `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,`AgeBand`,
-    `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
-    `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
-    `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
-    `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
-    `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
-  )
-  #out = out %>% bind_rows(out %>% mutate(Scenario="Timeseries"))
-  return(out)
-}
-
-#' reformats an Rt data set to SPI-M template
-#' 
-#' @param df - the dataframe with Rt estimates
-#' @param geographyExpr - the derivation of the geographic name
-#' @param modelName - the model
-#' @param dateVar - the column with dates
-#' @param groupName - the group submitting the estimate
-
-#' @return a tibble of the formatted estimates
-#' @export
-convertDoublingTimeToSPIM = function(df, geographyExpr, modelExpr, modelTypeExpr, growthVar = "Growth.windowed.value", growthSEVar = "Growth.windowed.SE.value", dateVar = "date", groupName = "Exeter", version="0.1") {
-  dateVar = ensym(dateVar)
-  growthVar = ensym(growthVar)
-  growthSEVar = ensym(growthSEVar)
-  geographyExpr = enexpr(geographyExpr)
-  modelExpr = enexpr(modelExpr)
-  modelTypeExpr = enexpr(modelTypeExpr)
-  
-  dtQuant = function(q) {
-    a = log(2)/qnorm(1-q, df %>% pull(!!growthVar), df %>% pull(!!growthSEVar))
-    b = ifelse(a<0 | is.nan(a) | is.infinite(a), 9999999+q, a)
-    return(b)
-  }
-  df %>% mutate(
-    `Group`=groupName,
-    `Model`=!!modelExpr,
-    `Scenario`="Nowcast",
-    `ModelType`=!!modelTypeExpr,
-    `Version`=version,
-    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
-    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
-    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
-    `Day of Value` = !!dateVar %>% format("%d") %>% as.integer(),
-    `Month of Value` = !!dateVar %>% format("%m") %>% as.integer(),
-    `Year of Value` = !!dateVar %>% format("%Y") %>% as.integer(),
-    `AgeBand` = "All",
-    `Geography` = !!geographyExpr,
-    `ValueType` = "doubling_time",
-    `Value` = dtQuant(0.5),
-    `Quantile 0.05` = dtQuant(0.05),# %>% round(2),
-    `Quantile 0.1` = NA_real_,
-    `Quantile 0.15` = NA_real_,	
-    `Quantile 0.2` = NA_real_,	
-    `Quantile 0.25` = dtQuant(0.25),# %>% round(2),
-    `Quantile 0.3` = NA_real_,	
-    `Quantile 0.35` = NA_real_,	
-    `Quantile 0.4` = NA_real_,	
-    `Quantile 0.45` = NA_real_,
-    `Quantile 0.5` = dtQuant(0.5),# %>% round(2),
-    `Quantile 0.55` = NA_real_,
-    `Quantile 0.6` = NA_real_,	
-    `Quantile 0.65` = NA_real_,	
-    `Quantile 0.7` = NA_real_,	
-    `Quantile 0.75` = dtQuant(0.75),# %>% round(2),
-    `Quantile 0.8` = NA_real_,	
-    `Quantile 0.85` = NA_real_,	
-    `Quantile 0.9` = NA_real_,	
-    `Quantile 0.95` = dtQuant(0.95),# %>% round(2)
-  ) %>% select(
-    `Group`,`Model`,`Scenario`,`ModelType`,`Version`,`Creation Day`,`Creation Month`,
-    `Creation Year`,`Day of Value`,`Month of Value`,`Year of Value`,`AgeBand`,
-    `Geography`,`ValueType`,`Value`,`Quantile 0.05`,`Quantile 0.1`,
-    `Quantile 0.15`,`Quantile 0.2`,`Quantile 0.25`,`Quantile 0.3`,`Quantile 0.35`,	
-    `Quantile 0.4`,`Quantile 0.45`,`Quantile 0.5`,`Quantile 0.55`,
-    `Quantile 0.6`,`Quantile 0.65`,`Quantile 0.7`,`Quantile 0.75`,
-    `Quantile 0.8`,`Quantile 0.85`,`Quantile 0.9`,`Quantile 0.95`
-  )
-}
-
-
-#' reformats an EpiEstim config file to SPI-M template
-#' 
-#' @param cfg - the serial interval object
-#' @param modelName - the model
-#' @param groupName - the group submitting the estimate
-
-#' @return a tibble of the formatted estimates
-#' @export
-convertSerialIntervalToSPIM = function(serial, modelName, groupName = "Exeter", version="0.1") {
-  cfg = serial$getSummary()
-  quant = function(q) {
-    m = msm::qtnorm(q, cfg$meanOfMean, cfg$sdOfMean, lower=cfg$minOfMean, upper=cfg$maxOfMean)
-    v = msm::qtnorm(q, cfg$meanOfSd, cfg$sdOfSd, lower=cfg$minOfSd, upper=cfg$maxOfSd)
-    
-    k_mean = (cfg$meanOfMean / cfg$meanOfSd)^2
-    k_sd = sdFromRatio(mu_x = cfg$meanOfSd, sig_x = cfg$sdOfSd, mu_y = cfg$meanOfMean, sig_y = cfg$sdOfMean ) ^ 2
-    
-    k = qnorm(q, k_mean, k_sd)
-    
-    # v = scales::squish(v, range = c(cfg$min_std_si,cfg$max_std_si))
-    # m = scales::squish(m, range = c(cfg$min_mean_si,cfg$max_mean_si))
-    #return(c(m,v^2) %>% round(3))
-    return(c(m,k,v^2)) # %>% round(3))
-  }
-  return(tibble(
-    `Group`=groupName,
-    `Model`=modelName,
-    `Scenario`="Nowcast",
-    `ModelType`="Multiple",
-    `Version`=version,
-    `Creation Day` = Sys.Date() %>% format("%d") %>% as.integer(),
-    `Creation Month` = Sys.Date() %>% format("%m") %>% as.integer(),
-    `Creation Year` = Sys.Date() %>% format("%Y") %>% as.integer(),
-    `Day of Value` = Sys.Date() %>% format("%d") %>% as.integer(),
-    `Month of Value` = Sys.Date() %>% format("%m") %>% as.integer(),
-    `Year of Value` = Sys.Date() %>% format("%Y") %>% as.integer(),
-    `AgeBand` = "All",
-    `Geography` = "United Kingdom",
-    `ValueType` = c("mean_generation_time","kappa","var_generation_time"),
-    `Value` = quant(0.5),
-    `Quantile 0.05` = quant(0.05),
-    `Quantile 0.1` = NA,
-    `Quantile 0.15` = NA,	
-    `Quantile 0.2` = NA,	
-    `Quantile 0.25` = quant(0.25),
-    `Quantile 0.3` = NA,	
-    `Quantile 0.35` = NA,	
-    `Quantile 0.4` = NA,	
-    `Quantile 0.45` = NA,
-    `Quantile 0.5` = quant(0.5),
-    `Quantile 0.55` = NA,
-    `Quantile 0.6` = NA,	
-    `Quantile 0.65` = NA,	
-    `Quantile 0.7` = NA,	
-    `Quantile 0.75` = quant(0.75),
-    `Quantile 0.8` = NA,	
-    `Quantile 0.85` = NA,	
-    `Quantile 0.9` = NA,	
-    `Quantile 0.95` = quant(0.95)
-  ))
-}

@@ -1,4 +1,4 @@
-#' Survival data proccesing
+#' General distribution fitting algorithms
 #' @export
 DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCache, public = list(
 
@@ -12,6 +12,11 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   samples = NULL,
   shifted = 0,
   
+  #' @description New distribution fitter
+  #' @param distributions - the distributions to fit
+  #' @param shifted - a shift to apply to all data
+  #' @param ... for compatibility
+  #' @return the fitter
   initialize = function(distributions = c("weibull","gamma","lnorm","exp","norm","tnorm"), shifted = 0, ...) {
     super$initialize(...)
     self$setModels(distributions, shifted)

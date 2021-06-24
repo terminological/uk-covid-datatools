@@ -14,6 +14,7 @@ Caching and dataset management
 \item \href{#method-new}{\code{PassthroughFilesystemCache$new()}}
 \item \href{#method-getDaily}{\code{PassthroughFilesystemCache$getDaily()}}
 \item \href{#method-getHashCached}{\code{PassthroughFilesystemCache$getHashCached()}}
+\item \href{#method-unloadCache}{\code{PassthroughFilesystemCache$unloadCache()}}
 \item \href{#method-getSaved}{\code{PassthroughFilesystemCache$getSaved()}}
 \item \href{#method-clone}{\code{PassthroughFilesystemCache$clone()}}
 }
@@ -50,6 +51,14 @@ Caching and dataset management
   orElse,
   ...
 )}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-unloadCache"></a>}}
+\subsection{Method \code{unloadCache()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$unloadCache()}\if{html}{\out{</div>}}
 }
 
 }

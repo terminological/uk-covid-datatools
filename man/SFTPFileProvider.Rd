@@ -33,15 +33,33 @@ Read only file providers
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+SFTP over SSH tunnel file provider
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPFileProvider$new(
   config,
   hostName = config$hostName,
   user = config$user,
-  password = config$password
+  password = config$password,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{user}}{- sftp username}
+
+\item{\code{password}}{- sftp password}
+
+\item{\code{...}}{for compatibility}
+
+\item{\code{hostname}}{- sftp host}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}

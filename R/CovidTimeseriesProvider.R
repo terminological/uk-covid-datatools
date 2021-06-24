@@ -11,6 +11,10 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     "death" = 10
   ),
   
+  #' @description New timeseries provider pipeline
+  #' @param providerController the provider controller
+  #' @param ... for compatibility
+  #' @return the provider
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
   },

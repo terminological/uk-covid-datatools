@@ -35,6 +35,7 @@ General covid  processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="unloadCache">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-unloadCache}{\code{ukcovidtools::PassthroughFilesystemCache$unloadCache()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageCatToFactor">}\href{../../ukcovidtools/html/DataProvider.html#method-ageCatToFactor}{\code{ukcovidtools::DataProvider$ageCatToFactor()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="ageToAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-ageToAgeCat}{\code{ukcovidtools::DataProvider$ageToAgeCat()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="breakFromCats">}\href{../../ukcovidtools/html/DataProvider.html#method-breakFromCats}{\code{ukcovidtools::DataProvider$breakFromCats()}}\out{</span>}
@@ -52,10 +53,23 @@ General covid  processing
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+New timeseries provider pipeline
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$new(providerController, ...)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{providerController}}{the provider controller}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-setTruncation"></a>}}
@@ -110,23 +124,34 @@ a covidTimeseriesFormat dataframe
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fillAbsentAllRegions"></a>}}
 \subsection{Method \code{fillAbsentAllRegions()}}{
+Take a set of regional timeseries, finds the full list of regions and the whole timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
+explicitly filling in missing values. This is suitable for use for a incidence derived from a line list where some dates and regions will not be observed
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$fillAbsentAllRegions(covidTimeseries)}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fillAbsentByRegion"></a>}}
 \subsection{Method \code{fillAbsentByRegion()}}{
+Take a set of timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
+explicitly filling in zeros for missing values. This is suitable for use for a incidence derived from a line list where some dates will not be
+observed. It does not enforce that something has been observed in all regions.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$fillAbsentByRegion(covidTimeseries)}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fixDatesAndNames"></a>}}
 \subsection{Method \code{fixDatesAndNames()}}{
-Take a set of timeseries and fixes any non standard names, trncates time series bu truncate days. 
+Take a set of timeseries and fixes any non standard names, truncates time series by truncate days. 
 intially Fills all regions to be the same length but with trim trailing NAs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$fixDatesAndNames(covidTimeseries, truncate = NULL)}\if{html}{\out{</div>}}

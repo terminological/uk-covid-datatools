@@ -13,8 +13,11 @@ Encoding: UTF-8
 LazyData: true
 Imports:
     dplyr,
+    dtplyr,
+    data.table,
     EpiEstim,
     msm,
+    here,
     forecast,
     ggplot2,
     ensurer,
@@ -25,7 +28,8 @@ Imports:
     rgeos,
     ggspatial,
     sf,
-    metR
+    metR,
+    patchwork
 Remotes: 
     thomasp85/patchwork
 Suggests: 

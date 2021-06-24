@@ -3,6 +3,10 @@
 ChessProcessingPipeline = R6::R6Class("ChessProcessingPipeline", inherit=DataProvider, public = list(
   
   
+  #' @description New chess processing pipeline
+  #' @param providerController the provider controller
+  #' @param ... for compatibility
+  #' @return the processor
   initialize = function(providerController, ...) {
     super$initialize(providerController, ...)
   },

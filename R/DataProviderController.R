@@ -38,6 +38,10 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     )
   ),
   
+  #' @description New provider controller
+  #' @param wd a shared cache directory for all uk-covid-datatools
+  #' @param ... for compatibility
+  #' @return the provider controller
   initialize = function(wd) {
     super$initialize(wd)
     self$directory = wd
@@ -135,6 +139,11 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
   
 ))
 
+#' @description Static method for new provider controller
+#' @param path a shared cache directory for all uk-covid-datatools
+#' @param spimSource configurable source for private files
+#' @param ... for compatibility
+#' @return the provider controller
 DataProviderController$setup = function(path, spimSource = getOption("ukcovid.spim"), ...) {
     dir = path.expand(path) %>% stringr::str_remove("/$")
     out = DataProviderController$new(dir) 

@@ -64,7 +64,7 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
       if (identical(dir,NULL)) {
         dir = self$wd
       }
-      
+      id = paste0(id,"-",openssl::md5(serialize(deparse(orElse),connection=NULL)))
       # 
       # if(length(dots)>0) {
       #   dots = dots[order(names(dots))]

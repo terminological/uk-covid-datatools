@@ -15,6 +15,7 @@ Control data sources
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{DataProviderController$new()}}
+\item \href{#method-unloadCaches}{\code{DataProviderController$unloadCaches()}}
 \item \href{#method-updateCodes}{\code{DataProviderController$updateCodes()}}
 \item \href{#method-updateSPIMDatasets}{\code{DataProviderController$updateSPIMDatasets()}}
 \item \href{#method-updateDatasets}{\code{DataProviderController$updateDatasets()}}
@@ -33,14 +34,37 @@ Control data sources
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getDaily">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getDaily}{\code{ukcovidtools::PassthroughFilesystemCache$getDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getHashCached">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getHashCached}{\code{ukcovidtools::PassthroughFilesystemCache$getHashCached()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="getSaved">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-getSaved}{\code{ukcovidtools::PassthroughFilesystemCache$getSaved()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="PassthroughFilesystemCache" data-id="unloadCache">}\href{../../ukcovidtools/html/PassthroughFilesystemCache.html#method-unloadCache}{\code{ukcovidtools::PassthroughFilesystemCache$unloadCache()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
 \subsection{Method \code{new()}}{
+New provider controller
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$new(wd)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{wd}}{a shared cache directory for all uk-covid-datatools}
+
+\item{\code{...}}{for compatibility}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the provider controller
+Title
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-unloadCaches"></a>}}
+\subsection{Method \code{unloadCaches()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$unloadCaches()}\if{html}{\out{</div>}}
 }
 
 }

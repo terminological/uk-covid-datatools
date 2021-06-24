@@ -2,3 +2,6 @@
 
 Code and supporting material for our [MedRxiv paper](https://doi.org/10.1101/2020.04.13.20062760) 
 
+These files have moved to:
+
+https://github.com/terminological/wave-one-regional-rt

@@ -294,6 +294,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       return()
   },
   
+  # TODO: generate more tests for this from manual review of:
+  # View(symptomaticTimeseries %>% filter(is.na(stats::filter(value,rep(1,9)))))
   completeAndRemoveAnomalies = function(r0Timeseries, outlier_min = 10, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001, allowZeroDays=FALSE) {covidTimeseriesFormat %def% {
     valueVar = ensym(valueVar)
     originalValueVar = ensym(originalValueVar)
@@ -652,7 +654,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           suppressWarnings({
             #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
             
-            tmp_intercept_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha, deg=1), tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
+            tmp_intercept_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=1), tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
             tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
             
             # if(any(is.na(tmp_intercept$fit))) 
@@ -677,6 +679,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           })
           
         }
+        
+        #TODO: quasi-poisson model must have some overdispertion parameters in there somewhere which we are not surfacing.
+        #also makes confidence interval calculations below questionable.
         
         d$Growth.ProbPos = 1-pnorm(0,mean=d$Growth.value,sd=d$Growth.SE.value)
         
@@ -1141,6 +1146,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   
   #### plot data ----
   
+  epiestimCols = c("Quantile.0.025(R)","Quantile.0.25(R)","Median(R)","Quantile.0.75(R)","Quantile.0.975(R)"),
+  jepidemicCols = c("Rt.Quantile.0.025","Rt.Quantile.0.25","Rt.Quantile.0.5","Rt.Quantile.0.75","Rt.Quantile.0.975"),
+  
   #' @description Plot the EpiEstim output in a standard way
   #' 
   #' @param df a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim
@@ -1150,13 +1158,46 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param features - 
   #' @param rtlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
-  plotRt = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rtlim=c(0.5,2.5), dates=NULL, 
-                    ribbons=("Quantile.0.025(R)" %in% colnames(covidRtTimeseries)), ...) {
+  plotRt = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates(1), rtlim=c(0.5,2.5), dates=NULL, 
+                    jepidemicMode = any(self$jepidemicCols %in% colnames(covidRtTimeseries)),
+                    ribbons = TRUE,
+                    ...) {
     df = covidRtTimeseries
-    if (!("Median(R)" %in% colnames(covidRtTimeseries))) {
+    cols = if(jepidemicMode) self$jepidemicCols else self$epiestimCols
+    #browser()
+    if (!cols[3] %in% colnames(covidRtTimeseries)) {
       warning("estimating median Rt with default parameters")
       df = df %>% self$estimateRtQuick()
+      cols = self$epiestimCols
+      ribbons = FALSE
+    
+      q5RtVar = as.symbol(cols[3])
+      
+      df = df %>% rename(
+        q5Rt = !!q5RtVar
+      )
+      
+    } else {
+    
+      q025RtVar = as.symbol(cols[1])
+      q25RtVar = as.symbol(cols[2])
+      q5RtVar = as.symbol(cols[3])
+      q75RtVar = as.symbol(cols[4])
+      q975RtVar = as.symbol(cols[5])
+      
+      df = df %>% rename(
+        q025Rt = !!q025RtVar,
+        q25Rt = !!q25RtVar,
+        q5Rt = !!q5RtVar,
+        q75Rt = !!q75RtVar,
+        q975Rt = !!q975RtVar
+      )
     }
+    
+    if (!"Anomaly.R" %in% colnames(covidRtTimeseries)) {
+      df = df %>% tsp$completeAndRemoveAnomalies() %>% mutate(Anomaly.R = Anomaly)
+    }
+    
     colour = tryCatch(ensym(colour),error = function(e) NULL)
     
     p2 = self$plotDefault(df,events,dates, ylim=rtlim) + ylab(latex2exp::TeX("$R_t$"))
@@ -1165,26 +1206,24 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
       if(ribbons) {
         p2 = p2 + 
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`,...),alpha=0.05,fill="black",show.legend = FALSE)+
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`,...),alpha=0.065,fill="black",show.legend = FALSE)
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=q25Rt, ymax=q75Rt,...),alpha=0.05,fill="black",show.legend = FALSE)+
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=q025Rt, ymax=q975Rt,...),alpha=0.065,fill="black",show.legend = FALSE)
       }
       p2 = p2 + 
-        geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,...))+
-        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
+        geom_line(data=df,mapping=aes(x=date,y=q5Rt,...))+
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=q5Rt),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
       
     } else {
       
       if(ribbons) {
         p2 = p2 + 
-          # geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`, fill=!!colour,...),alpha=0.1,show.legend = FALSE)+
-          # geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`, fill=!!colour,...),alpha=0.15,show.legend = FALSE)
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.25(R)`, ymax=`Quantile.0.75(R)`,group=!!colour,  ...),alpha=0.05,fill="black",show.legend = FALSE)+
-          geom_ribbon(data=df,mapping=aes(x=date, ymin=`Quantile.0.025(R)`, ymax=`Quantile.0.975(R)`,group=!!colour, ...),alpha=0.065,fill="black",show.legend = FALSE)
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=q25Rt, ymax=q75Rt,group=!!colour,  ...),alpha=0.05,fill="black",show.legend = FALSE)+
+          geom_ribbon(data=df,mapping=aes(x=date, ymin=q025Rt, ymax=q975Rt,group=!!colour, ...),alpha=0.065,fill="black",show.legend = FALSE)
           
       }
       p2 = p2 +
-        geom_line(data=df,mapping=aes(x=date,y=`Median(R)`,colour=!!colour,...))+
-        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=`Median(R)`),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
+        geom_line(data=df,mapping=aes(x=date,y=q5Rt,colour=!!colour,...))+
+        geom_point(data=df %>% filter(`Anomaly.R`),mapping=aes(x=date,y=q5Rt),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
       
     }
     p2 = p2 + geom_hline(yintercept = 1,colour="grey50")
@@ -1197,14 +1236,26 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param rlim - the max and min or Rt to display
   #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
   #' @param ribbons - display the confidence limit as ribbons
-  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates() %>% filter(Significance==1), rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, growthVar = "Growth.value", growthSEVar = "Growth.SE.value", ...) {
-    growthVar=  ensym(growthVar)
-    growthSEVar=  ensym(growthSEVar)
+  plotGrowthRate = function(covidRtTimeseries, colour=NULL, events=self$datasets$getSignificantDates(1), 
+                            rlim=c(-0.25,0.25), dates=NULL, ribbons=TRUE, 
+                            growthVar = "Growth.value", growthLowerVar = "Growth.Quantile.0.025.value", growthHigherVar = "Growth.Quantile.0.975.value", growthSEVar = NULL, ...) {
+    
+    growthVar = ensym(growthVar)
+    growthLowerVar =  ensym(growthLowerVar)
+    growthHigherVar =  ensym(growthHigherVar)
+    growthSEVar =  tryCatch(ensym(growthSEVar),error=function(x) NULL)
     
     df = covidRtTimeseries %>% 
-      dplyr::filter(type=="incidence") %>%
-      #self$logIncidenceStats(...)
-      self$estimateGrowthRate2(...)
+      dplyr::filter(type=="incidence") 
+    
+    if (!as_label(growthVar) %in% colnames(df)) {
+      if (as_label(growthVar) == "Growth.poisson") df = df %>% self$estimateGrowthRate(...)
+      if (as_label(growthVar) == "Growth.value") df = df %>% self$estimateGrowthRate2(...)
+    }
+    
+    if (!as_label(growthLowerVar) %in% colnames(df)) df = df %>% mutate(!!growthLowerVar := !!growthVar-1.96*!!growthSEVar)
+    if (!as_label(growthHigherVar) %in% colnames(df)) df = df %>% mutate(!!growthHigherVar := !!growthVar+1.96*!!growthSEVar)
+    
     colour = enexpr(colour)
     
     p2 = self$plotDefault(df, events,dates, ylim=rlim,...) + ylab(latex2exp::TeX("$r$")) + scale_y_continuous(
@@ -1213,14 +1264,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
     if(identical(colour,NULL)) {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = "black",...)
-      else p2 = p2 + geom_line(aes(y=!!growthVar,...))
+      if(ribbons) p2 = p2 + geom_ribbon(aes(ymin=!!growthLowerVar,ymax=!!growthHigherVar,...),alpha=0.065,fill = "black")
+      p2 = p2 + geom_line(aes(y=!!growthVar,...))
     } else if (class(colour) == "character") {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = !!colour,...)
-      else p2 = p2 + geom_line(aes(y=!!growthVar, ...),colour=!!colour)
+      if(ribbons) p2 = p2 + geom_ribbon(aes(ymin=!!growthLowerVar,ymax=!!growthHigherVar,...),alpha=0.065,fill = "black")
+      p2 = p2 + geom_line(aes(y=!!growthVar, ...),colour=!!colour)
     } else {
-      if(ribbons) p2 = p2 + plotRibbons(meanVar=!!growthVar,sdVar=!!growthSEVar,colourExpr = !!colour,...)
-      else p2 = p2 + geom_line(aes(y=!!growthVar,colour=!!colour, ...))
+      if(ribbons) p2 = p2 + geom_ribbon(aes(ymin=!!growthLowerVar,ymax=!!growthHigherVar, group=!!colour,...),alpha=0.065,fill = "black")
+      p2 = p2 + geom_line(aes(y=!!growthVar,colour=!!colour, ...))
     }
     if ("Anomaly" %in% colnames(df)) {
       p2 = p2 + geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=!!growthVar),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE)
@@ -1229,20 +1280,12 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  #' @description Plot the growth rate
-  #' @param df a df containing an Rt timeseries, including a date and a `Median(R)` column from EpiEstim
-  #' @param colour - the colour aesthetic
-  #' @param rlim - the max and min or Rt to display
-  #' @param dates - the min (and optionally max) dates to display as a YYYY-MM-DD character (or anything that can be coerced to a Date)
-  #' @param ribbons - display the confidence limit as ribbons
-  plotWindowedGrowthRate = function(covidRtTimeseries, ...) {
-    self$plotGrowthRate(covidRtTimeseries,...,growthVar = Growth.windowed.value,growthSEVar = Growth.windowed.SE.value)
-  },
-  
-  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates, timespan=15, colour=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=c(-0.15,0.15), maxSize=6, ...) {
+  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=c(-0.15,0.15), ilim=c(0,NA), maxSize=6, ...) {
     colour = enexpr(colour)
     grps = groupedCovidRtTimeseries %>% groups()
     if (length(grps)==0) grps = list(as.symbol("code"))
+    
+    if (identical(plotDates, NULL)) plotDates = (groupedCovidRtTimeseries %>% summarise(p = max(date,na.rm = TRUE)) %>% pull(p) %>% min(na.rm = TRUE)) - 3
     plotDates = as.Date(plotDates)
     
     df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
@@ -1305,8 +1348,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     p2 = p2 +
       scale_y_continuous(trans="log1p", breaks=ukcovidtools::breaks_log1p())+
+      scale_x_continuous(sec.axis = dup_axis( breaks = log(2)/c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), labels = c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), name="doubling time"))+
       scale_alpha_continuous(range=c(0,maxAlpha),guide="none")+
-      coord_cartesian(xlim=rlim)
+      coord_cartesian(xlim=rlim, ylim=ilim)
     
     if (populationAdj) p2 = p2+ylab("incidence/1M")
     
@@ -1328,7 +1372,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
   
-  plotDefault = function(data, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=NULL, labelSize = 7,...) {
+  plotDefault = function(data, events = NULL, dates=NULL, ylim=NULL, labelSize = 7,...) {
     p = ggplot(data, aes(x=date))
     if (identical(dates,NULL)) {
       dates = as.Date(c(min(data$date),max(data$date)),"1970-01-01")
@@ -1336,19 +1380,21 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dates = as.Date(dates)
       if (length(dates) == 1) dates = c(dates,max(data$date))
     }
-    events = events %>% filter(!is.na(`End date`) & `End date` < max(dates) & `Start date` > min(dates))
-    if (nrow(events) > 1) {
-      rects = events %>% mutate(labelDate = `Start date`) # %>% mutate(labelDate = as.Date(`Start date`+floor((`End date`-`Start date`)/2),"1970-01-01"))
-      p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
-      lines = events %>% filter(is.na(`End date`) & `Start date` < max(dates) & `Start date` > min(dates)) %>% mutate(labelDate = `Start date`)
-      p = p + geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE) 
-      labels = bind_rows(rects,lines)
-      p = p +
-        ggrepel::geom_text_repel(
-          aes(x=labelDate, y=Inf, label=`Label`),data=labels, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
-          size=(labelSize/ggplot2:::.pt/(96/72)))
+    if (!identical(events,NULL)) {
+      events = events %>% filter((is.na(`End date`) | `End date` < max(dates)) & `Start date` > min(dates) & `Start date` < max(dates))
+      if (nrow(events) > 1) {
+        rects = events %>% filter(!is.na(`End date`)) # %>% mutate(labelDate = as.Date(`Start date`+floor((`End date`-`Start date`)/2),"1970-01-01"))
+        p = p + geom_rect(data=rects,mapping=aes(xmin=`Start date`,xmax=`End date`),inherit.aes = FALSE,ymin=-Inf,ymax=Inf,fill="grey90",colour="grey90")
+        lines = events %>% filter(is.na(`End date`)) %>% mutate(labelDate = `Start date`)
+        p = p + geom_vline(data=lines,mapping=aes(xintercept = `Start date`),linetype="dashed",colour="grey50",show.legend = FALSE) 
+        labels = bind_rows(rects,lines)
+        p = p +
+          ggrepel::geom_text_repel(
+            aes(x=labelDate, y=Inf, label=`Label`),data=labels, hjust=0,vjust=1, angle=90, show.legend = FALSE,box.padding=0.05,inherit.aes = FALSE,
+            size=(labelSize/ggplot2:::.pt/(96/72)))
+      }
     }
-    p = p + scale_x_date(date_breaks = "2 week", date_labels = "%d-%m")
+    p = p + scale_x_date(date_breaks = "1 month", date_labels = "%d-%m")
     
     if (!identical(ylim,NULL)) {
       p =p+coord_cartesian(xlim=dates, ylim=ylim)
@@ -1360,7 +1406,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
 
-  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), ...) {
+  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates(1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), ...) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
       self$estimateGrowthRate2(...)
@@ -1417,7 +1463,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NULL, events = self$datasets$getSignificantDates() %>% filter(Significance==1), dates=NULL, ylim=c(0,NA), ...
+  plotIncidenceRollmean = function(covidTimeseries, denominatorExpr=NULL, events = self$datasets$getSignificantDates(1), dates=NULL, ylim=c(0,NA), ...
   ) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%

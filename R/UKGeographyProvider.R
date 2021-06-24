@@ -278,7 +278,6 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   #' @param inputShape - an input map, 
   #' @param inputIdVar - an id shared between the grouped data fram and the input map, 
   #' @param outputShape - an output map which must be grouped by the desired output, 
-  
   #' @return a dataframe containing the grouping columns, the outputIdVar and the interpolated value of interpolateVar
   interpolateByArea = function(inputDf, 
       inputMapId, inputShape = self$getMap(inputMapId), inputIdVar = "code", 

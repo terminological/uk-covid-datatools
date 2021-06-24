@@ -15,12 +15,10 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
+
 devtools::load_all("~/Git/uk-covid-datatools/")
 #devtools::install_github("terminological/uk-covid-datatools", force = TRUE)
-
 ukcovidtools::setup()
-
-
 
 ```
 
@@ -28,7 +26,7 @@ ukcovidtools::setup()
 
 ```{r}
 
-testData = dpc$datasets$getPHEApi()
+testData = dpc$datasets$getPHEApi(areaType = "nation")
 
 ```
 
@@ -38,20 +36,16 @@ timeseries has UK region, England NHS region, and England Unitary Authority
 
 ```{r}
 
-
-testData %>% tsp$plotIncidenceQuantiles(colour = statistic)
-
+tsp$plotIncidenceQuantiles(testData,colour = statistic)+facet_wrap(vars(name))+scale_y_continuous(trans="log1p", breaks = ukcovidtools::breaks_log1p(n = 6))
 
 ```
+
+
 ```{r}
 
-tn = SerialIntervalProvider$truncatedNormals(dpc)
+# switch the serial interval
+tn = SerialIntervalProvider$resampledSerialInterval(dpc)
 tsp$serial = tn
 
-
-```
-
-```{r}
-tmp = testData %>% tsp$estimateRtWithAssumptions(period = 60,quick=TRUE,nocache=TRUE)
-tmp %>% tsp$adjustRtDates() %>% tsp$adjustRtCorrFac() %>% tsp$plotRt(colour=statistic, rtlim = c(0,10), dates = "2020-02-01")
+testData %>% tsp$estimateRt() %>% tsp$plotRt(colour=name, rtlim = c(0,2.5), dates = "2020-03-01")+facet_wrap(vars(statistic),ncol=1)
 ```

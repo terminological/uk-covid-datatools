@@ -12,7 +12,11 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
    
  ), public=list(
     controller = NULL,
-    
+   
+    #' @description New provider pipeline
+    #' @param providerController the provider controller
+    #' @param ... for compatibility
+    #' @return the provider 
    initialize = function(providerController, ...) {
      self$controller = providerController
      super$initialize(providerController$directory, ...)

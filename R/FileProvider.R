@@ -5,6 +5,10 @@ AbstractFileProvider = R6::R6Class("AbstractFileProvider", public = list(
   
   sep = NULL,
   
+  #' @description New file provider
+  #' @param sep - platform separator
+  #' @param ... for compatibility
+  #' @return the provider
   initialize = function(sep = .Platform$file.sep) {
     self$sep = sep
   },
@@ -59,7 +63,16 @@ SFTPOverSSHFileProvider = R6::R6Class("SFTPOverSSHFileProvider", inherit=ReadOnl
   password=NULL,
   sshSession = NULL,
   tmpdir = NULL,
-  initialize = function(config, hostName = config$hostName, ssh=config$ssh, sshkey=config$sshkey, user=config$user, password=config$password) {
+  
+  #' @description SFTP over SSH tunnel file provider
+  #' @param hostname - sftp host
+  #' @param ssh - ssh tunnel host
+  #' @param sshkey - ssh key file
+  #' @param user - sftp username
+  #' @param password - sftp password
+  #' @param ... for compatibility
+  #' @return the provider
+  initialize = function(config, hostName = config$hostName, ssh=config$ssh, sshkey=config$sshkey, user=config$user, password=config$password, ...) {
     super$initialize(sep="/")
     self$hostName=hostName
     self$ssh=ssh
@@ -126,7 +139,13 @@ SFTPOverSSHFileProvider = R6::R6Class("SFTPOverSSHFileProvider", inherit=ReadOnl
 #' Read only file providers
 #' @export
 SFTPFileProvider = R6::R6Class("SFTPFileProvider", inherit=ReadOnlyFileProvider, public = list(
-  initialize = function(config, hostName = config$hostName, user=config$user, password=config$password) {
+  #' @description SFTP over SSH tunnel file provider
+  #' @param hostname - sftp host
+  #' @param user - sftp username
+  #' @param password - sftp password
+  #' @param ... for compatibility
+  #' @return the provider
+  initialize = function(config, hostName = config$hostName, user=config$user, password=config$password, ...) {
     stop("not yet implemented")
   },
   print=function() {invisible(self)}
@@ -142,7 +161,16 @@ S3FileProvider = R6::R6Class("S3FileProvider", inherit=ReadOnlyFileProvider, pub
   secret = NULL,
   region = NULL,
   tmpdir = NULL,
-  initialize = function(config, bucket = config$bucket, key=config$accesskey, secret=config$secretkey, region=config$region) {
+  
+  #' @description SFTP over SSH tunnel file provider
+  #' @param config - config object
+  #' @param bucket - S3 bucket name
+  #' @param key - S3 access key
+  #' @param secret - S3 secret key
+  #' @param region - S3 region
+  #' @param ... for compatibility
+  #' @return the provider
+  initialize = function(config, bucket = config$bucket, key=config$accesskey, secret=config$secretkey, region=config$region, ...) {
     super$initialize(sep="/")
     self$bucket=bucket
     self$key=key
@@ -186,7 +214,13 @@ LocalFileProvider = R6::R6Class("LocalFileProvider", inherit=ReadOnlyFileProvide
     if(parts==".") return(self$root)
     return(self$root %>% paste0(self$relativePath(parts)))
   },
-  initialize = function(config, root=config$root, sep = .Platform$file.sep) {
+  
+  #' @description Local filesystem provider
+  #' @param root - the top level directory from which to search for files
+  #' @param sep - the platform file separator
+  #' @param ... for compatibility
+  #' @return the provider
+  initialize = function(config, root=config$root, sep = .Platform$file.sep, ...) {
     super$initialize(sep)
     self$root= root %>% normalizePath(mustWork = FALSE) %>% paste0(sep) 
   },
