@@ -246,11 +246,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(tmp3 %>% dplyr::ungroup())
   }},
   
-  #### smoothing and imputing
+  #### smoothing and imputing ----
   
+  #' @description Low tech smoothing and missing value imputation, based on a log1p transform and a sgolayfilter to preserve ends of timeseries. This also does anomaly detection and is the one stop shop to minimally clean a timeseries.
+  #' @param window - the window length for the rolling average
+  #' @return - the timeseries with an Imputed.value, a RollMean.value column and an Imputed flag.
   imputeAndWeeklyAverage = function(covidTimeseries, window=7, ...) {
     if ("RollMean.value" %in% colnames(covidTimeseries)) {
-      # message("time series has already been averaged")
       return(covidTimeseries)
     }
     ts=covidTimeseries
@@ -284,6 +286,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }})
   },
   
+  #' @description Identify and make NA any days for which the timeseries contains no non zero values
+  #' @param valueVar - the value to look at
+  #' @return - the same timeseries with totally missing days replaced with NA
+  #' TODO: do we want to store the original somewhere?
   removeZeroDays = function(r0Timeseries, valueVar = "value") {
     valueVar = ensym(valueVar)
     r0Timeseries %>% 
@@ -294,9 +300,22 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       return()
   },
   
-  # TODO: generate more tests for this from manual review of:
-  # View(symptomaticTimeseries %>% filter(is.na(stats::filter(value,rep(1,9)))))
-  completeAndRemoveAnomalies = function(r0Timeseries, outlier_min = 10, outlier_sd = 5, window=9, valueVar = "value", originalValueVar = "value.original", precision=0.00001, allowZeroDays=FALSE) {covidTimeseriesFormat %def% {
+  #' @description Ensure completeness timeseries and remove anomalies. Anomolies are detected as improbable observations based on a an approximate log normal of surrounding obs.
+  #' @param r0timeseries a time series includeing incidence totals
+  #' @param smoothExpr an expression to evaluate in the context of the dataframe to generate a variable to be smoothed (e.g. log(value+1))
+  #' @param ... - not used
+  #' @param window - the window over which to check anomaly status (defaults to 9)
+  #' @param p - how unlikely is an oservation before removed.
+  #' @param min - the minimum SD allowed (to prevent runs of identical values causing issues)
+  #' @param valueVar - the column to screen
+  #' @param originalValueVar - the column to save to originals to
+  #' @param allowZeroDays - whether to identify dates for which there are zero counts across all groups. This helps in the detection of totally missing days.
+  #' @return an timeseries with Anomaly column 
+  completeAndRemoveAnomalies = function(r0Timeseries, window=9, p = 0.999, min = 1, valueVar = "value", originalValueVar = "value.original", allowZeroDays=FALSE) {covidTimeseriesFormat %def% {
+    
+    # TODO: generate more tests for this from manual review of:
+    # View(symptomaticTimeseries %>% filter(is.na(stats::filter(value,rep(1,9)))))
+    
     valueVar = ensym(valueVar)
     originalValueVar = ensym(originalValueVar)
     if ("Anomaly" %in% colnames(r0Timeseries)) {
@@ -305,67 +324,103 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }
     # trim tailing NAs
     tmp = self$trimNAs(r0Timeseries)
-    if (!allowZeroDays) tmp = tmp %>% self$removeZeroDays()
+    groups = tmp %>% covidStandardGrouping() %>% n_groups()
+    if (!allowZeroDays & groups>1) tmp = tmp %>% self$removeZeroDays()
+    
+    # the minimum value of lambda is set so that 0 is within the confidence limits.
+    # usually this will allow noise at low levels
+    minLambda = -log(2*(1-p))
     
     tmp = tmp %>%
       dplyr::ungroup() %>%
       dplyr::mutate(!!originalValueVar := !!valueVar) %>%
       self$complete() %>%
       covidStandardGrouping() %>%
+      
       dplyr::group_modify(function(d,g,...) {
         
-        tmp_ts = d %>% dplyr::mutate(tmp_y = log(!!valueVar+1))
-        # #TODO: make this a more generic way of doing windowing & tidyify it
-        i = 1:(nrow(tmp_ts))
-        w2 = floor(window/2)
-        v = c(rep(NA,w2),tmp_ts$tmp_y, rep(NA,w2))
-        # turn time series into matrix with columns for each window
-        m = sapply(i,function(j) {v[j:(j+w2*2+1)]})
-        # get rid of central value
-        m[w2+1,] = NA
-        m_mean = apply(m, 2, mean, na.rm=TRUE) #2 here means apply mean col-wise
-        m_sd = apply(m, 2, sd, na.rm=TRUE)
-        m_sd[m_sd < precision] = precision
-        m_low = m_mean-outlier_sd*m_sd
-        m_high = m_mean+outlier_sd*m_sd
+        d = d %>% mutate(Anomaly = FALSE)
         
-        tmp_ts = tmp_ts %>% dplyr::mutate(
-          m_mean = m_mean,
-          m_sd = m_sd,
-          m_low = m_low,
-          m_high = m_high,
-          tmp_y = ifelse(
-              (tmp_y > m_low & tmp_y < m_high) |
-              (tmp_y > 0 & tmp_y < log(outlier_min+1))# & m_high < log(outlier_min+1))
-            , tmp_y, NA), # Do not remove any values unless > outlier_min
-        ) %>% dplyr::mutate(
-          Anomaly = is.na(tmp_y)
-        )
+        fn = function(e) {
+          y_orig = e %>% pull(!!valueVar)
+          # #TODO: make this a more generic way of doing windowing & tidyify it
+          y = log(y_orig+1)
+          i = 1:(length(y))
+          w2 = floor(window/2)
+          # set anomalous values to NA
+          y[d$Anomaly] = NA
+          # add in head and tail
+          v = c(rep(NA,w2), y, rep(NA,w2))
+          # turn time series into matrix with columns for each window
+          m = sapply(i,function(j) {v[j:(j+w2*2)]})
+          # get rid of central value
+          m[w2+1,] = NA
+          
+          intercept = function(y) {
+            #browser()
+            x = (-w2:w2)[!is.na(y)]
+            y = y[!is.na(y)]
+            n = length(y)
+            m = (n*sum(x*y)-sum(x)*sum(y))/(n*sum(x^2)-sum(x)^2)
+            c = (sum(y) - m*sum(x))/n
+            
+            return(c)
+          }
+          
+          m_mean = apply(m, 2, intercept) #2 here means apply mean col-wise
+          m_sd = pmax(apply(m, 2, sd, na.rm=TRUE),log(min+1)) #2 here means apply mean col-wise
+          
+          # m_lambda = pmax(exp(m_mean)-1, minLambda)
+          # m_p = 1-m_mean/m_sd^2
+          # m_r = m_mean^2/(m_sd^2-m_mean)
+          # p_obs = abs(ppois(y_orig, m_lambda)-0.5)*2
+          p_obs = abs(pnorm(y, mean = m_mean,sd = m_sd)-0.5)*2
+          Anomaly = p_obs > p | !is.finite(p_obs) #& !(m_lambda==0 & y_orig==0) 
+          # browser()
+          return(Anomaly)
+        }
         
-        #TODO: repeat the anomaly removal stage to detect anything ?
-        
-        tmp_ts = tmp_ts %>% dplyr::select(-!!valueVar, -m_mean, -m_sd, -m_low, -m_high) %>% dplyr::mutate(!!valueVar := exp(tmp_y)-1) %>% select(-tmp_y)
+        i=1
+        repeat {
+          newAnomaly = fn(d)
+          if (i>5) {
+            warning("anomaly detection did not converge")
+            break;
+          }
+          if (all(newAnomaly==d$Anomaly)) break;
+          d$Anomaly=newAnomaly
+          i=i+1
+        }
+        # d$Anomaly = fn(d)
         # browser()
-        return(tmp_ts)
+        # d$Anomaly = fn(d)
+        # #TODO: repeat the anomaly removal stage to detect anything ?
+        
+        d = d %>% dplyr::mutate(!!valueVar := ifelse(Anomaly,NA,!!valueVar), Anomaly = Anomaly & !is.na(!!originalValueVar))
+        # browser()
+        return(d)
       }) %>% 
       dplyr::ungroup()
     return(tmp)
   }}, 
   
-  #' @description Calculate an estimate of rate of change of Rt using a loess
-  #' 
-  #' @param R0timeseries a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim
-  
-  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, ..., window = 14, leftSided = TRUE) {covidTimeseriesFormat %def% {
+  #' @description Calculate an estimate of central value and rate of change of a value using a loess smoother. This makes no assumptions and can be used for any statistic.
+  #' @param r0timeseries a timeseries including a date
+  #' @param smoothExpr an expression to evaluate in the context of the dataframe to generate a variable to be smoothed (e.g. log(value+1))
+  #' @param ... - not used
+  #' @param window - the smoothing window (defaults to 21)
+  #' @return an timeseries augmented with estimates of the smoothExpr and first derivative of the smoothExpr.
+  smoothAndSlopeTimeseries = function(r0Timeseries, smoothExpr, ..., window = 21) {covidTimeseriesFormat %def% {
     smoothExpr = enexpr(smoothExpr)
     smoothLabel = as_label(smoothExpr)
-    if (smoothLabel == "value") warning("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
+    if (smoothLabel == "value") message("Smoothing value directly does not account for its exponential nature - you maybe want logIncidenceStats?")
     if (paste0("Est.",smoothLabel) %in% colnames(r0Timeseries)) {
       warning(smoothLabel," has already been estimated. aborting smooth and slope.")
       return(r0Timeseries)
     }
     covidTimeseriesFormat(r0Timeseries) %>% 
       dplyr::ungroup() %>%
+      # TODO: does this make sense here as the anomaly detection is focussed around exponentially growing quantities?
       self$completeAndRemoveAnomalies() %>%
       dplyr::mutate(
         y = !!smoothExpr
@@ -379,7 +434,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         tmp_alpha_2 = min(window*2/nrow(d),1)
         tmp_ts = d %>% 
           dplyr::mutate(
-            y = forecast::na.interp(y),
+            y = forecast::na.interp(y), # TODO: locfit does not need NAs to be interpolated. This is probably extraneous.
             window = window
           ) %>%
           dplyr::select(date,x,y,Anomaly,window) 
@@ -390,21 +445,22 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         }
         # calculate derivative using a loess method
         # tmp = locfit::locfit(log(value+1) ~ day,loessTest,deg = 2,alpha=0.25,deriv=1)
-        if (leftSided) {
-          tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts)#, family="qgamma")
-          tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
-          #tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts)#, family="qgamma")
-          #tmp_slope_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts, deriv=1)#, family="qgamma")
-        } else {
+        # if (leftSided) {
+        #   tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts)#, family="qgamma")
+        #   tmp_slope_model = locfit::locfit(y ~ locfit::left(x, nn=tmp_alpha_2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+        #   #tmp_intercept_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts)#, family="qgamma")
+        #   #tmp_slope_model = locfit::locfit(y ~ locfit::left(x, h=window, deg=1), tmp_ts, deriv=1)#, family="qgamma")
+        # } else {
+        # TODO: look at changing this in line with evaluation points in estimateGrowthRate(...)
           tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha_2, deg=1), tmp_ts)#, family="qgamma")
           tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, nn=tmp_alpha_2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
           #tmp_intercept_model = locfit::locfit(y ~ locfit::lp(x, h=window/2, deg=1), tmp_ts)#, family="qgamma")
           #tmp_slope_model = locfit::locfit(y ~ locfit::lp(x, h=window/2, deg=1), tmp_ts, deriv=1)#, family="qgamma")
-        }
+        # }
         #tmp_intercept_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha)
         #tmp_slope_model = locfit::locfit(y ~ x, tmp_ts, deg=1, alpha=tmp_alpha, deriv=1)
-        tmp_intercept = predict(tmp_intercept_model, tmp_ts$x, band="local")
-        tmp_slope = predict(tmp_slope_model, tmp_ts$x, band="local")
+        tmp_intercept = predict(tmp_intercept_model, tmp_ts$x, band="global")
+        tmp_slope = predict(tmp_slope_model, tmp_ts$x, band="global")
         tmp_ts[[paste0("Est.",smoothLabel)]] = ifelse(tmp_intercept$fit < 0, 0, tmp_intercept$fit) # prevent negative smoothing.
         tmp_ts[[paste0("Est.SE.",smoothLabel)]] = tmp_intercept$se.fit
         #tmp_ts[[paste0("Est.RMSE.",smoothLabel)]] = sqrt(mean(residuals(tmp_intercept_model,tmp_ts)^2))
@@ -429,24 +485,15 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       }) %>% 
       dplyr::ungroup()
   }},
-  
-  
-  
-  # TODO: gamma distribution weighted interpolation:
-  # shape = (self$rtConfig$mean_si^2)/(self$rtConfig$std_si^2)
-  # rate = self$rtConfig$mean_si/(self$rtConfig$std_si^2)
-  # tmp = pgamma(1:31,shape,rate)-pgamma(0:30,shape,rate)
-  # EpiEstim::discr_si does something different
-  # in theory this could be bootstrapped
-  # sds = qgamma(seq(5,195,5)/200,cfg$$std_si, cfg$std_std_si)
-  # means = qgamma(seq(5,195,5)/200,cfg$mean_si, cfg$std_mean_si)
-  # relevant code in metaward tools for applying a set of bootstrapped parameterised convolutions
-  # but in this case we want the convolution filter to be used as weights for a linear model.
 
   #### calculate baskets of stats ----
-  
+  #' @description Calculates a basket of stats based on 
+  #' @param covidTimeseries a covid timeseries data frame
+  #' @param window - the length of the smoothing window (default 21)
+  #' @return a dataframe with groupwise growth rate estimates
   logIncidenceStats = function(covidTimeseries, valueVar = "value", growthRateWindow = 7,smoothingWindow = 14,earliestPossibleDate = "2020-02-01", ...) {
     valueVar = ensym(valueVar)
+    message("This function is deprecated: switch logIncidenceStats() to estimateGrowthRate()")
     self$getHashCached(object = covidTimeseries, operation="LOG-INCIDENCE", params=list(as_label(valueVar),growthRateWindow,smoothingWindow), ... , orElse = function (...) {covidTimeseriesFormat %def% {
       
       tmp = covidTimeseriesFormat(covidTimeseries)  %>% 
@@ -463,11 +510,12 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         return(covidTimeseries) 
       }
       
+      # The following does anomaly detection (but not imputation)
       tmp = tmp %>% self$smoothAndSlopeTimeseries(!!logExpr,window = smoothingWindow,...)
       
       tmp[[lblV("Growth")]] = tmp[[lbl("Slope")]]
       tmp[[lblV("Growth.SE")]] =  tmp[[lbl("Slope.SE")]]
-      tmp[[lblV("Growth.RMSE")]] =  tmp[[lbl("Slope.RMSE")]]
+      # tmp[[lblV("Growth.RMSE")]] =  tmp[[lbl("Slope.RMSE")]]
       tmp[[lblV("Growth.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth")]],sd=tmp[[lblV("Growth.SE")]])
       
       tmp$interceptDate = as.Date(tmp$date - tmp[[lbl("Est")]]/tmp[[lbl("Slope")]])
@@ -501,26 +549,6 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             !!lblV("Growth.windowed.SE") := stats::filter(x = tmp_gv.se, filter=rep(1/growthRateWindow,growthRateWindow)) / sqrt(growthRateWindow),
             !!lblV("Growth.windowed.Window") := growthRateWindow
         ) %>% 
-        # TODO: this is a good idea but should be done earlier.
-        # mutate(
-        #   make sure zero growth rates have no SD.
-        #   !!lblV("Growth.windowed.SE") := ifelse(!!lblV("Growth.windowed") == 0 , NA_real_, !!lblV("Growth.windowed.SE") )
-        # ) %>%
-        # This is a rolling geometric mean
-        # dplyr::group_modify(function(d,g,...) {
-        #   tmp_ts = d %>% dplyr::mutate(tmp_y = tmp_gv)
-        #   i = 1:(nrow(tmp_ts))
-        #   w2 = floor(growthRateWindow/2)
-        #   v = c(rep(NA,w2),tmp_ts$tmp_y, rep(NA,w2))
-        #   # turn time series into matrix with columns for each window
-        #   m = sapply(i,function(j) {v[j:(j+w2*2+1)]})
-        #   m = log(1+m)
-        #   # geometric mean of r is  mean of exp(mean(log(1+r)))-1
-        #   # this is like a normalised compound interest rate
-        #   m_mean = exp(apply(m, 2, mean, na.rm=TRUE))-1 #2 here means apply mean col-wise
-        #   tmp_ts = tmp_ts %>% dplyr::mutate(!!lblV("Growth.windowed") :=  m_mean) %>% select(-tmp_y)
-        #   return(tmp_ts)
-        # }) %>%
         dplyr::select(-tmp_gv, -tmp_gv.se)
       
       tmp$doublingTime.windowed = log(2)/tmp[[lblV("Growth.windowed")]]
@@ -530,20 +558,68 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       tmp$doublingTime.windowed.Quantile.0.975 = log(2)/qnorm(mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]],p = 0.025)
       
       tmp[[lblV("Growth.windowed.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]])
+      
+      # calculate imputed value as close to actual value as possible
+      Imputed = is.na(value) & !is.na(tmp[[lblV("Est.Quantile.0.5")]])
+      Imputed.value = ifelse(is.na(value),tmp[[lblV("Est.Quantile.0.5")]],value)
         
       return(tmp %>% ungroup())
     }})
   },
   
-  estimateGrowthRate = function(covidTimeseries, window = 14, growthRateWindow = 7, leftSided=TRUE, ...) {
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(leftSided,window,growthRateWindow), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+  #' @description Calculates a growth rate timeseries using a fitted quasipoisson model fitted using sliding windows on the assumption growth is constant over the window this is for comparison and estmiateGrowthRate(...) is almost always better
+  #' @param covidTimeseries a covid timeseries data frame
+  #' @param window - the length of the smoothing window (default 21)
+  #' @return a dataframe with groupwise growth rate estimates
+  estimatePoissonGrowthRate = function(covidTimeseries, window = 21, ...) {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R", params=list(window), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
 
+      w2 = floor(window/2)
+      
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
         dplyr::filter(type == "incidence") %>%
         self$completeAndRemoveAnomalies() %>%
         dplyr::mutate(I = value, errors=NA_character_)
-         
+
+      
+      fitPois = function(d) {
+        if(sum(d$I > 0,na.rm = TRUE) == 0) {
+          result = tibble(
+            Est.value = 0,
+            Est.SE.value = NA_real_,
+            Est.dispersion = 0,
+            Est.error = 0,
+            Growth.value = 0,
+            Growth.SE.value = NA_real_,
+            Growth.N = nrow(d)
+          )
+        } else {
+          
+          ltrunc = (d$row[1] == 1 & length(d$row) < (w2*2+1)) * ((w2*2+1)-length(d$row))
+          rtrunc = (d$row[1] != 1 & length(d$row) < (w2*2+1)) * ((w2*2+1)-length(d$row))
+          # if(leftSided) {
+          #   d = d %>% mutate(time = -(w2*2-ltrunc):0)
+          # } else {
+          d = d %>% mutate(time = -(w2-ltrunc):(w2-rtrunc))
+          # }
+          model = suppressWarnings(glm(I ~ time, family = quasipoisson(), data = d))
+          # browser()
+          model_sum <- summary(model)
+          result = tibble(
+            Est.value = ifelse(model$df.residual < w2-1, NA_real_, tryCatch(model_sum$family$linkinv(model_sum$coefficients[1,1]), error = function(e) 0)),
+            Est.SE.value = ifelse(model$df.residual < w2-1, NA_real_, tryCatch(model_sum$family$linkinv(model_sum$coefficients[1,2]), error = function(e) NA)),
+            Est.dispersion = ifelse(model$df.residual < w2-1, NA_real_, model_sum$dispersion),
+            Est.error = ifelse(model$df.residual < w2-1, NA_real_, mean(model$residuals,na.rm = TRUE)),
+            Growth.value = ifelse(model$df.residual < w2-1, NA_real_, tryCatch(model_sum$coefficients[2,1], error = function(e) NA)),
+            Growth.SE.value = ifelse(model$df.residual < w2-1, NA_real_, tryCatch(model_sum$coefficients[2,2], error = function(e) NA)),
+            Growth.N = model$df.residual
+            # `Growth.Fit.poisson` = (model$null.deviance - model$deviance) / (model$null.deviance)
+          )
+          # browser()
+        }
+        return(result)
+      }         
 
       groupedDf = groupedDf %>% covidStandardGrouping()
 
@@ -552,79 +628,78 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         message(".",appendLF = FALSE)
         if (nrow(d) < 2+window) d$errors = paste0(ifelse(is.na(d$errors),"",paste0(d$errors,"; ")),"Not enough data to calculate growth rates")
         if (any(!is.na(d$errors))) {return(d)}
-        
-        result = NULL
-        # https://cran.rstudio.com/web/packages/tibbletime/vignettes/TT-03-rollify-for-rolling-analysis.html
-        # https://rdrr.io/cran/tsibble/man/slide.html
-        for(i in window:nrow(d)) {
-          if(leftSided) {
-            sample = d %>% dplyr::filter(row_number() > i-window & row_number() <= i) %>% mutate(time=row_number())
-          } else {
-            sample = d %>% dplyr::filter(row_number() > i-window/2 & row_number() <= i+window/2) %>% mutate(time=row_number())
-          }
-          # if no values > 1 return a non answer 
-          if(sum(sample$I>0,na.rm = TRUE) == 0) {
-            result = result %>% bind_rows(tibble::tibble(
-              date = d$date[i],
-              `Growth.poisson` = 0,
-              `Growth.SE.poisson` = NA_real_,
-              `Growth.Fit.poisson` = NA_real_
-            ))
-          } else {
-          # browser()
-            
-            tmp = tryCatch({
-              model <- suppressWarnings(glm(I ~ time, family = quasipoisson(), data = sample))
-              model_sum <- summary(model)
-              tmp = tibble::tibble(
-                date = d$date[i],
-                `Growth.poisson` = model_sum$coefficients[2, 1],
-                `Growth.SE.poisson` = model_sum$coefficients[2, 2],
-                `Growth.Fit.poisson` = (model$null.deviance - model$deviance) / (model$null.deviance)
-              )
-            }, error = browser)
-      
-            result = result %>% bind_rows(tmp)
-            
-          }
-        }
-        return(d %>% dplyr::left_join(result, by="date"))
+        # if(leftSided) {
+        #   d$regression = slider::slide(d %>% mutate(row = row_number()), fitPois, .before=w2*2,.complete = FALSE)
+        # } else {
+        d$regression = slider::slide(d %>% mutate(row = row_number()), fitPois, .before=w2,.after=w2,.complete = FALSE)
+        # }
+        # browser()
+        d = d %>% tidyr::unnest(cols = regression)
+        return(d)
       })
       
+      # browser()
       groupedDf = groupedDf %>%
         covidStandardGrouping() %>% 
         dplyr::mutate(
-          Growth.windowed.poisson = stats::filter(x =  Growth.poisson, filter=rep(1/growthRateWindow,growthRateWindow)),
-          Growth.windowed.SE.poisson = stats::filter(x = Growth.SE.poisson, filter=rep(1/growthRateWindow,growthRateWindow)) / sqrt(growthRateWindow),
-          Growth.windowed.Window.poisson = growthRateWindow
-        ) # %>% 
-        # dplyr::group_modify(function(d,g,...) {
-        #   tmp_ts = d %>% dplyr::mutate(tmp_y = Growth.poisson)
-        #   i = 1:(nrow(tmp_ts))
-        #   w2 = floor(growthRateWindow/2)
-        #   v = c(rep(NA,w2),tmp_ts$tmp_y, rep(NA,w2))
-        #   # turn time series into matrix with columns for each window
-        #   m = sapply(i,function(j) {v[j:(j+w2*2+1)]})
-        #   m = log(1+m)
-        #   # geometric mean of r is  mean of exp(mean(log(1+r)))-1
-        #   # this is like a normalised compound interest rate
-        #   m_mean = exp(apply(m, 2, mean, na.rm=TRUE))-1 #2 here means apply mean col-wise
-        #   tmp_ts = tmp_ts %>% dplyr::mutate(Growth.windowed.poisson = m_mean) %>% select(-tmp_y)
-        #   return(tmp_ts)
-        # })
-      return(groupedDf %>% dplyr::select(-I) %>% mutate(`Window.Growth.poisson` = window))
+          # estimate second derivative with sgolay filter
+          # TODO: this seemed to produce unexpected NA values 
+          Growth.derivative = signal::sgolayfilt(Growth.value, p = 1, n = floor(window/2)*2+1, m = 1),
+          Growth.SE.derivative = NA_real_
+        ) %>% 
+        ungroup() %>% 
+        mutate(
+          Growth.method = "GLM",
+          Growth.ProbPos = 1-pnorm(0,mean=Growth.value,sd=Growth.SE.value),
+          
+          Est.Quantile.0.025.value = qpois(0.025,Est.value),
+          Est.Quantile.0.25.value = qpois(0.25,Est.value),
+          Est.Quantile.0.5.value = qpois(0.5,Est.value),
+          Est.Quantile.0.75.value = qpois(0.75,Est.value),
+          Est.Quantile.0.975.value = qpois(0.975,Est.value),
+          
+          Growth.Quantile.0.025.value = qnorm(0.025, Growth.value, Growth.SE.value),
+          Growth.Quantile.0.25.value = qnorm(0.25, Growth.value, Growth.SE.value),
+          Growth.Quantile.0.5.value = qnorm(0.5, Growth.value, Growth.SE.value),
+          Growth.Quantile.0.75.value = qnorm(0.75, Growth.value, Growth.SE.value),
+          Growth.Quantile.0.975.value = qnorm(0.975, Growth.value, Growth.SE.value),
+          
+          # calculate imputed value as close to actual value as possible
+          Imputed = is.na(value) & !is.na(Est.Quantile.0.5.value),
+          Imputed.value = ifelse(is.na(value),Est.Quantile.0.5.value,value)
+          
+        )
+        
+      return(groupedDf %>% dplyr::select(-I))
 
     }})
   },
   
-  estimateGrowthRate2 = function(covidTimeseries, window = 21, weekendEffect = 0.75, ...) {
-    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R-2", params=list(window), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
+  #' @description Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
+  #' @param covidTimeseries a covid timeseries data frame
+  #' @param window - the length of the smoothing window (default 21)
+  #' @param weekendEffect - the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay
+  #' @param polynomialDegree - improves fit at risk of overfitting. default 1 (linear)
+  #' @return a dataframe with groupwise growth rate estimates
+  estimateGrowthRate2 = function(covidTimeseries, window = 21, ...) {
+    message("This function is deprecated: switch estimateGrowthRate2() to estimateGrowthRate() or estimatePoissonGrowthRate()")
+    self$estimateGrowthRate(covidTimeseries, window, ...)
+  },
+  
+  #' @description Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
+  #' @param covidTimeseries a covid timeseries data frame
+  #' @param window - the length of the smoothing window (default 21)
+  #' @param weekendEffect - the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay
+  #' @param polynomialDegree - improves fit at risk of overfitting. default 1 (linear)
+  #' @return a dataframe with groupwise growth rate estimates
+  estimateGrowthRate = function(covidTimeseries, window = 21, weekendEffect = 0.75, polynomialDegree = 1, ...) {
+    self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R-2", params=list(window, weekendEffect, polynomialDegree), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
         ensurer::ensure_that(any(.$type == "incidence") ~ "dataset must contain incidence figures") %>%
         dplyr::filter(type == "incidence") %>%
         self$completeAndRemoveAnomalies() %>%
-        dplyr::mutate(errors=NA_character_)
+        dplyr::mutate(errors=NA_character_, Growth.method = "Local regression", Growth.N = window)
       
       
       groupedDf = groupedDf %>% covidStandardGrouping()
@@ -634,27 +709,30 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         d = d %>% mutate(time = as.numeric(date-max(date)))
         tmp = d %>% mutate(
           weights = case_when(
-            weekdays(date) %in% c("Tuesday","Thursday","Thursday","Friday") ~ (7-3*weekendEffect)/4,
+            weekdays(date) %in% c("Tuesday","Wednesday","Thursday","Friday") ~ (7-3*weekendEffect)/4,
             TRUE ~ weekendEffect)
         )
         
         if(all(na.omit(tmp$value) == 0)) {
           
           d$Est.value = 0
-          d$Est.SE.value = 0
+          d$Est.SE.value = NA_real_
+          d$Est.error = 0
+          d$Est.dispersion = NA_real_
           d$Growth.value = 0
-          d$Growth.SE.value = 1
+          d$Growth.SE.value = NA_real_
+          d$Growth.derivative = 0
+          d$Growth.SE.derivative = NA_real_
           
         } else {
           
           tmp_alpha = min(window/nrow(d),1)
           tmp_alpha_2 = min(window*2/nrow(d),1)
           
-          
           suppressWarnings({
             #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
             
-            tmp_intercept_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=1), tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
+            tmp_intercept_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
             tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
             
             # if(any(is.na(tmp_intercept$fit))) 
@@ -662,7 +740,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             if(any(is.na(tmp_intercept$fit))) 
               browser()
             
-            tmp_slope_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=1), tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
+            tmp_slope_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
             tmp_slope = predict(tmp_slope_model, band="global", se.fit=TRUE, where="fitp")
             
             # if(any(is.na(tmp_slope$fit))) 
@@ -670,12 +748,43 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             if(any(is.na(tmp_slope$fit))) 
               browser()
             
+            # browser()
+            # https://stats.stackexchange.com/questions/62006/definition-of-dispersion-parameter-for-quasipoisson-family
+            
+            absRes = d$value - tmp_intercept$fit
+            d$Est.error = (absRes %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE))/tmp_intercept$fit
+            # Pearson residuals assuming poisson
+            # pearson = sqrt(absRes^2/tmp_intercept$fit)
+            # d$Est.dispersion = pearson %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE)
+            # Deviance residuals
+            
+            # https://stats.stackexchange.com/questions/99065/why-are-pearsons-residuals-from-a-poisson-regression-so-large
+            # Deviance residuals
+            deviance = d$value * log(d$value/tmp_intercept$fit) + (tmp_intercept$fit-d$value)
+            d$Est.dispersion = deviance %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE)
+            # possibly this is not accounting for df and should be multiplied by 
+            
+            
+            # https://statweb.stanford.edu/~jtaylo/courses/stats306b/restricted/notebooks/quasilikelihood.pdf
             
             d$Est.value = ifelse(tmp_intercept$fit < 0, 0, tmp_intercept$fit) # prevent negative smoothing.
-            
             d$Est.SE.value = tmp_intercept$se.fit
+            
             d$Growth.value = tmp_slope$fit #ifelse(tmp_intercept$fit < 0, 0, tmp_slope$fit) # prevent growth when case numbers are zero.
             d$Growth.SE.value = tmp_slope$se.fit
+            
+            if(polynomialDegree > 1) {
+              # if the locfit model supports second derivative then grab it
+              tmp_slope2_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", deriv=c(1,1), weights = tmp$weights, ev=d$time)
+              tmp_slope2 = predict(tmp_slope2_model, band="global", se.fit=TRUE, where="fitp")
+              d$Growth.derivative = tmp_slope2$fit #ifelse(tmp_intercept$fit < 0, 0, tmp_slope$fit) # prevent growth when case numbers are zero.
+              d$Growth.SE.derivative = tmp_slope2$se.fit
+            } else {
+              # otherwise estimate directly
+              d$Growth.derivative = signal::sgolayfilt(d$Growth.value, p = 1, n = floor(window/2)*2+1, m = 1)
+              d$Growth.SE.derivative = NA_real_
+            }
+            
           })
           
         }
@@ -696,6 +805,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         d$Growth.Quantile.0.5.value = qnorm(0.5, d$Growth.value, d$Growth.SE.value)
         d$Growth.Quantile.0.75.value = qnorm(0.75, d$Growth.value, d$Growth.SE.value)
         d$Growth.Quantile.0.975.value = qnorm(0.975, d$Growth.value, d$Growth.SE.value)
+        
+        # calculate imputed value column as close to actual value as possible
+        d$Imputed = is.na(d$value) & !is.na(d$Est.Quantile.0.5.value)
+        d$Imputed.value = ifelse(is.na(d$value),d$Est.Quantile.0.5.value,d$value)
         
         #browser()
         return(d)
@@ -733,10 +846,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     self$getHashCached(object = covidTimeseries, operation="ESTIM-RT", params=list(as_label(valueVar), window, quick, priorR0, priorR0Sd, tmpConfig), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
       if(!(as_label(valueVar) %in% colnames(covidTimeseries))) {
-        if (as_label(valueVar) == "RollMean.value") {
+        if (as_label(valueVar) %in% c("RollMean.value","Imputed.value")) {
           covidTimeseries = covidTimeseries %>% self$imputeAndWeeklyAverage()
         } else if (as_label(valueVar) == "Est.value") {
-          covidTimeseries = covidTimeseries %>% self$logIncidenceStats()
+          covidTimeseries = covidTimeseries %>% self$estimateGrowthRate()
         } else {
           stop("can't estimate Rt, ",as_label(valueVar)," is not defined")
         }
@@ -797,6 +910,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       
     }})
   },
+  
+  ## Correct outputs for delays ---
   
   defaultOffsetAssumptions = function() {
     return(
@@ -882,6 +997,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   
   adjustRtDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
     
+    # TODO: integrate Jepidemic output 
+    
     adjustable = c(
       "Mean(R)","Std(R)","Quantile.0.025(R)","Quantile.0.05(R)","Quantile.0.25(R)","Median(R)","Quantile.0.75(R)","Quantile.0.95(R)","Quantile.0.975(R)",
       "Window.R","Anomaly.R","Est.Mean.SerialInterval","SE.Mean.SerialInterval","Est.SD.SerialInterval","SE.SD.SerialInterval","Prior.Mean.R0","Prior.SD.R0",
@@ -914,6 +1031,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   },
   
   adjustGrowthRateDates = function(covidRtResult, window=0, offsetAssumptions = self$defaultOffsetAssumptions(), extraCols=NULL) {
+    
+    #TODO: check this is up to date.
     
     adjustable = c(
       "Growth.value","Growth.SE.value","Growth.ProbPos",
@@ -949,6 +1068,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(tmp7 %>% ungroup())
   },
   
+  # Deprecated - to remove
   adjustRtCorrFac = function(covidRtResult, window=7, correctionFactor = self$defaultCorrectionFactor(), extraCols=NULL) {
     
     adjustable = c(
@@ -1120,7 +1240,6 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   
   #' @description calculate a volatility statistic for the timeseries based on previous N days
   #' @details 
-  #' This will not work well for timeseries with NAs
   #' 
   #' $x+y=z$
   #'  
@@ -1249,8 +1368,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       dplyr::filter(type=="incidence") 
     
     if (!as_label(growthVar) %in% colnames(df)) {
-      if (as_label(growthVar) == "Growth.poisson") df = df %>% self$estimateGrowthRate(...)
-      if (as_label(growthVar) == "Growth.value") df = df %>% self$estimateGrowthRate2(...)
+      df = df %>% self$estimateGrowthRate(...)
     }
     
     if (!as_label(growthLowerVar) %in% colnames(df)) df = df %>% mutate(!!growthLowerVar := !!growthVar-1.96*!!growthSEVar)
@@ -1280,19 +1398,30 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=c(-0.15,0.15), ilim=c(0,NA), maxSize=6, ...) {
+  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=c(-0.15,0.15), ilim=c(0,NA), maxSize=6, ...) {
     colour = enexpr(colour)
+    shape = enexpr(shape)
+    
     grps = groupedCovidRtTimeseries %>% groups()
     if (length(grps)==0) grps = list(as.symbol("code"))
     
     if (identical(plotDates, NULL)) plotDates = (groupedCovidRtTimeseries %>% summarise(p = max(date,na.rm = TRUE)) %>% pull(p) %>% min(na.rm = TRUE)) - 3
     plotDates = as.Date(plotDates)
     
-    df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
-      dplyr::filter(type=="incidence") %>%
-      self$estimateGrowthRate2(...) %>%
-      self$demog$findDemographics()
-      #self$logIncidenceStats()
+    if (!all(c("Est.value", "Est.Quantile.0.025.value", "Est.Quantile.0.975.value","Growth.value", "Growth.Quantile.0.025.value", "Growth.Quantile.0.975.value") %in% colnames(groupedCovidRtTimeseries))) {
+      df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
+        dplyr::filter(type=="incidence") %>%
+        self$estimateGrowthRate(...)
+    } else {
+      df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
+        dplyr::filter(type=="incidence")
+    }
+    
+    
+    if(populationAdj & !("population" %in% colnames(df))) {
+      df = df %>% self$demog$findDemographics()
+    }
+    
     
     subsetDf = bind_rows(lapply(plotDates, function(plotDate) {
       if (max(df$date) < plotDate) stop("Max supported plot date is: ",max(df$date))
@@ -1301,6 +1430,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     #browser()
     subsetDf$tmpGrpId = subsetDf %>% group_by(!!!grps, plotDate) %>% group_indices()
+    
     if (populationAdj) {
       subsetDf = subsetDf %>%
         mutate(
@@ -1323,13 +1453,26 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         )
     }
     
-    if(identical(colour,NULL)) {
-      p2 = ggplot(subsetDf, aes(x=growth, y=incidence, group=tmpGrpId))
-    } else if (class(colour) == "character") {
-      p2 = ggplot(subsetDf, aes(x=growth, y=incidence, group=tmpGrpId),colour=colour)
-    } else {
-      p2 = ggplot(subsetDf, aes(x=growth, y=incidence, colour=!!colour,group=tmpGrpId))
+    fixed = list()
+    variable = list()
+    
+    if(!identical(colour,NULL)) {
+      if (class(colour) == "character") {
+        fixed$colour = colour
+      } else {
+        variable$colour = colour
+      }
     }
+    
+    if(!identical(shape,NULL)) {
+      if (class(shape) == "character") {
+        fixed$shape = shape
+      } else {
+        variable$shape = shape
+      }
+    }
+    
+    p2 = ggplot(subsetDf, aes(x=growth, y=incidence, group=tmpGrpId, !!!variable), !!!fixed)
     
     points = subsetDf %>% filter(timeOffset==0)
     p2 = p2 +
@@ -1341,9 +1484,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       geom_path(aes(alpha=fade),linejoin = "round",lineend = "round")
       
     if(showHistorical) {
-      p2 = p2 + geom_point(aes(alpha=fade))
+      p2 = p2 + geom_point(data=subsetDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId,alpha=fade,!!!variable),stat="identity",position="identity",!!!fixed)
     } else {
-      p2 = p2 + geom_point(data=points)
+      p2 = p2 + geom_point(data=points, mapping=aes(x=growth, y=incidence, group=tmpGrpId,!!!variable),stat="identity",position="identity",!!!fixed)
     }
     
     p2 = p2 +
@@ -1407,9 +1550,16 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   },
 
   plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates(1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), ...) {
-    df = covidTimeseriesFormat(covidTimeseries)  %>% 
-      dplyr::filter(type=="incidence") %>%
-      self$estimateGrowthRate2(...)
+    
+    if (!all(c("Est.value", "Est.Quantile.0.025.value", "Est.Quantile.0.975.value", "Est.Quantile.0.25.value", "Est.Quantile.0.75.value") %in% colnames(covidTimeseries))) {
+      df = covidTimeseriesFormat(covidTimeseries)  %>% 
+        dplyr::filter(type=="incidence") %>%
+        self$estimateGrowthRate(...)
+    } else {
+      df = covidTimeseriesFormat(covidTimeseries)  %>% 
+        dplyr::filter(type=="incidence")
+    }
+    
     
     denominatorExpr = enexpr(denominatorExpr)
     
@@ -1467,6 +1617,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   ) {
     df = covidTimeseriesFormat(covidTimeseries)  %>% 
       dplyr::filter(type=="incidence") %>%
+      self$completeAndRemoveAnomalies() %>%
       self$imputeAndWeeklyAverage()
     
     denominatorExpr = enexpr(denominatorExpr)
@@ -1490,6 +1641,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     p2 = self$plotDefault(df,events,dates,ylim=ylim,...)+ylab("Incidence")
     p2 = p2+
       geom_point(aes(y=y,...),alpha=0.5,size=0.25)+
+      geom_point(data=df %>% filter(Imputed),mapping=aes(y=y),colour="blue",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
       geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
       geom_line(aes(y=yMid,...),alpha=1)
     return(p2)

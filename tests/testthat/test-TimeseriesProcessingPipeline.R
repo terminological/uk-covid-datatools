@@ -87,7 +87,7 @@ test_that("anomaly detection",{
   testthat::expect_true(all(anomaly1res==FALSE))
   
   anomaly2 = testDf2(c(rep(0,5),8,rep(0,10),100))
-  anomaly2res = anomaly2 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)
+  anomaly2res = anomaly2 %>% tsp$completeAndRemoveAnomalies(allowZeroDays = TRUE) %>% pull(Anomaly)
   testthat::expect_equal(anomaly2$value %in% c(100),anomaly2res)
   
   anomaly3 = testDf2(c(0,0,0,2,4,8,16,32,64,128))
@@ -95,6 +95,10 @@ test_that("anomaly detection",{
   
   anomaly4 = testDf2(c(0,0,0,2,4,8,16,32,64,128,256,512,1024,0))
   testthat::expect_true(any(anomaly4 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)))
+  
+  # TODO: this coudl do better.
+  anomaly5 = testDf2(c(2,NA,NA,NA,3,NA,NA,1,NA,NA,NA,1,4,0,0,NA,5))
+  testthat::expect_true(any(anomaly5 %>% tsp$completeAndRemoveAnomalies() %>% pull(Anomaly)))
   
 })
 

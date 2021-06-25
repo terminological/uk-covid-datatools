@@ -1254,7 +1254,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
                       date_exposure_last = readr::col_date(format = "%Y-%m-%d"),
                       exposure_setting_final = readr::col_character()
                     ))
-    attr(tmp,"paths") = c(path1,path2)
+    attr(tmp,"paths") = c(path)
     return(tmp %>% as_tibble())
   },
     

@@ -9,9 +9,11 @@ I will try and make releases of it as I go but things will probably break in unp
 
 * Document options
 * Switch code in geography provider for that in terminological/arear
-* Look into over-dispertion in growth rate
+* ~~Look into over-dispertion in growth rate~~
 * Expand to include international data sources
-
+* ~~fix anomaly detection to user slider::slide and dnorm~~
+* review aggregation routines as very slow.
+* remove epiestim as default and link in jepidemic
 
 ## Setup:
 
