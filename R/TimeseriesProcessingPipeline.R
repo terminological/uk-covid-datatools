@@ -265,7 +265,11 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         covidStandardGrouping() %>%
         dplyr::group_modify(function(d,g,...) {
           d = d %>% arrange(date)
-          d$logValue1 = forecast::na.interp(d$logValue1)
+          if (sum(!is.na(d$logValue1)) < 2) {
+            d$logValue1 = rep(NA,length(d$logValue1))
+          } else {
+            d$logValue1 = forecast::na.interp(d$logValue1)
+          }
           if (length(d$logValue1) > window) {
             d$logValue2 = signal::sgolayfilt(d$logValue1,p=1,n=window)
           } else {
@@ -560,8 +564,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       tmp[[lblV("Growth.windowed.ProbPos")]] = 1-pnorm(0,mean=tmp[[lblV("Growth.windowed")]],sd=tmp[[lblV("Growth.windowed.SE")]])
       
       # calculate imputed value as close to actual value as possible
-      Imputed = is.na(value) & !is.na(tmp[[lblV("Est.Quantile.0.5")]])
-      Imputed.value = ifelse(is.na(value),tmp[[lblV("Est.Quantile.0.5")]],value)
+      tmp$Imputed = is.na(tmp$value) & !is.na(tmp[[lblV("Est.Quantile.0.5")]])
+      tmp$Imputed.value = ifelse(is.na(tmp$value),tmp[[lblV("Est.Quantile.0.5")]],tmp$value)
         
       return(tmp %>% ungroup())
     }})
@@ -1398,7 +1402,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=c(-0.15,0.15), ilim=c(0,NA), maxSize=6, ...) {
+  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=NULL, ilim=NULL, maxSize=6, ...) {
     colour = enexpr(colour)
     shape = enexpr(shape)
     
@@ -1428,6 +1432,8 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       return(df %>% filter(date <= plotDate & date > plotDate-timespan) %>% mutate(plotDate = plotDate, timeOffset = as.numeric(plotDate-date), fade=(timespan-as.numeric(plotDate-date))/timespan))
     }))
     
+    
+    
     #browser()
     subsetDf$tmpGrpId = subsetDf %>% group_by(!!!grps, plotDate) %>% group_indices()
     
@@ -1442,6 +1448,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           growthHi = Growth.Quantile.0.975.value
         )
     } else {
+      
       subsetDf = subsetDf %>%
         mutate(
           incidence = Est.value,
@@ -1452,6 +1459,20 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           growthHi = Growth.Quantile.0.975.value
         )
     }
+    
+    if (identical(ilim,NULL)) {
+      ilim = c(0,max(subsetDf$incidence)*1.2)
+    }
+    
+    if (identical(rlim,NULL)) {
+      #tmp = max(c(quantile(subsetDf$growth,0.99,na.rm = TRUE),0.1))*1.2
+      tmp = max(c(subsetDf$growth,0.1),na.rm = TRUE)*1.1
+      tmp = if (tmp>0.25) 0.25 else if (tmp<0.1) 0.1 else tmp
+      rlim = c(-tmp,tmp)
+    }
+    
+    # TODO: clipped data points:
+    # https://stackoverflow.com/questions/30131061/plot-points-outside-grid-as-arrows-pointing-to-data-with-ggplot2-in-r
     
     fixed = list()
     variable = list()

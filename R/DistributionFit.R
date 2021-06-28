@@ -47,7 +47,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
         values = d %>% pull(value)
         if (truncate) {
           if (any(values>m$support[2]|values<m$support[1])) message("Truncating data for ",m$name)
-          values = values[values<m$support[2] & values>m$support[1]]
+          values = values[values<=m$support[2] & values>=m$support[1]]
         }
         
         if(m$discrete) {
@@ -103,11 +103,12 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
         #browser()
         values = d %>% select(left,right)
         oldLen = nrow(values)
+        # browser()
         if (truncate) {
           
           values = values %>% 
-            filter(is.na(left) | (left<m$support[2] & left>m$support[1])) %>%
-            filter(is.na(right) | (right<m$support[2] & right>m$support[1]))
+            filter(is.na(left) | (left<=m$support[2] & left>=m$support[1])) %>%
+            filter(is.na(right) | (right<=m$support[2] & right>=m$support[1]))
           if (oldLen > nrow(values)) message("Truncating data for ",m$name)
         }
         
@@ -222,8 +223,11 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
           values = values+self$shifted
           if (truncate) {
             #if (any(values>m$support[2]|values<m$support[1])) message("Truncating data for ",m$name)
+            # browser()
             values = values[values<=m$support[2] & values>=m$support[1]]
+            
           }
+          # browser(expr = m$dist == "lnorm")
           if(m$discrete) {
             values = round(values)
           }
@@ -234,7 +238,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
           arg$distr = m$name
           arg$start = m$start
           arg$lower=unlist(m$lower)
-          #browser()
+          # browser()
           if (length(m$fix.arg)>0) {arg$fix.arg=m$fix.arg}
           
           dist2 = suppressWarnings({
@@ -785,7 +789,7 @@ DistributionFit$standardDistributions = list(
   weibull = list(name = "weibull", print = "weibull", start = list(shape =1 , scale=10), fix.arg = list(), lower=list(shape=0,scale=0), support=c(0,Inf), discrete=FALSE),
   gamma = list(name = "gamma", print = "gamma", start = list(shape =1 , rate=0.1), fix.arg = list(), lower=list(shape=0,rate=0), support=c(0,Inf), discrete=FALSE),
   lnorm = list(name = "lnorm", print = "log-normal", start = list(meanlog=1 , sdlog=1), fix.arg = list(), lower=list(meanlog=-Inf, sdlog=-Inf), support=c(0,Inf), discrete=FALSE),
-  exp = list(name = "exp", print = "exponential", start = list(rate=0.5), fix.arg = list(), lower=list(rate=0.000001), support=c(.Machine$double.xmin, Inf), discrete=FALSE),
+  exp = list(name = "exp", print = "exponential", start = list(rate=0.5), fix.arg = list(), lower=list(rate=.Machine$double.xmin), support=c(.Machine$double.xmin, Inf), discrete=FALSE),
   norm = list(name = "norm", print = "normal", start = list(mean = 1, sd = 0.1), fix.arg = list(), lower=list(sd=0), support=c(-Inf,Inf), discrete=FALSE),
   tnorm = list(name = "tnorm", print = "truncated normal", start = list(mean = 1, sd = 0.1), fix.arg = list(lower=0,upper=Inf), support=c(0,Inf), lower=list(mean=0,sd=0.001), discrete=FALSE),
   nbinom = list(name = "nbinom", print = "negative binomial", start = list(size = 1, prob = 0.1), fix.arg = list(), lower=list(size=.Machine$double.xmin, prob=0), support=c(0,Inf), discrete=TRUE),
