@@ -1288,12 +1288,15 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     df = covidRtTimeseries
     cols = if(jepidemicMode) self$jepidemicCols else self$epiestimCols
     #browser()
-    if (!cols[3] %in% colnames(covidRtTimeseries)) {
+    
+    if (!any(cols %in% colnames(covidRtTimeseries))) {
       warning("estimating median Rt with default parameters")
       df = df %>% self$estimateRtQuick()
       cols = self$epiestimCols
       ribbons = FALSE
+    }
     
+    if (!ribbons) {
       q5RtVar = as.symbol(cols[3])
       
       df = df %>% rename(
@@ -1385,6 +1388,14 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     )
     p2 = p2 + geom_hline(yintercept = 0,colour="grey50")
     
+    # TODO: change here to rename colums appropriately add in 0.25 quantiles also
+    # if (identical(rlim,NULL)) {
+    #   #tmp = max(c(quantile(subsetDf$growth,0.99,na.rm = TRUE),0.1))*1.2
+    #   tmp = max(c(df$growth,0.1),na.rm = TRUE)*1.1
+    #   tmp = if (tmp>0.20) 0.20 else if (tmp<0.1) 0.1 else tmp
+    #   rlim = c(-tmp,tmp)
+    # }
+    
     if(identical(colour,NULL)) {
       if(ribbons) p2 = p2 + geom_ribbon(aes(ymin=!!growthLowerVar,ymax=!!growthHigherVar,...),alpha=0.065,fill = "black")
       p2 = p2 + geom_line(aes(y=!!growthVar,...))
@@ -1467,7 +1478,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     if (identical(rlim,NULL)) {
       #tmp = max(c(quantile(subsetDf$growth,0.99,na.rm = TRUE),0.1))*1.2
       tmp = max(c(subsetDf$growth,0.1),na.rm = TRUE)*1.1
-      tmp = if (tmp>0.25) 0.25 else if (tmp<0.1) 0.1 else tmp
+      tmp = if (tmp>0.20) 0.20 else if (tmp<0.1) 0.1 else tmp
       rlim = c(-tmp,tmp)
     }
     

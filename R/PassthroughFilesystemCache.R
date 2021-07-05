@@ -59,7 +59,7 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
       #   dir = self$wd
       # }
       if (identical(nocache,NULL)) {
-        nocache = self$nocache
+        nocache = getOption("ukcovid.cache.disabled", self$nocache)
       }
       if (identical(dir,NULL)) {
         dir = self$wd

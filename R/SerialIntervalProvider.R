@@ -24,11 +24,11 @@ SerialIntervalProvider = R6::R6Class("SerialIntervalProvider", inherit=CovidTime
     ci = floor((confint[2]-confint[1])*100)
     sum = self$getSummary(confint)
     if(self$isUncertain()) {
-        sprintf("%s distribution, with a mean plus %1d%% credible interval of %1.2f days (%1.2f; %1.2f), and a standard deviation of %1.2f days (%1.2f; %1.2f)",
+        sprintf("%s distribution, with a mean plus %1d%% confidence interval of %1.2f days (%1.2f; %1.2f), and a standard deviation of %1.2f days (%1.2f; %1.2f)",
                 sum$distName, ci, 
                 sum$meanOfMean, sum$minOfMean, sum$maxOfMean,
                 sum$meanOfSd, sum$minOfSd, sum$maxOfSd)
-        # sprintf(" distribution, with a mean plus %1d%% credible interval of %1.2f \U00B1 %1.2f (%1.2f; %1.2f), ",ci, 
+        # sprintf(" distribution, with a mean plus %1d%% confidence interval of %1.2f \U00B1 %1.2f (%1.2f; %1.2f), ",ci, 
         #         sum$meanOfMean, sum$sdOfMean, sum$minOfMean, sum$maxOfMean),
         # sprintf("and a standard deviation of %1.2f \U00B1 %1.2f (%1.2f; %1.2f)",
         #         sum$meanOfSd, sum$sdOfSd, sum$minOfSd, sum$maxOfSd)
@@ -48,9 +48,9 @@ FittedSerialIntervalProvider = R6::R6Class("FittedSerialIntervalProvider", inher
   summary = NULL,
   confint = NULL,
   
-  initialize = function(providerController, offset=0, dfit, ...) {
+  initialize = function(providerController, offset=0, dfit=NULL, ...) {
     super$initialize(providerController, offset, ...)
-    if(dfit$shifted !=0) stop("Cannot handle shifted distributions")
+    if(!identical(dfit,NULL) & dfit$shifted !=0) stop("Cannot handle shifted distributions")
     self$dfit = dfit
   },
   
@@ -221,46 +221,19 @@ ParametricSerialIntervalProvider = R6::R6Class("ParametricSerialIntervalProvider
 #' @import ggplot2
 #' @import msm
 #' @export
-NonParametricSerialIntervalProvider = R6::R6Class("NonParametricSerialIntervalProvider", inherit=FittedSerialIntervalProvider, public = list(
+NonParametricSerialIntervalProvider = R6::R6Class("NonParametricSerialIntervalProvider", inherit= SerialIntervalProvider, public = list(
   
   bootstrapSamples = NULL,
   uncertain = NULL,
   
-  initialize = function(providerController, samples, offset=0, dists = c("norm","gamma","weibull"),...) {
+  initialize = function(providerController, samples, offset=0,...) {
     
     if(!is.data.frame(samples)) samples = tibble(value=samples)
     if(!"bootstrapNumber" %in% colnames(samples)) samples = samples %>% mutate(bootstrapNumber = 1)
     if(!"value" %in% colnames(samples)) stop("must have a value column")
     if(any(is.na(samples$value))) stop("NAs in samples")
     
-    # even though this is non parametric we fit a set of distributions to the data.
-    # but as the data includes a lot of zero and negative items for the poorly
-    # fitting distributions we exclude support for zero.
-    
-    dfit = DistributionFit$new(distributions = dists, shifted = 0) #offset)
-    
-    if ("gamma" %in% dists) {
-      dfit$models$gamma$start$shape = 1.1
-      dfit$models$gamma$lower$shape = 1
-      dfit$models$gamma$support = c(0.01,Inf)
-    }
-    
-    if ("weibull" %in% dists) {
-      dfit$models$weibull$start$shape = 1.1
-      dfit$models$weibull$lower$shape = 1
-      dfit$models$weibull$support = c(0.01,Inf)
-    }
-    
-    if ("nbinom" %in% dists) {
-      dfit$models$nbinom$support = c(.Machine$double.xmin,Inf)
-    }
-    
-    if ("lnorm" %in% dists) {
-      dfit$models$lnorm$support = c(0.01,Inf)
-    }
-      
-    dfit$fromBootstrappedData(samples %>% ungroup() %>% select(bootstrapNumber, value))
-    super$initialize(providerController,offset,dfit,...)
+    super$initialize(providerController,offset,...)
     self$bootstrapSamples = samples
     self$uncertain = length(unique(samples$bootstrapNumber))>1
   },
@@ -383,8 +356,8 @@ SerialIntervalProvider$printSerialIntervalSources = function() {
 }
   
 
-SerialIntervalProvider$resampledSerialInterval = function(providerController, resamples = ukcovidtools::serialIntervalResampling, dists=c("gamma","norm","lnorm"), ...) {
-  npsip = NonParametricSerialIntervalProvider$new(providerController = providerController,samples = force(resamples), dists = dists) 
+SerialIntervalProvider$resampledSerialInterval = function(providerController, resamples = ukcovidtools::serialIntervalResampling, ...) {
+  npsip = NonParametricSerialIntervalProvider$new(providerController = providerController,samples = force(resamples)) 
   return(npsip)
 }
           
@@ -392,7 +365,6 @@ SerialIntervalProvider$metaAnalysis = function(providerController, metaDf = ukco
   psip = ParametricSerialIntervalProvider$new(providerController, dist="gamma",paramDf = force(metaDf), offset = 0, bootstraps=10000, epiestimMode = epiestimMode)
   return(psip)
 }
-
 
 SerialIntervalProvider$generationInterval = function(providerController, bootstrapsDf = ukcovidtools::generationIntervalSimulation, epiestimMode = FALSE, ...) {
   genIntFit = DistributionFit$new()
@@ -483,43 +455,11 @@ SerialIntervalProvider$truncatedNormals = function(dataProviderController, obser
 }
   
 
-SerialIntervalProvider$fromFF100 = function(dataProviderController, dists=c("gamma","norm","lnorm")) {
-  
-  ff100 = dataProviderController$spim$getFF100()
-  tmp = ff100 %>% inner_join(ff100, by=c("ContactOf_FF100_ID"="FF100_ID"),suffix=c(".infectee",".infector"))
-  tmp = tmp %>% select(FF100_ID,ContactOf_FF100_ID,contains("date"))
-  dfit = DistributionFit$new(distributions = dists)
-  
-  if ("gamma" %in% dists) {
-    dfit$models$gamma$start$shape = 1.1
-    dfit$models$gamma$lower$shape = 1
-    dfit$models$gamma$support = c(.Machine$double.xmin,Inf)
-  }
-  
-  if ("weibull" %in% dists) {
-    dfit$models$weibull$start$shape = 1.1
-    dfit$models$weibull$lower$shape = 1
-    dfit$models$weibull$support = c(.Machine$double.xmin,Inf)
-  }
-  
-  if ("nbinom" %in% dists) {
-    dfit$models$nbinom$support = c(.Machine$double.xmin,Inf)
-  }
-  
-  if ("lnorm" %in% dists) {
-    dfit$models$lnorm$support = c(.Machine$double.xmin,Inf)
-  }
-  
-  dfit$fromUncensoredData(tmp,valueExpr = as.integer(date_onset.infectee - date_onset.infector),truncate = TRUE)
-  return(FittedSerialIntervalProvider$new(providerController = dataProviderController,offset = 0,dfit = dfit))
-  
-}
 
 SerialIntervalProvider$default = function(dataProviderController,...) {
   out = dataProviderController$getSaved("SERIAL-INTERVAL-DEFAULT",...,orElse = function() {
      SerialIntervalProvider$resampledSerialInterval(dataProviderController)
   })
-  # out = SerialIntervalProvider$metaAnalysis(dataProviderController)
   out$controller = dataProviderController
   return(out)
 }

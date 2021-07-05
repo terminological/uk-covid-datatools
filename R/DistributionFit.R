@@ -11,6 +11,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   bootstraps = NULL,
   samples = NULL,
   shifted = 0,
+  distFits = list(),
   
   #' @description New distribution fitter
   #' @param distributions - the distributions to fit
@@ -37,6 +38,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     valueExpr=enexpr(valueExpr)
     errors = NULL
     self$fitData = groupedDf %>% mutate(value = !!valueExpr) %>% mutate(value = value+self$shifted) %>% select(!!!grps,value) %>% group_by(!!!grps)
+    
     #TODO: cache this?
     out = self$fitData %>% group_modify( function(d,g,...) {
       if(any(d$value == 0)) warning("Input contains zero values after shift.")
@@ -74,6 +76,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
           # nasty hack coming up....
           bstr = res$bootstraps %>% full_join(g, by = character())
           self$bootstraps = self$bootstraps %>% bind_rows(bstr)
+          self$distFits = c(self$distFits,list(dist))
         }
       }
       return(tmp)
@@ -136,9 +139,10 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
         } else {
           res = self$extractFitted(dist, isCensored = TRUE, bootstraps = bootstraps, seed=seed)
           tmp = tmp %>% bind_rows(res$fittedModels)
-          # nasty hack coming up....
+          # nasty hack coming up.... change properties of object from inside the group_modify
           bstr = res$bootstraps %>% full_join(g, by = character())
           self$bootstraps = self$bootstraps %>% bind_rows(bstr)
+          self$distFits = c(self$distFits,list(dist))
         }
       }
       return(tmp)
@@ -300,6 +304,129 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     self$samples = bootstrappedDf %>% mutate(value = !!valueExpr) %>% 
       select(!!!grps, bootstrapNumber, value) %>% group_by(!!!grps, bootstrapNumber) %>% mutate(sampleNumber = row_number(), dist="empirical")
     self$censored = FALSE
+    if (!identical(errors,NULL)) warning(unique(errors))
+    invisible(self)
+  },
+  
+  fromBootstrappedCensoredData = function(bootstrappedDf, lowerValueExpr=left, upperValueExpr=right, truncate = TRUE,...) {
+    dots = rlang::list2(...)
+    lowerValueExpr=enexpr(lowerValueExpr)
+    upperValueExpr=enexpr(upperValueExpr)
+    errors = NULL
+    grps = bootstrappedDf %>% groups()
+    self$grps = grps
+    self$groupedDf = bootstrappedDf
+    #browser()
+    
+    self$bootstraps = bootstrappedDf %>% ensurer::ensure_that("bootstrapNumber" %in% colnames(.) ~ "bootstrapDf must have a bootstrapNumber column") %>%
+      group_by(!!!grps, bootstrapNumber) %>% 
+      group_modify(function(d,g,...) {
+        d = d %>% 
+          mutate(left = !!lowerValueExpr, right = !!upperValueExpr) %>% 
+          mutate(left = left+self$shifted, right=right+self$shifted) %>% 
+          select(left,right)
+        
+        # if(any(d$left == 0,na.rm=TRUE)) warning("Input contains zero values after shift.")
+        # if(any(d$left < 0,na.rm=TRUE)) warning("Input contains negative values after shift.")
+        
+        tmpBootstrap = tibble(dist=character(),param=character(),value=numeric())
+        for (m in self$models) {
+          values = d %>% select(left,right)
+          oldLen = nrow(values)
+          # browser()
+          if (truncate) {
+            
+            values = values %>% 
+              # right side is larger that the lowest bound of support
+              filter(is.na(right) | (right>=m$support[1])) %>%
+              # left side is smaller than the upper bound of support
+              filter(is.na(left) | (left<=m$support[2])) #%>%
+              # truncate left and right to the bounds if smaller / larger
+              # mutate(
+              #   left = left %>% pmax(m$support[1],na.rm = TRUE),
+              #   right = right %>% pmin(m$support[2],na.rm = TRUE)
+              # )
+              # filter(is.na(left) | (left<=m$support[2] & left>=m$support[1])) %>%
+              # filter(is.na(right) | (right<=m$support[2] & right>=m$support[1]))
+            # if (oldLen > nrow(values)) message("Truncating data for ",m$name)
+          }
+          
+          
+          if(m$discrete) {
+            values = values %>% mutate(
+              left = round(left),
+              right = round(right),
+            )
+          }
+          
+          arg = dots
+          arg$censdata = as.data.frame(values)
+          arg$distr = m$name
+          arg$start = m$start
+          arg$lower=unlist(m$lower)
+          # if(m$name == "norm") browser()
+          if (length(m$fix.arg)>0) {arg$fix.arg=m$fix.arg}
+          
+          dist2 = suppressWarnings({
+            tryCatch(do.call(fitdistrplus::fitdistcens, args=arg), error = function(e) {errors <<- c(errors,e$message);NULL})
+          })
+          
+          if (!is.null(dist2)) {
+            # build a bootstraps entry
+            #browser()
+            tmpBootstrap = tmpBootstrap %>% bind_rows(
+              tibble(
+                dist = dist2$distname,
+                param = names(dist2$estimate),
+                value = dist2$estimate,
+                n = dist2$n,
+                loglik = dist2$loglik,
+                aic = dist2$aic,
+                bic = dist2$bic
+              )
+            )
+            if(length(m$fix.arg)>0) {
+              tmpBootstrap = tmpBootstrap %>% bind_rows(
+                tibble(
+                  dist = dist2$distname, 
+                  param = names(m$fix.arg),
+                  value = unlist(m$fix.arg),
+                  n = dist2$n,
+                  loglik = dist2$loglik,
+                  aic = dist2$aic,
+                  bic = dist2$bic
+                )
+              )
+            }
+          }
+        }
+        return(tmpBootstrap)
+      }) %>% group_by(!!!grps)
+    
+    self$fittedModels = self$bootstraps %>% group_by(!!!grps,dist,param) %>%
+      summarise(
+        mean = mean(value,na.rm = TRUE),
+        sd = sd(value,na.rm = TRUE),
+        lower = quantile(value, 0.025),
+        upper = quantile(value, 0.975),
+        n = sum(n),
+        loglik = mean(loglik),
+        aic = mean(aic),
+        bic = mean(bic)
+      ) %>% group_by(!!!grps)
+    
+    self$bootstraps = self$bootstraps %>% select(!!!grps,bootstrapNumber,dist,param,value)
+    
+    # self$groupedDf = bootstrappedDf %>% group_by(!!!grps) %>% summarise(
+    #   !!paste0("Mean.",as_label(valueExpr) := mean(!!valueExpr)))
+    self$fitData =  bootstrappedDf %>% mutate(
+      left = !!lowerValueExpr+self$shifted,
+      right = !!upperValueExpr+self$shifted) %>%
+      select(!!!grps,left,right)
+    
+    self$samples = bootstrappedDf %>% mutate(value = runif(1,min=!!lowerValueExpr,max=!!upperValueExpr)) %>% 
+      select(!!!grps, bootstrapNumber, value) %>% group_by(!!!grps, bootstrapNumber) %>% mutate(sampleNumber = row_number(), dist="empirical")
+    self$censored = TRUE
     if (!identical(errors,NULL)) warning(unique(errors))
     invisible(self)
   },

@@ -74,6 +74,12 @@ localfiles:
   root: ~/covid19/input/
 ```
 
+## Cache control:
+
+Lots of the more complex data operations in this library will be cached based on the input data, and the code. This can be overridden in most instances by specifying the `nocache=TRUE` option on a given function call. 
+Alternatively it can be disabled on a service by service basis with e.g. `dpc$datasets$nocache = TRUE`
+Globally disabling the cache is also possible with `options("ukcovid.cache.disabled"=TRUE)` but setting this means everything (including code sets) will be re-downloaded and rebuilt from scratch.
+
 ## Meta-analysis of the SARS-CoV-2 serial interval and the impact of parameter uncertainty on the COVID-19 reproduction number 
 
 [Code and supporting material](https://github.com/terminological/serial-interval) for our [MedRxiv paper](https://doi.org/10.1101/2020.11.17.20231548) 

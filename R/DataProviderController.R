@@ -135,6 +135,10 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     } else stop(paste0("Unknown file provider type: ",cfg$type))
     self$fileProviders[[name]] = prov
     return(self$fileProviders[[name]])
+  },
+  
+  cacheProvider = function(wd) {
+    return(PassthroughFilesystemCache$new(wd))
   }
   
 ))

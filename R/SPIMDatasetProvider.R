@@ -39,7 +39,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     oneOneOneLineList = "111telephony_CLEANSED",
     fourNationsCases = "Casedata_AllNations",
     sgene = "SGTF_linelist",
-    immunization = "immunisations SPIM.csv",
+    immunization = "immunisations SPIM",
     voc351 = "VOC202012_02_linelist",
     ctasLineList = "CTAS SGTF data.zip",
     vamLineList = "VAM line list"
@@ -67,7 +67,13 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       y = unique(x[x==max(x)])
       return(y)
     })
-    tmp3 = tmp2[tmp2Date == max(tmp2Date)]
+    
+    reproDate = getOption("ukcovid.reproduce.at",Sys.Date())
+    if (reproDate != Sys.Date()) message("Reproducing results from: ",reproDate," ( set options('ukcovid.reproduce.at'=NULL) to get the latest version )")
+    
+    tmp4 = tibble(path = tmp2, date = as.Date(tmp2Date,"%Y%m%d"))
+    tmp3 = tmp4 %>% filter(date < reproDate) %>% filter(date==max(date)) %>% pull(path)
+    
     if(length(tmp3)==0) {
       warning("Missing file: ",search)
       return(NA_character_)
@@ -456,7 +462,15 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     path = self$getLatest(self$filter$immunization)
     message("Using: ",path)
     out = self$getSaved("IMMUNIZATIONS", params = list(path), ...,  orElse = function (...) {
-      tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+      
+      if (stringr::str_detect(path,"zip")) {
+        tmpFile = self$fileProvider$getFile(path)
+        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
+        tmp = readr::read_csv(unz(tmpFile, filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
+      } else if (stringr::str_detect(path,"csv")) {
+        tmp = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+      }
+      
       tmp = tmp %>% 
         as_tibble() %>% 
         mutate(
