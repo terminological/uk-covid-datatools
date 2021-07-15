@@ -266,7 +266,8 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
         
       )
       
-      scot_register = self$download("SCOT_REGISTER",url="https://www2.gov.scot/Resource/0054/00547737.xlsx",type="xlsx")
+      # https://www.gov.scot/publications/small-area-statistics-reference-materials/
+      scot_register = self$download("SCOT_REGISTER",url="https://www.gov.scot/binaries/content/documents/govscot/publications/statistics/2020/01/small-area-statistics-reference-materials/documents/scotland-register-of-gss-codes---july-2019/scotland-register-of-gss-codes---july-2019/govscot%3Adocument/GI-SAT%2BNaming%2BConvention_%2BScottish%2BRegister%2Bof%2BGeographic%2BCodes%2B%2528GSS%2529%2B0521.xlsx",type="xlsx")
       sheets = readxl::excel_sheets(scot_register)
       sheets = sheets[sheets %>% stringr::str_detect("[A-Z][0-9][0-9]_.*")]
       for(sheet in sheets) {

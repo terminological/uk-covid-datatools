@@ -74,6 +74,15 @@ localfiles:
   root: ~/covid19/input/
 ```
 
+## Reproducing from a given date
+
+```R
+# set
+options("ukcovid.reproduce.at"=as.Date("2021-06-29"))
+# unset
+options("ukcovid.reproduce.at"=NULL)
+```
+
 ## Cache control:
 
 Lots of the more complex data operations in this library will be cached based on the input data, and the code. This can be overridden in most instances by specifying the `nocache=TRUE` option on a given function call. 

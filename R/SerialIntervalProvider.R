@@ -336,8 +336,7 @@ NonParametricSerialIntervalProvider = R6::R6Class("NonParametricSerialIntervalPr
 
 #### Static defintions ----
   
-SerialIntervalProvider$printSerialIntervalSources = function() {
-  serialIntervals = readr::read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRdVV2wm6CcqqLAGymOLGrb8JXSe5muEOotE7Emq9GHUXJ1Fu2Euku9d2LhIIK5ZvrnGsinH11ejnUt/pub?gid=0&single=true&output=csv")
+SerialIntervalProvider$printSerialIntervalSources = function(serialIntervals = ukcovidtools::serialIntervalEstimates) {
   unk=function(x) ifelse(is.na(x),"unk",sprintf("%1.2f",x))
   conf=function(x,xmin,xmax) return(paste0(unk(x),"\n(",unk(xmin),"-",unk(xmax),")"))
   SItable1 = serialIntervals %>% mutate(

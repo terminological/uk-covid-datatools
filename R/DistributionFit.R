@@ -171,29 +171,43 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   withSingleDistribution = function(dist, paramDf, bootstraps = 1000, epiestimMode = FALSE, ...) {
     dots = rlang::list2(...)
     distParams = names(DistributionFit$conversionFrom[[dist]])
-    # is the distribution fully specified?
-    if (all(distParams %in% paramDf$param) & !any(is.na(c(paramDf$mean,paramDf$sd,paramDf$lower,paramDf$upper)))) {
-      # use native parameters. Assume a truncated normal.
+    # is the distribution fully specified in terms of the native parameters for that distribution?
+    if (all(distParams %in% paramDf$param) & !any(is.na(c(paramDf$mean,paramDf$sd)))) {
+      # With a fully natively specified distribution we can create a range of samples
+      # of the distribution under a set of assumptions about the sampling distributions of those parameters
+      # e.g. This woudl be the sampling distribution of the shape and sampling distribution of the 
+      # rate of a gamma distribution. The assumption made here is they all follow a truncated normal and are not
+      # correlated this is probably not a good assumption in the general case.
+      # TODO: in theory with the results from O'Neill (2014) https://doi.org/10.1080/00031305.2014.966589
+      # it would be possible if there is information about the mean and sd to 
+      # estimate the correlation between shape and rate. It may also be possible that sampling from mean and sd
+      # actually give you a better answer that sampling from native parameters
       tmp_bootstraps = paramDf %>% group_by(param) %>% group_modify(function(d,g,..) {
         if(nrow(d) > 1) stop(paste0("param ",g$param," is not unique"))
         print(list(mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper))
-        return(tibble(
-          bootstrapNumber = 1:bootstraps,
-          value = msm::rtnorm(n=bootstraps, mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper)
-        ))
+        if (!is.null(d$lower) & !is.null(d$upper) & is.finite(d$lower) & is.finite(d$upper)) {
+          return(tibble(
+            bootstrapNumber = 1:bootstraps,
+            value = msm::rtnorm(n=bootstraps, mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper)
+          ))
+        } else {
+          return(tibble(
+            bootstrapNumber = 1:bootstraps,
+            value = rnorm(n=bootstraps, mean = d$mean, sd = d$sd)
+          ))
+        }
       })
       self$bootstraps = self$bootstraps %>% bind_rows(tmp_bootstraps %>% mutate(dist = dist) %>% mutate(...))
       self$fittedModels = self$fittedModels %>% bind_rows(paramDf %>% mutate(dist = dist) %>% mutate(...))
     } else if (all(c("mean","sd") %in% paramDf$param)) {
-      # use moments to define distribution
+      # In this case we are defining a distribution in terms of its moments.
+      # Creating a set of bootstraps here is done by use moments to infer sampling distribution of mean and
+      # standard deviation and sampling in the mean / sd space.
       converted = DistributionFit$convertParameters(dist = dist, paramDf = paramDf, bootstraps = bootstraps, epiestimMode = epiestimMode, ...)
       self$bootstraps = self$bootstraps %>% bind_rows(converted$bootstraps %>% mutate(...))
       self$fittedModels = self$fittedModels %>% bind_rows(converted$fittedModels %>% mutate(...))
-      # TODO: could formally check for intersection of previous and new groups, or that dots contains all the correct args.
-      # TODO: rethink what is fit data here - we ought to be able to generate a single "mid market" sample: self$fitData = self$samples
-      # I think we only need it for plotting. maybe better to disable that part of plotting if it is not present.
     } else {
-      stop("paramDf does not define mean and sd, or other distribution parameters")
+      stop("paramDf does not define mean and sd, or other native distribution parameters")
     }
     if (identical(self$grps,NULL))  self$grps = sapply(names(dots),as.symbol)
     self$censored = FALSE
@@ -457,7 +471,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
       }
     }
     
-    disc = unlist(map(DistributionFit$standardDistributions, ~ .$discrete))
+    disc = unlist(purrr::map(DistributionFit$standardDistributions, ~ .$discrete))
     
     cont = pdfs %>% filter(dist %in% names(disc)[!disc])
     if(nrow(cont) > 0) {
@@ -914,7 +928,8 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
 
 DistributionFit$standardDistributions = list(
   weibull = list(name = "weibull", print = "weibull", start = list(shape =1 , scale=10), fix.arg = list(), lower=list(shape=0,scale=0), support=c(0,Inf), discrete=FALSE),
-  gamma = list(name = "gamma", print = "gamma", start = list(shape =1 , rate=0.1), fix.arg = list(), lower=list(shape=0,rate=0), support=c(0,Inf), discrete=FALSE),
+  gamma = list(name = "gamma", print = "gamma", start = list(shape =1, scale=10), fix.arg = list(), lower=list(shape=0,scale=0), support=c(0,Inf), discrete=FALSE),
+  gamma2 = list(name = "gamma", print = "gamma", start = list(shape =1, rate=0.1), fix.arg = list(), lower=list(shape=0,rate=0), support=c(0,Inf), discrete=FALSE),
   lnorm = list(name = "lnorm", print = "log-normal", start = list(meanlog=1 , sdlog=1), fix.arg = list(), lower=list(meanlog=-Inf, sdlog=-Inf), support=c(0,Inf), discrete=FALSE),
   exp = list(name = "exp", print = "exponential", start = list(rate=0.5), fix.arg = list(), lower=list(rate=.Machine$double.xmin), support=c(.Machine$double.xmin, Inf), discrete=FALSE),
   norm = list(name = "norm", print = "normal", start = list(mean = 1, sd = 0.1), fix.arg = list(), lower=list(sd=0), support=c(-Inf,Inf), discrete=FALSE),
@@ -925,9 +940,12 @@ DistributionFit$standardDistributions = list(
 
 DistributionFit$conversionFrom = list(
   gamma = list(
-    scale = function(mean,sd) sd^2/mean,
-    shape = function(mean,sd) mean^2/sd^2
-    #rate = function(mean,sd) sd^2/mean^2
+    shape = function(mean,sd) mean^2/sd^2,
+    scale = function(mean,sd) sd^2/mean
+  ),
+  gamma2 = list(
+    shape = function(mean,sd) mean^2/sd^2,
+    rate = function(mean,sd) mean/sd^2
   ),
   lnorm = list(
     meanlog = function(mean,sd) log(mean/sqrt(1+(sd^2)/(mean^2))),
@@ -961,6 +979,10 @@ DistributionFit$conversionFrom = list(
 
 DistributionFit$conversionTo = list(
   gamma = list(
+    mean = function(shape,scale = 1/rate, rate=1/scale) shape*scale,
+    sd = function(shape,scale = 1/rate, rate=1/scale) sqrt(shape*(scale^2))
+  ),
+  gamma2 = list(
     mean = function(shape,scale = 1/rate, rate=1/scale) shape*scale,
     sd = function(shape,scale = 1/rate, rate=1/scale) sqrt(shape*(scale^2))
   ),
@@ -1030,40 +1052,103 @@ DistributionFit$convertParameters = function(
     bootstraps = 1000, 
     epiestimMode = FALSE,
     ...
-  ) {
-  
-    meanOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(mean)
-    sdOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(sd)
-    lowerOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(lower)
-    upperOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(upper)
-    meanOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(mean)
-    sdOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(sd)
-    lowerOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(lower)
-    upperOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(upper)
-  
-    invalid = function(x) {is.null(x) | any(is.na(x))}
-  
+) {
+
+  meanOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(mean)
+  sdOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(sd)
+  lowerOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(lower)
+  upperOfMean = parameterDefinition(paramDf) %>% filter(param=="mean") %>% pull(upper)
+  meanOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(mean)
+  sdOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(sd)
+  lowerOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(lower)
+  upperOfSd = parameterDefinition(paramDf) %>% filter(param=="sd") %>% pull(upper)
+
+  invalid = function(x) {any(is.null(x) | any(is.na(x)))}
+
   if (invalid(c(meanOfMean,meanOfSd))) stop("must supply non NA values for meanOfMean and meanOfSd")
   conversion = DistributionFit$conversionFrom[[dist]]
   paramSamples = NULL
-  if (invalid(sdOfMean)) sdOfMean = (upperOfMean-lowerOfMean)/(qnorm(confint[2],0,1)-qnorm(confint[1],0,1))
   
-  if (!invalid(sdOfMean) & invalid(sdOfSd)) {
-    if (invalid(c(lowerOfSd, upperOfSd))) {
-      #stop("must supply non NA values for: lowerOfSd and upperOfSd or sdOfSd")
-      # browser()
-      sdOfSd = 0
+  # Mean of mean is implicitly normally distributed. This follows from central limit theorem
+  # we need to make sure the sdOfMean is defined.
+  if (invalid(sdOfMean)) {
+    if (invalid(c(upperOfMean,lowerOfMean))) {
+      warning("There is no sd of the mean, or quantiles defined. The fitted distributions will all have the same mean")
+      sdOfMean = 0
     } else {
-      fit.sd.gamma = suppressWarnings(nls(y ~ qgamma(x, shape=tmp_shape, scale=meanOfSd/tmp_shape), data = tibble( x=c(confint[1],confint[2]), y=c(lowerOfSd, upperOfSd) )))
-      sdShape = summary(fit.sd.gamma)$parameters[["tmp_shape",1]]
-      sdScale = meanOfSd/sdShape
-      sdOfSd = sqrt(sdShape*sdScale^2)
+      sdOfMean = (upperOfMean-lowerOfMean)/(qnorm(confint[2],0,1)-qnorm(confint[1],0,1))
     }
-    #TODO: we could have fixed the scale to 2 and used the moments to get the shape from the mean... This wouldn't use the lower and upper at all.
   }
   
+  # sdOfMean must be defined. Make sure that upper and lower of mean are also defined:
+  if (invalid(lowerOfMean)) lowerOfMean = qnorm(confint[[1]], meanOfMean, sdOfMean)
+  if (invalid(upperOfMean)) upperOfMean = qnorm(confint[[2]], meanOfMean, sdOfMean)
+  
+  # all parameters for mean are defined
+  
+  # turning attention to SD:
+  if (invalid(sdOfSd) & invalid(c(lowerOfSd,upperOfSd)) & is.na(N)) {
+    warning("There is no sd of the sd, or quantiles, or sample size defined. The fitted distributions will all have the same sd")
+    sdOfSd = 0
+  } else {
+    
+    # as per vignette on distribution sampling
+    # we are using a nakagami with a fixed scale parameter
+    # define the nakagami scale parameter
+    sdScale = meanOfSd^2
+    
+    # The sd of a nakagmai is defined as
+    # in https://en.wikipedia.org/wiki/Nakagami_distribution
+    # in this m = sdShape and omega = sdScale
+    nakaSd = function(shape,scale) sqrt(
+      scale * (
+        1-1/shape*exp( (lgamma(shape+0.5)-lgamma(shape))*2 )
+      )
+    )
+    if (!invalid(sdOfSd)) {
+      # we need to infer shape parameters for nakagmai distribution from moments
+      # we actually have more information that we need to do this as scale is fixed
+      # however the expression is a bit of a pig and needs to be solved numerically
+      browser()
+      fn = function(tmp_shape) nakaSd(tmp_shape, sdScale)-sdOfSd
+      root = uniroot(f = fn, lower = 0.5, upper = 10000, extendInt="yes", check.conv=FALSE)
+      sdShape = root$root
+    } else {
+      if (invalid(c(lowerOfSd, upperOfSd))) {
+        # If we know N then it is possible to infer a bounding SD based on an underlying 
+        # normal distribution. This is essentially using the sampling variance of the variance
+        # being a ChiSquared with N-1 degrees of freedom. 
+        # but generalising this to a gamma and then the SD to a nakagami.
+        sdShape = (N-1)/2
+      } else {
+        # we are fitting here a nakagami distribution (see resampling vignette)
+        # the nakagami omega (scale) parameter is the 1/meanOfSd^2
+        fn = function(x,tmp_shape) nakagami::qnaka(x,shape=tmp_shape, scale=sdScale)
+        fit.sd.naka = suppressWarnings(nls(y ~ fn(x,tmp_shape), data = tibble( x=confint, y=c(lowerOfSd, upperOfSd) ), start=list(tmp_shape=1), lower=0.5 ))
+        sdShape = summary(fit.sd.naka)$parameters[["tmp_shape",1]]
+      }
+      # with scale and shape derived we can define the sdOfSd
+      sdOfSd = nakaSd(sdShape,sdScale)
+    }
+  
+    if (invalid(lowerOfSd)) lowerOfSd = nakagami::qnaka(confint[[1]], sdShape, sdScale)
+    if (invalid(upperOfSd)) upperOfSd = nakagami::qnaka(confint[[2]], sdShape, sdScale)
+  }
+
+  # all parameters for SD are defined
+  
+  # Sample thre distributions mean and sd
+  # TODO: this assumes independence between the mean and SD
+  # which is not true for distributions with a high degree of kurtosis
+  # the O'Neill (2014) reference has some expressions for correlation of mean and sd
+  # based on skewness and kurtosis (results 1 and 12) however these correlations are between mean
+  # and variance which might require the whole of this to be re-written in terms of variance
+  # which is limited by the fact that we do not have that information from source studies
   if ((invalid(sdOfMean) | sdOfMean == 0) & (invalid(sdOfSd) | sdOfSd == 0)) {
     
+    # If the mean and sd are exactly specified and have no variability we can only estimate
+    # one bootstrap (or at least further bootstraps will be the same.
+    if (bootstraps>1) warning("more than one bootstraps requested but distribution has no variability defined. One one bootstrap will be returned.")
     bootstraps = 1
     boot_mean = meanOfMean
     boot_sd = meanOfSd
@@ -1071,32 +1156,35 @@ DistributionFit$convertParameters = function(
   } else {
   
     if (invalid(sdOfMean)) stop("either sdOfMean or upperOfMean and lowerOfMean must be specified")
-    if (invalid(sdOfSd)) stop("either sdOfSd or upperOfSd and lowerOfSd must be specified")
+    if (invalid(sdOfSd)) stop("either sdOfSd or upperOfSd and lowerOfSd or must be specified")
     
-    # central limit - means are normally
-    boot_mean = msm::rtnorm(bootstraps,mean = meanOfMean,sd = sdOfMean,lower = lowerOfMean, upper=upperOfMean) 
-    if (epiestimMode) {
-      boot_sd = msm::rtnorm(bootstraps,mean = meanOfSd,sd = sdOfSd,lower = lowerOfSd, upper=upperOfSd) 
+    # central limit - means are normally distributed
+    if (sdOfMean > 0) {
+      boot_mean = msm::rtnorm(bootstraps,mean = meanOfMean,sd = sdOfMean,lower = lowerOfMean, upper=upperOfMean) 
     } else {
-      if (is.na(N)) {
-        if (sdOfSd == 0) {
-          #browser()
-          boot_sd = meanOfSd
-        } else {
-          sdShape = meanOfSd^2/sdOfSd^2
-          sdScale = sdOfSd^2/meanOfSd # this should maybe hard limited to 2 - as SD is chisq distributed and chisq is gamma with scale 2 (or rate 0.5).
-          boot_sd = rgamma(bootstraps,shape = sdShape,scale = sdScale)
-        }
-      } else {
-        boot_sd = meanOfSd*sqrt(rchisq(bootstraps, N-1)/(N-1))
-      }
-      if (!invalid(c(lowerOfSd, upperOfSd))) {
-        boot_sd = boot_sd %>% scales::squish(range = c(lowerOfSd,upperOfSd))
-      }
+      # no variability defined
+      boot_mean = rep(meanOfMean,bootstraps)
     }
     
+    # sds are nakagmai distributed
+    if(sdOfSd > 0) {
+      if (epiestimMode) {
+        # epiestim does something weird here officially
+        # unofficially I'm not sure it even does this.
+        boot_sd = msm::rtnorm(bootstraps,mean = meanOfSd,sd = sdOfSd,lower = lowerOfSd, upper=upperOfSd) 
+      } else {
+        # the nakagami distribution for sd should be fully defined by this point
+        boot_sd = nakagami::rnaka(bootstraps,shape = sdShape, scale=sdScale)
+        boot_sd = boot_sd %>% scales::squish(range = c(lowerOfSd,upperOfSd))
+      }
+    } else {
+      # no variability defined
+      boot_sd = rep(meanOfSd,bootstraps)
+    }
   }
+
   # browser()
+  # having samples in the mean SD space we need to augment this with native parameters
   for(paramName in names(conversion)) {
     paramSamples = paramSamples %>% bind_rows(tibble(
       dist = dist,

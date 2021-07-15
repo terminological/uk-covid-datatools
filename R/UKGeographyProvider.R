@@ -8,7 +8,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
     maps = list(
       WD11 = list(
         # https://geoportal.statistics.gov.uk/datasets/wards-december-2011-boundaries-ew-bgc
-        url = "https://opendata.arcgis.com/datasets/bc0c7a7e865643cb90eae44bc4f15df0_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/bc0c7a7e865643cb90eae44bc4f15df0_0/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/bc0c7a7e865643cb90eae44bc4f15df0_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Wards__December_2011__Boundaries_EW_BGC",
         codeCol = "wd11cd",
         nameCol = "wd11nm",
@@ -17,7 +18,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       WD19 = list(
         # https://geoportal.statistics.gov.uk/datasets/wards-december-2019-boundaries-ew-bgc
-        url = "https://opendata.arcgis.com/datasets/bf1a23cfe83f4da9844e7f34e4824d03_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        #url = "https://opendata.arcgis.com/datasets/bf1a23cfe83f4da9844e7f34e4824d03_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/446d684e667a4d91bd54a073efff207d_0/downloads/data?format=shp&spatialRefId=27700",
         mapName = "Wards__December_2019__Boundaries_EW_BGC",
         codeCol = "wd19cd",
         nameCol = "wd19nm",
@@ -26,7 +28,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       LSOA11 = list(
         # https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-boundaries-ew-bgc
-        url = "https://opendata.arcgis.com/datasets/e993add3f1944437bc91ec7c76100c63_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
+        # url = "https://opendata.arcgis.com/datasets/e993add3f1944437bc91ec7c76100c63_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/8bbadffa6ddc493a94078c195a1e293b_0/downloads/data?format=shp&spatialRefId=27700",
         mapName = "Lower_Layer_Super_Output_Areas__December_2011__Boundaries_EW_BGC",
         codeCol = "LSOA11CD",
         nameCol = "LSOA11NM",
@@ -35,7 +38,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       MSOA11 = list(
         # https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-boundaries-ew-bgc
-        url = "https://opendata.arcgis.com/datasets/5d4e4cc075ef4a40acbe6e50735451ef_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        # url = "https://opendata.arcgis.com/datasets/5d4e4cc075ef4a40acbe6e50735451ef_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/80223f1d571c405fb2fdf719c7e6da13_0/downloads/data?format=shp&spatialRefId=27700",
         mapName = "Middle_Layer_Super_Output_Areas__December_2011__EW_BGC_V2",
         codeCol = "MSOA11CD",
         nameCol = "MSOA11NM",
@@ -62,7 +66,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       LHB19 = list(
         # https://geoportal.statistics.gov.uk/datasets/local-health-boards-april-2019-boundaries-wa-buc
-        url = "https://opendata.arcgis.com/datasets/def40bdc98a9457aa108eb3a5fb052b1_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        # url = "https://opendata.arcgis.com/datasets/def40bdc98a9457aa108eb3a5fb052b1_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/473fed063ce84d98a2f7c4fb0b0ff320_0/downloads/data?format=shp&spatialRefId=27700",
         mapName = "Local_Health_Boards__April_2019__Boundaries_WA_BUC",
         codeCol = "lhb19cd",
         nameCol = "lhb19nm",
@@ -71,7 +76,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       CTYUA19 = list(
         # https://geoportal.statistics.gov.uk/datasets/counties-and-unitary-authorities-april-2019-boundaries-ew-buc-1
-        url = "https://opendata.arcgis.com/datasets/a917c123e49d436f90660ef6a9ceb5cc_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/b216b4c8a4e74f6fb692a1785255d777_0/downloads/data?format=shp&spatialRefId=27700",
+        #url = "https://opendata.arcgis.com/datasets/a917c123e49d436f90660ef6a9ceb5cc_0.zip?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
         mapName = "Counties_and_Unitary_Authorities__April_2019__Boundaries_EW_BUC",
         codeCol = "ctyua19cd",
         nameCol = "ctyua19nm",
@@ -80,7 +86,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       LAD19 = list(
         # https://geoportal.statistics.gov.uk/datasets/local-authority-districts-december-2019-boundaries-uk-buc
-        url = "https://opendata.arcgis.com/datasets/3a4fa2ce68f642e399b4de07643eeed3_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/3a4fa2ce68f642e399b4de07643eeed3_0/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/3a4fa2ce68f642e399b4de07643eeed3_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Local_Authority_Districts__December_2019__Boundaries_UK_BUC",
         codeCol = "lad19cd",
         nameCol = "lad19nm",
@@ -89,7 +96,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       LAD20 = list(
         # https://geoportal.statistics.gov.uk/datasets/local-authority-districts-may-2020-boundaries-uk-buc
-        url = "https://opendata.arcgis.com/datasets/910f48f3c4b3400aa9eb0af9f8989bbe_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/69dc11c7386943b4ad8893c45648b1e1_0/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/910f48f3c4b3400aa9eb0af9f8989bbe_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Local_Authority_Districts__May_2020__UK_BUC",
         codeCol = "LAD20CD",
         nameCol = "LAD20NM",
@@ -98,7 +106,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       CCG20 = list(
         # https://geoportal.statistics.gov.uk/datasets/clinical-commissioning-groups-april-2020-generalised-clipped-boundaries-en
-        url = "https://opendata.arcgis.com/datasets/e33a6b14379f4d0b9890f9dfa26f8a1f_1.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/8e410b3299154bb3a93fae1a69ed4f2b_1/downloads/data?format=shp&spatialRefId=27700",
+        #url = "https://opendata.arcgis.com/datasets/e33a6b14379f4d0b9890f9dfa26f8a1f_1.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Clinical_Commissioning_Groups__April_2020__EN_BGC",
         codeCol = "ccg20cd",
         nameCol = "ccg20nm",
@@ -107,7 +116,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       NHSER20 = list(
         # https://geoportal.statistics.gov.uk/datasets/nhs-england-regions-april-2020-boundaries-en-bgc
-        url = "https://opendata.arcgis.com/datasets/87511f3ae00a40208741c685f827c1d3_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/5e33fd1436114a19b335ed07076a4c5b_0/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/87511f3ae00a40208741c685f827c1d3_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "NHS_England_Regions__April_2020__Boundaries_EN_BGC",
         codeCol = "nhser20cd",
         nameCol = "nhser20nm",
@@ -116,7 +126,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       ),
       PHEC16 = list(
         # https://geoportal.statistics.gov.uk/datasets/public-health-england-centres-december-2016-generalised-clipped-boundaries-in-england
-        url = "https://opendata.arcgis.com/datasets/91d15139a82e47fc8167a11c0e4e86de_2.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        url = "https://opendata.arcgis.com/api/v3/datasets/91d15139a82e47fc8167a11c0e4e86de_2/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/91d15139a82e47fc8167a11c0e4e86de_2.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Public_Health_England_Centres__December_2016__Boundaries",
         codeCol = "phec16cd",
         nameCol = "phec16nm",
@@ -124,8 +135,9 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
         simplify = FALSE
       ),
       CTRY19 = list(
-        # https://geoportal.statistics.gov.uk/datasets/countries-december-2019-boundaries-uk-bgc/data
-        url = "https://opendata.arcgis.com/datasets/b789ba2f70fe45eb92402cee87092730_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
+        # https://geoportal.statistics.gov.uk/datasets/countries-december-2019-boundaries-uk-bgc
+        url = "https://opendata.arcgis.com/api/v3/datasets/b789ba2f70fe45eb92402cee87092730_0/downloads/data?format=shp&spatialRefId=27700",
+        # url = "https://opendata.arcgis.com/datasets/b789ba2f70fe45eb92402cee87092730_0.zip?outSR=%7B%22latestWkid%22%3A27700%2C%22wkid%22%3A27700%7D",
         mapName = "Countries__December_2019__Boundaries_UK_BGC",
         codeCol = "ctry19cd",
         nameCol = "ctry19nm",

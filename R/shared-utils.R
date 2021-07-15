@@ -208,7 +208,7 @@ mode <- function(x) {
 }
 
 setup = function(file = Sys.getenv("R_CONFIG_FILE", "config.yml")) {
-  if(!exists("dpc")) ukcovidtools::reload()
+  if(!exists("dpc")) ukcovidtools::reload(file)
 }
 
 reload = function(file = Sys.getenv("R_CONFIG_FILE", "config.yml")) {
@@ -216,7 +216,9 @@ reload = function(file = Sys.getenv("R_CONFIG_FILE", "config.yml")) {
   #devtools::load_all(paths$librarySource)
   options("ukcovid.config"=paths$secrets)
   options("ukcovid.spim"=paths$spimSource)
-  dpc = DataProviderController$setup(paths$cache)
+  dpc = DataProviderController$setup(
+    if(fs::is_absolute_path(paths$cache)) paths$cache else here::here(paths$cache)
+  )
   assign("dpc", dpc, envir = .GlobalEnv)
   assign("tsp", dpc$timeseriesProcessor(), envir = .GlobalEnv)
 }

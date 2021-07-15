@@ -1,0 +1,273 @@
+---
+title: "Sampling from uncertain distributions"
+author: "Rob Challen"
+date: "05/07/2021"
+output: 
+  rmarkdown::html_vignette:
+    self_contained: TRUE
+knit: (function(inputFile, encoding,...) {
+  rmarkdown::render(
+    inputFile,
+    encoding = encoding,
+    output_dir = here::here("docs"))
+  })
+vignette: >
+  %\VignetteIndexEntry{Basic usage}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+This is a brief note to explain the approach taken to producing samples from results given as parameterised distributions cited in the literature. The purpose for this is in combining multiple studies which report a quantity (e.g. the serial interval of an infection) as modelled by a parameterised statistical distribution (e.g. a Gamma distribution), with a central estimate of the mean, a central estimate of the standard deviation, and typically confidence limits on both of those quantities (or credible intervals if the distribution was estimated using a Bayesian framework). Combining such results into a single estimate through meta-analysis does not fit within the standard approaches, as these generally assume a normally distributed single dimensional effect, and whilst this is probably valid for the means of the parameterised distributions to be treated in this way, it is not a valid assumption for the parameter defining the spread (i.e. the standard deviation).
+
+The challenge in combining such distributions is essentially that of estimating the mixture of all possible distributions that are compatible with the results published in all the studies. The resulting mixture distribution may then be further analysed in a range of ways. 
+
+For example an additional important capability for us is the ability to combine studies that present results as a parameterised distribution, with other studies where only empirical estimates are made on the quantities of interest, and the raw data is available. In this case generating representative samples from the original report is important, so that parameterised results can be combined with empirical results. This approach is akin to parametric bootstrapping, but where the bootstrapping is performed not on data but on the uncertain estimate of the parameterised distribution. 
+
+The key step of this re-sampling is the conversion of an uncertain parameterised distribution into a representative set of precisely specified distributions that can in turn be sampled. The set of studies described in Table 1 is a typical example of the kind of information analysed with this approach.
+
+```{r}
+here::i_am("vignettes/sampling-uncertain-distributions.Rmd")
+devtools::load_all()
+devtools::load_all("~/Git/standard-print-output/")
+standardPrintOutput::setDefaults()
+library(tidyverse)
+library(patchwork)
+
+# SerialIntervalProvider$printSerialIntervalSources()
+
+```
+
+The specific problem of generating a set of representative set of precisely specified parameterised distributions from an uncertainly specified result is somewhat similar to that of sampling parameter values within a Bayesian framework where the mean and standard deviation of a parameter distribution are themselves specified by prior distributions. In this scenario however the choice of distribution for the mean and spread parameter (usually variance) as hyper-parameters, can be assumed. Because of the Central Limit theorem, a sensible choice for the prior of the mean is a Gaussian distribution, but the spread parameter typically has support between zero and infinity, and often weakly informed priors chosen for this, from either uniform distributions or half-*t* family (including the Cauchy distribution) (Gelman 2006)^1^. 
+
+In our situation, we are doing the reverse, and given a mean and standard deviation, and confidence intervals for each, but no knowledge of the distributions of these quantities, the challenge is to produce a set of sampling distributions that accurately reflect the study definition.
+
+## The sampling distribution of the mean
+
+To do this we need to make some assumptions about the nature of the sampling distribution of the mean. Fortunately this is rather simple, as a key finding of the central limit theorem, as regardless of the underlying distribution, as the number of samples of a distribution increases the sampling distribution of the mean ($E_n$) is a Gaussian where $\bar{\mu}$ is the central estimate of the mean^2^:
+
+$$
+E_n \sim \mathcal{N}(\bar{\mu},\frac{\bar{\sigma}}{\sqrt{n}})
+$$
+
+Knowing that the sampling distribution of the mean is a Gaussian, we can use this assumption to estimate the $\frac{\bar{\sigma}}{\sqrt{n}}$ quantity, which is the standard deviation of the sampling distribution of the mean, from the confidence intervals, giving us a fully specified sampling distribution of the mean.
+
+$$
+E_n \sim \mathcal{N}(\bar{\mu},\frac{CI_{\mu,upper} - CI_{\mu,lower}}{\mathcal{N}_{upper}-\mathcal{N}_{lower}})
+$$
+
+## The sampling distribution of the variance and standard deviation
+
+In the case of a normally distributed variable the sampling distribution of the variance can be shown to be a Chi-squared distribution^2^ with $n-1$ degress of freedom. Given that the Chi-squared distribution is a particular form of a Gamma distribution and given the definition of the Nagakami-m distribution^3^, the following holds:
+
+$$
+\begin{aligned}
+(n-1)S^2_n/\sigma^2=n\hat\sigma^2_n/\sigma^2=\frac{1}{\sigma^2}\sum_i(x_i-\overline{x})^2\sim\tilde{\chi}^2_{n-1} \\
+\tilde{\chi}^2_{n-1} = \text{Gamma}\Big(\frac{n-1}{2},\frac{1}{2}\Big)\\
+X\sim\text{Gamma}(\alpha,\beta) \implies 
+aX\sim\text{Gamma}(\alpha,\beta/a) \\
+S^2_n=\frac{\sigma^2}{n-1}\left(\frac{(n-1)S^2_n}{\sigma^2}\right)\sim\text{Gamma}\left(\frac{n-1}{2},\frac{n-1}{2\sigma^2}\right) \\
+m = \kappa = \alpha = \frac{n-1}{2}\\
+\Omega = \kappa\theta = \frac{\alpha}{\beta} = \sigma^2 \\
+S_n \sim \text{Nakagami}( m, \Omega) \\
+S_n \sim \text{Nakagami}( \frac{n-1}{2}, \sigma^2)
+\end{aligned}
+$$
+
+With no information about the nature of the underlying distribution this expression is a bounding limit on the sampling distribution of the standard deviation, and we use this in the situation where the central estimate of the standard deviation is given, alongside the sample size, but with no other information. However this will tend to over-estimate the variation in the situation where there is kurtosis in the distribution, which could lead to a broader range of samples than would be compatible with the reported results when these are Gamma, or Log-normally distributed.
+
+In O’Neill (2014)^4^ the asymptotic sampling distribution of the variance is explored with respect to the kurtosis of the underlying distribution, and this modifies the degrees of freedom applied to the Chi-squared distrbition above, to the following expression, where $\kappa$ is the kurtosis of the underlying distribution (this is their result 14). 
+
+
+$$
+\begin{aligned}
+DF_nS^2_n/\sigma^2 \sim \tilde{\chi}^2_{DF_n} \\
+DF_n = \frac{2n}{\kappa-(n-3)/(n-1)} \\
+S^2_n=\frac{\sigma^2}{DF_n}\left(\frac{(DF_n)S^2_n}{\sigma^2}\right)\sim\text{Gamma}\left(\frac{DF_n}{2},\frac{DF_n}{2\sigma^2}\right) \\
+S_n \sim \text{Nakagami}( \frac{DF_n}{2}, \sigma^2)
+\end{aligned}
+$$
+
+Information about the kurtosis of the underlying distribution is available from the confidence limits on the standard deviations quoted in source studies and a closed form expression for these is given in O'Neill (2014)^4^. This involves the population size from which the sample is taken which is information we do not generally have. With both confidence intervals, it would be possible to eliminate the unknown population size (or we could reasonably assume it is very much larger than our sample size), but it is also possible to estimate the associated Nakagami distribution numerically from the confidence intervals and central estimate of the standard deviation ($\sigma$) from the expression above. These again describe bounding distributions for the sampling distribution of the standard deviation.
+
+## Generating samples from uncertain distributions
+
+The main purpose of this approach is to generate a representative sample set from uncertainly specified parameterised distributions such that they can be combined. To test this we investigate a list of published studies that give estimates of the serial interval of SARS-CoV-2 as a parameterised distribution.
+
+*Table 1: A set of uncertainly specified parameterised distributions extracted from the SARS-CoV-2 literature.*
+
+```{r}
+
+
+input = ukcovidtools::serialIntervalEstimates %>% filter(estimate_type == "serial interval" & assumed_distribution %in% c("gamma","lnorm","norm")) %>%
+  select(
+    label,
+    N = sample_size,
+    dist = assumed_distribution,
+    meanOfMean = mean_si_estimate,
+    lowerOfMean = mean_si_estimate_low_ci,
+    upperOfMean = mean_si_estimate_high_ci,
+    meanOfSd = std_si_estimate,
+    lowerOfSd = std_si_estimate_low_ci,
+    upperOfSd = std_si_estimate_high_ci
+  ) %>%
+  group_by(label) %>%
+  filter(row_number() ==1 ) %>%
+  ungroup() %>%
+  pivot_longer(cols = c(meanOfMean,lowerOfMean,upperOfMean,meanOfSd,lowerOfSd,upperOfSd), names_to="param", values_to="value") %>%
+  mutate(
+    col = case_when(
+      stringr::str_detect(param,"mean") ~ "mean",
+      stringr::str_detect(param,"lower") ~ "lower",
+      stringr::str_detect(param,"upper") ~ "upper"),
+    param = case_when(
+      stringr::str_detect(param,"Mean") ~ "mean",
+      stringr::str_detect(param,"Sd") ~ "sd")
+  ) %>% 
+  pivot_wider(names_from = col, values_from =value) %>% mutate(sd = NA_real_)
+
+
+
+
+
+# distLabel = function(fit) {
+#   fit %>% ungroup() %>% 
+#     mutate(label = ifelse( is.na(sd),
+#       sprintf("%s: %1.2f, 95%% CI %1.2f\u2013%1.2f",param,mean, lower, upper),
+#       sprintf("%s: %1.2f (\u00B1%1.2f), 95%% CI %1.2f\u2013%1.2f",param,mean,sd, lower, upper))) %>%
+#     pull(label) %>%
+#     paste0(collapse="; ")
+# }
+
+inputSumm = input %>% mutate(summary = ifelse( is.na(sd),
+      sprintf("%1.2f, (95%% CI %1.2f\u2013%1.2f)",mean, lower, upper),
+      sprintf("%1.2f \u00B1 %1.2f, (95%% CI %1.2f\u2013%1.2f)",mean,sd, lower, upper))) %>% 
+  select(source = label,dist,N,summary,param) 
+
+inputSumm %>% select(source,dist,N,param,summary) %>% group_by(source,dist,N) %>% standardPrintOutput::saveTable()
+```
+
+
+
+```{r}
+
+converted = input %>% group_by(label, dist, N) %>% group_modify(function(d,g,...) {
+  out = DistributionFit$convertParameters(paramDf = d, N=g$N, dist = g$dist,bootstraps = 1000)
+  return(out$bootstraps %>% select(-dist))
+})
+
+samples = converted %>% group_by(label,dist,N,bootstrapNumber) %>% group_modify(function(d,g,...) {
+  params = deframe(d) %>% as.list() %>% c(list(n=1000))
+  #browser()
+  fnName = paste0("r",g$dist)
+  return(tibble(samples = do.call(fnName,params)))
+})
+
+sampleSumm = samples %>% ungroup() %>% summarise(
+  mean = mean(samples),
+  lower = quantile(samples,0.025),
+  upper = quantile(samples,0.975),
+  sd = sd(samples)
+) %>% summarise(out = sprintf("%1.2f \u00B1 %1.2f, (95%% CI %1.2f\u2013%1.2f)",mean,sd, lower, upper)) %>% pull(out)
+```
+
+Using the logic above, for each of these studies a sampling distribution for the mean and standard deviation is estimated. This is used to generate 1000 representative parameterised distributions for each study. From these 1000 distributions, 1000 random samples are taken representing 1,000,000 generated samples per study. With all studies taken together and with equally weighting, the combined sample has a mean and SD of `r sampleSumm` however in reality we would take a number of samples proprtional to the study size when combining. 
+
+More relevant though is comparing the distribution of means and standard deviations recovered from the re-sampling process. In this case keeping 1000 sample from each of the 1000 inferred distributions from each study separate, and summarizing the samples shows us how well the distribution sampling is performing. In the following figure, for the Bi et al. 2020 study, we see the sampled mean and standard deviation in each of the 1000 precisely specified distributions, compared to the quoted central estimates (solid red) and confidence intervals (dashed lines) in Panel A, and in panel B the associate shape and rate parameters. 
+
+```{r}
+reconstructed = samples %>% group_by(label,dist,N,bootstrapNumber) %>% filter(!is.na(samples)) %>% summarise(m_mean = mean(samples,na.rm=TRUE),m_sd=sd(samples,na.rm=TRUE))
+
+source = ukcovidtools::serialIntervalEstimates %>% filter(label == "Bi et al. 2020")
+
+p1 = (ggplot(reconstructed %>% filter(label=="Bi et al. 2020"),aes(x=m_mean, y=m_sd))+geom_point(alpha=0.5)+geom_density2d()+xlab("mean")+ylab("sd")+
+        geom_hline(yintercept = source$std_si_estimate, colour="red")+
+        geom_vline(xintercept = source$mean_si_estimate, colour="red")+
+        geom_hline(yintercept = source$std_si_estimate_low_ci, colour="red",linetype="dashed")+
+        geom_vline(xintercept = source$mean_si_estimate_low_ci, colour="red",linetype="dashed")+
+        geom_hline(yintercept = source$std_si_estimate_high_ci, colour="red",linetype="dashed")+
+        geom_vline(xintercept = source$mean_si_estimate_high_ci, colour="red",linetype="dashed")
+      
+      ) %>% ggExtra::ggMarginal(type="density",size=10)
+p2 = (ggplot(converted %>% filter(label=="Bi et al. 2020") %>% pivot_wider(names_from = param),aes(x=shape, y=scale))+geom_density2d()+geom_point(alpha=0.5)) %>% ggExtra::ggMarginal(type="density",size = 10)
+
+
+patchwork::wrap_elements(p1)+patchwork::wrap_elements(p2)+plot_annotation(tag_levels = "A")
+
+```
+
+*Figure 1: Panel A shows the first 2 moments of a set of precisely specified parameterised distributions compatible with the findings of Bi et al. 2020. Central estimates and confidence intervals from that study are marked in red lines in panel A. Panel B is the equivalent distributions expressed in shape and scale parameters of the Gamma distribution.*
+
+Combining the summaries from the plot above, allows us to reconstruct the uncertainty in the mean and standard deviation in our sampled data, and reconstruct central estimates and confidence intervals, for each source, which are shown below. These compare well with the original reported values from the papers, where the numbers of cases is sufficiently large, or the original reported confidence intervals are not excessively wide. It is less accurate where the very small numbers in some of the studies leads to wide confidence intervals, for example Zhang et al. 2020. In such cases the ability to replicate the exact shape is arguably less important for our intended purpose as such small studies will be relatively down-weighted during meta-analysis. 
+
+*Table 2: The comparison between original uncertain distributions, and the result of aggregating samples generated using the procedure described in this paper. A good agreement is shown when source distributions are reasonably well constrained to begin with* 
+
+```{r}
+
+
+reconstructedSumm = reconstructed %>% group_by(label,dist,N) %>% summarise(
+  tibble(
+    param = c("mean","sd"),
+    mean = c(mean(m_mean), mean(m_sd)),
+    lower = c(quantile(m_mean,0.025),quantile(m_sd,0.025)),
+    upper = c(quantile(m_mean,0.975),quantile(m_sd,0.975)),
+    sd = c(sd(m_mean), sd(m_sd))
+  )
+) %>% mutate(summary = ifelse( is.na(sd),
+      sprintf("%1.2f, (95%% CI %1.2f\u2013%1.2f)",mean, lower, upper),
+      sprintf("%1.2f \u00B1 %1.2f, (95%% CI %1.2f\u2013%1.2f)",mean,sd, lower, upper))) %>% 
+  select(source = label,dist,N,summary,param)
+
+bind_rows(
+  inputSumm %>% mutate(type = "original"),
+  reconstructedSumm  %>% mutate(type = "sampled")
+) %>% 
+  select(source,dist,N,param,type,summary) %>% 
+  group_by(source,dist,N,param) %>% 
+  standardPrintOutput::saveTable()
+```
+
+## Conclusion
+
+We have presented a short summary on the method we use to generate samples from uncertainly specified parameterised distributions. We have demonstrated it is able to produce both a set of exactly specified parameterised distributions that is representative of the uncertainty in the original specification, but also that from this approach we can generate a set of samples that cover the range of possibilities described in the original source in a representative way. When aggregated these samples recover the original uncertainty with a reasonable degree of fidelity. This method is used in our approach to meta-analysis of quantities such as the serial interval that are reported in the literature as uncertainly defined parameter distributions, rather than as single dimensional effect sizes.
+
+
+<!-- ```{r} -->
+<!-- devtools::load_all() -->
+<!-- dfit = DistributionFit$new(distributions = "gamma2") -->
+<!-- cereda = tibble( -->
+<!--   param = c("shape","rate"), -->
+<!--   mean = c(1.87,0.28),  -->
+<!--   sd = c(0.26,0.04), -->
+<!--   lower = c(NA_real_,NA_real_), -->
+<!--   upper = c(NA_real_,NA_real_) -->
+<!-- ) -->
+<!-- dfit$withSingleDistribution(dist = "gamma2", paramDf = cereda) -->
+<!-- dfit$printDistributionDetail() -->
+<!-- ``` -->
+
+## References
+
+1. Gelman A. Prior distributions for variance parameters in hierarchical models (comment on article by Browne and Draper). Bayesian Analysis [Internet]. 2006 Sep [cited 2021 Jul 5];1(3):515–34. Available from: https://projecteuclid.org/journals/bayesian-analysis/volume-1/issue-3/Prior-distributions-for-variance-parameters-in-hierarchical-models-comment-on/10.1214/06-BA117A.full
+2. Sampling Distribution of Sample Variance | STAT 414 [Internet]. PennState: Statistics Online Courses. [cited 2021 Jul 3]. Available from: https://online.stat.psu.edu/stat414/lesson/26/26.3
+3. Nakagami M. The m-Distribution—A General Formula of Intensity Distribution of Rapid Fading. In: Hoffman WC, editor. Statistical Methods in Radio Wave Propagation [Internet]. Pergamon; 1960 [cited 2021 Jul 6]. p. 3–36. Available from: https://www.sciencedirect.com/science/article/pii/B9780080093062500054
+4. O’Neill B. Some Useful Moment Results in Sampling Problems. The American Statistician [Internet]. 2014 Oct 2 [cited 2021 Jul 3];68(4):282–96. Available from: https://doi.org/10.1080/00031305.2014.966589
+
+
+### Serial interval source citations
+
+```{r results="asis"}
+tmp = ukcovidtools::serialIntervalEstimates %>% filter(estimate_type == "serial interval" & assumed_distribution %in% c("gamma","lnorm","norm")) %>% select(label,source) %>% distinct() %>% mutate(source = paste0(label,"\n  ~ ",source)) %>% pull(source)
+cat(paste0(tmp,collapse = "\n\n"))
+```

@@ -29,7 +29,8 @@ Imports:
     ggspatial,
     sf,
     metR,
-    patchwork
+    patchwork,
+    nakagami
 Remotes: 
     thomasp85/patchwork
 Suggests: 

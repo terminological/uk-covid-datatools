@@ -264,7 +264,16 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     message("Using: ",path)
     tmp = self$getSaved("DEATHS-LINE-LIST", params = list(path), ..., orElse = function (...) {
       
-      tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text")
+      if (stringr::str_detect(path,"zip")) {
+        tmpFile = self$fileProvider$getFile(path)
+        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".xlsx")
+        unzipped = unzip(tmpFile, junkpaths = TRUE,exdir = tempdir())
+        tmp = readxl::read_excel(unzipped, col_types = "text")
+      } else {
+        tmp = readxl::read_excel(self$fileProvider$getFile(path), col_types = "text")
+      }
+      
+      
       datecols = c(colnames(tmp) %>% stringr::str_subset("date"),"dod")
       
       for(datecol in datecols) {
