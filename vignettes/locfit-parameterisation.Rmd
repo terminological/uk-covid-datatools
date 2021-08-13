@@ -1,0 +1,156 @@
+---
+title: "Parameterising locfit"
+author: "Rob Challen"
+date: "02/08/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+devtools::load_all()
+d = ukcovidtools::fitTestData
+tmp = d
+
+```
+
+```{r}
+createModel = function(window = 21, polynomialDegree = 1, nearestNeigbours = TRUE, adaptive=FALSE, acri="ici", adpen= 1.1, ...) {
+  
+  tmp_alpha = min(window/nrow(tmp),1)
+  tmp_alpha_2 = min(window*2/nrow(tmp),1)
+  
+  if (adaptive) {
+    lpParams = list(
+      #nn = 0,
+      #h = 0,
+      adpen = adpen,
+      acri = paste0(c('"',acri,'"')),
+      deg = polynomialDegree
+    )
+  } else {
+    lpParams = list(
+      nn = if( nearestNeigbours ) tmp_alpha_2 else 0, # this is given in fraction of total observations
+      h = if( !nearestNeigbours ) window else 0, # this is given in units of X
+      deg = polynomialDegree
+    )
+  }
+  
+  lpParamsText = paste(names(lpParams),lpParams,sep="=",collapse=", ")
+  lpFormula = as.formula(paste0(c("value ~ locfit::lp(time, ",lpParamsText,")")))
+  lpFormula
+  
+  tmp_intercept_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", weights = tmp$weights, ev=tmp$time)
+  return(tmp_intercept_model)
+}
+```
+
+```{r}
+
+
+
+plotModel = function(model, logScale=TRUE) {
+tmp_intercept = predict(model, band="global", se.fit=TRUE, where="fitp")
+
+d$Est.value = ifelse(tmp_intercept$fit < 0, 0, tmp_intercept$fit) # prevent negative smoothing.
+d$Est.SE.value = tmp_intercept$se.fit
+
+# if(any(is.na(tmp_intercept$fit))) 
+#   tmp_intercept = predict(tmp_intercept_model, d$time, band="global", se.fit=TRUE)
+if(any(is.na(tmp_intercept$fit))) 
+  browser()
+p = ggplot(d,aes(x=date))+
+  geom_line(mapping=aes(y=Est.value))+
+  geom_point(mapping=aes(y=value.original),size=0.5)
+if(logScale) p = p +
+  scale_y_continuous(trans="log1p")
+return(p)
+}
+```
+
+
+```{r}
+createModel() %>% plotModel()
+```
+
+```{r}
+createModel(window=14, polynomialDegree = 1,nearestNeigbours = FALSE) %>% plotModel()
+```
+```{r}
+library(locfit)
+
+adapt = createModel(adaptive = TRUE,adpen = 0.9) 
+#pred = predict(adapt, band="global", se.fit=TRUE, where="fitp")
+#pred$fit
+
+adapt %>% plotModel()
+
+```
+
+
+
+```{r}      
+tmp_slope_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
+tmp_slope = predict(tmp_slope_model, band="global", se.fit=TRUE, where="fitp")
+            
+# if(any(is.na(tmp_slope$fit))) 
+#   tmp_slope = predict(tmp_slope_model, d$time, band="global", se.fit=TRUE)
+if(any(is.na(tmp_slope$fit))) 
+  browser()
+
+# browser()
+# https://stats.stackexchange.com/questions/62006/definition-of-dispersion-parameter-for-quasipoisson-family
+
+absRes = d$value - tmp_intercept$fit
+d$Est.error = (absRes %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE))/tmp_intercept$fit
+# Pearson residuals assuming poisson
+# pearson = sqrt(absRes^2/tmp_intercept$fit)
+# d$Est.dispersion = pearson %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE)
+# Deviance residuals
+
+# https://stats.stackexchange.com/questions/99065/why-are-pearsons-residuals-from-a-poisson-regression-so-large
+# Deviance residuals
+deviance = d$value * log(d$value/tmp_intercept$fit) + (tmp_intercept$fit-d$value)
+d$Est.dispersion = deviance %>% slider::slide_dbl( .f = mean, .before = floor(window/2), .after = floor(window/2), .complete = FALSE, na.rm=TRUE)
+# possibly this is not accounting for df and should be multiplied by 
+
+
+# https://statweb.stanford.edu/~jtaylo/courses/stats306b/restricted/notebooks/quasilikelihood.pdf
+
+
+
+d$Growth.value = tmp_slope$fit #ifelse(tmp_intercept$fit < 0, 0, tmp_slope$fit) # prevent growth when case numbers are zero.
+d$Growth.SE.value = tmp_slope$se.fit
+
+if(polynomialDegree > 1) {
+  # if the locfit model supports second derivative then grab it
+  tmp_slope2_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", deriv=c(1,1), weights = tmp$weights, ev=d$time)
+  tmp_slope2 = predict(tmp_slope2_model, band="global", se.fit=TRUE, where="fitp")
+  d$Growth.derivative = tmp_slope2$fit #ifelse(tmp_intercept$fit < 0, 0, tmp_slope$fit) # prevent growth when case numbers are zero.
+  d$Growth.SE.derivative = tmp_slope2$se.fit
+} else {
+  # otherwise estimate directly
+  d$Growth.derivative = signal::sgolayfilt(d$Growth.value, p = 1, n = floor(window/2)*2+1, m = 1)
+  d$Growth.SE.derivative = NA_real_
+}
+            
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

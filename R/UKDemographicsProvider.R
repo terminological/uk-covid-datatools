@@ -95,7 +95,7 @@ UKDemographicsProvider = R6::R6Class("UKDemographicsProvider", inherit=DataProvi
         ) %>% select(-`2011 Census Supergroup`,-Total) %>%
         filter(!is.na(code)) %>%
         mutate(
-          `Afro-carribbean` = `Black / African / Caribbean / Black British`,
+          `Afro-caribbean` = `Black / African / Caribbean / Black British`,
           `Asian` = `Asian / Asian British`,
           `White` = `White British`+`All Other White`,
           `Other` = `Other ethnic group`+`Mixed / Multiple ethnic groups`

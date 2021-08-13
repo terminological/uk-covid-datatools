@@ -404,8 +404,13 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     path = self$getLatest(self$filter$vamLineList)
     message("Using: ",path)
     tmp = self$getSaved("VAM", params = list(path), ...,  orElse = function (...) {
-      tmp = self$fileProvider$getFile(path)
-      tmp2 = readr::read_csv(tmp, col_types = readr::cols(.default = readr::col_character()))
+      if (stringr::str_detect(path,"zip")) {
+        tmpFile = self$fileProvider$getFile(path)
+        zipPath = fs::path_file(path) %>% stringr::str_replace("\\.zip",".csv")
+        tmp2 = readr::read_csv(unz(tmpFile, filename=zipPath), col_types = readr::cols(.default = readr::col_character()))
+      } else {
+        tmp2 = readr::read_csv(self$fileProvider$getFile(path), col_types = readr::cols(.default = readr::col_character()))
+      }
       # tmp2 = tmp2 %>% mutate(genomic_specimen_date = suppressWarnings(as.Date(genomic_specimen_date,"%Y%m%d")))
       datecols = colnames(tmp2)[colnames(tmp2) %>% stringr::str_detect("date|_at")]
       for(datecol in datecols) {
@@ -418,7 +423,6 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       tmp2 = tmp2 %>% mutate(
         age = suppressWarnings(as.integer(age))
       )
-      if(file.exists(tmp)) unlink(tmp)
       return(tmp2)
     })
     attr(tmp,"paths") = path

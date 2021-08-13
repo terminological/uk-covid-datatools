@@ -685,7 +685,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param weekendEffect - the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay
   #' @param polynomialDegree - improves fit at risk of overfitting. default 1 (linear)
   #' @return a dataframe with groupwise growth rate estimates
-  estimateGrowthRate2 = function(covidTimeseries, window = 21, ...) {
+  estimateGrowthRate2 = function(covidTimeseries, window = 14, ...) {
     message("This function is deprecated: switch estimateGrowthRate2() to estimateGrowthRate() or estimatePoissonGrowthRate()")
     self$estimateGrowthRate(covidTimeseries, window, ...)
   },
@@ -696,7 +696,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
   #' @param weekendEffect - the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay
   #' @param polynomialDegree - improves fit at risk of overfitting. default 1 (linear)
   #' @return a dataframe with groupwise growth rate estimates
-  estimateGrowthRate = function(covidTimeseries, window = 21, weekendEffect = 0.75, polynomialDegree = 1, ...) {
+  estimateGrowthRate = function(covidTimeseries, window = 14, weekendEffect = 0.75, polynomialDegree = 1, nearestNeigbours = FALSE, ... ) {
     self$getHashCached(object = covidTimeseries, operation="ESTIM-LITTLE-R-2", params=list(window, weekendEffect, polynomialDegree), ... , orElse = function (ts, ...) {covidTimeseriesFormat %def% {
       
       groupedDf = covidTimeseriesFormat(covidTimeseries) %>%
@@ -732,11 +732,18 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           
           tmp_alpha = min(window/nrow(d),1)
           tmp_alpha_2 = min(window*2/nrow(d),1)
+          lpParams = list(
+            nn = if( nearestNeigbours ) tmp_alpha_2 else tmp_alpha, # this is given in fraction of total observations
+            h = if( !nearestNeigbours ) window else 0, # this is given in units of X
+            deg = polynomialDegree
+          )
+          lpParamsText = paste(names(lpParams),lpParams,sep="=",collapse=", ")
+          lpFormula = as.formula(paste0(c("value ~ locfit::lp(time, ",lpParamsText,")")))
           
           suppressWarnings({
             #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
             
-            tmp_intercept_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
+            tmp_intercept_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
             tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
             
             # if(any(is.na(tmp_intercept$fit))) 
@@ -744,7 +751,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             if(any(is.na(tmp_intercept$fit))) 
               browser()
             
-            tmp_slope_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
+            tmp_slope_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
             tmp_slope = predict(tmp_slope_model, band="global", se.fit=TRUE, where="fitp")
             
             # if(any(is.na(tmp_slope$fit))) 
@@ -779,7 +786,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             
             if(polynomialDegree > 1) {
               # if the locfit model supports second derivative then grab it
-              tmp_slope2_model = locfit::locfit(value ~ locfit::lp(time, nn=tmp_alpha_2, deg=polynomialDegree), tmp, family="qpois", link="log", deriv=c(1,1), weights = tmp$weights, ev=d$time)
+              tmp_slope2_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", deriv=c(1,1), weights = tmp$weights, ev=d$time)
               tmp_slope2 = predict(tmp_slope2_model, band="global", se.fit=TRUE, where="fitp")
               d$Growth.derivative = tmp_slope2$fit #ifelse(tmp_intercept$fit < 0, 0, tmp_slope$fit) # prevent growth when case numbers are zero.
               d$Growth.SE.derivative = tmp_slope2$se.fit
@@ -792,9 +799,6 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           })
           
         }
-        
-        #TODO: quasi-poisson model must have some overdispertion parameters in there somewhere which we are not surfacing.
-        #also makes confidence interval calculations below questionable.
         
         d$Growth.ProbPos = 1-pnorm(0,mean=d$Growth.value,sd=d$Growth.SE.value)
         
@@ -1413,17 +1417,28 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(p2)
   },
   
-  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=NULL, ilim=NULL, maxSize=6, ...) {
+  minMaxDate = function(groupedCovidRtTimeseries, buffer = 0) {
+    return(as.Date(groupedCovidRtTimeseries %>% summarise(p = max(date,na.rm = TRUE)) %>% pull(p) %>% min(na.rm = TRUE) - buffer, "1970-01-01"))
+  },
+  
+  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=NULL, ilim=NULL, size=1, ...) {
     colour = enexpr(colour)
     shape = enexpr(shape)
+    if(length(maxAlpha==1)) maxAlpha = c(maxAlpha,maxAlpha)
     
     grps = groupedCovidRtTimeseries %>% groups()
     if (length(grps)==0) grps = list(as.symbol("code"))
     
-    if (identical(plotDates, NULL)) plotDates = (groupedCovidRtTimeseries %>% summarise(p = max(date,na.rm = TRUE)) %>% pull(p) %>% min(na.rm = TRUE)) - 3
+    if (identical(plotDates, NULL)) {
+      plotDates = self$minMaxDate(groupedCovidRtTimeseries)
+    } else {
+      if (all(plotDates <= 0)) plotDates = self$minMaxDate(groupedCovidRtTimeseries) + plotDates
+    }
     plotDates = as.Date(plotDates)
     
-    if (!all(c("Est.value", "Est.Quantile.0.025.value", "Est.Quantile.0.975.value","Growth.value", "Growth.Quantile.0.025.value", "Growth.Quantile.0.975.value") %in% colnames(groupedCovidRtTimeseries))) {
+    if (
+        !all(c("Est.value", "Est.Quantile.0.025.value", "Est.Quantile.0.975.value","Growth.value", "Growth.Quantile.0.025.value", "Growth.Quantile.0.975.value") %in% colnames(groupedCovidRtTimeseries))
+    ) {
       df = covidTimeseriesFormat(groupedCovidRtTimeseries)  %>% 
         dplyr::filter(type=="incidence") %>%
         self$estimateGrowthRate(...)
@@ -1440,7 +1455,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     subsetDf = bind_rows(lapply(plotDates, function(plotDate) {
       if (max(df$date) < plotDate) stop("Max supported plot date is: ",max(df$date))
-      return(df %>% filter(date <= plotDate & date > plotDate-timespan) %>% mutate(plotDate = plotDate, timeOffset = as.numeric(plotDate-date), fade=(timespan-as.numeric(plotDate-date))/timespan))
+      return(df %>% filter(date <= plotDate & date > plotDate-timespan) %>% mutate(
+        plotDate = plotDate, 
+        timeOffset = as.numeric(plotDate-date), 
+        fade=(timespan-as.numeric(plotDate-date))/timespan))
     }))
     
     
@@ -1510,24 +1528,26 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     p2 = p2 +
       geom_vline(xintercept = 0, colour="grey40")
     if(showConfInt) p2 = p2 +  
-      geom_errorbar(data = points,mapping=aes(ymin=incidenceLow, ymax=incidenceHi),colour="grey50",size=0.5,alpha=0.5,width=0)+
-      geom_errorbar(data = points,mapping=aes(xmin=growthLow, xmax= growthHi),colour="grey50",size=0.5,alpha=0.5,width=0)
+      geom_errorbar(data = points,mapping=aes(ymin=incidenceLow, ymax=incidenceHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)+
+      geom_errorbar(data = points,mapping=aes(xmin=growthLow, xmax= growthHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)
     p2 = p2+
-      geom_path(aes(alpha=fade),linejoin = "round",lineend = "round")
+      geom_path(aes(alpha=fade*maxAlpha[2]),linejoin = "round",lineend = "round")
       
     if(showHistorical) {
-      p2 = p2 + geom_point(data=subsetDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId,alpha=fade,!!!variable),stat="identity",position="identity",!!!fixed)
+      p2 = p2 + geom_point(data=subsetDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!!fixed)
     } else {
-      p2 = p2 + geom_point(data=points, mapping=aes(x=growth, y=incidence, group=tmpGrpId,!!!variable),stat="identity",position="identity",!!!fixed)
+      p2 = p2 + geom_point(data=points, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!!fixed)
     }
     
     p2 = p2 +
       scale_y_continuous(trans="log1p", breaks=ukcovidtools::breaks_log1p())+
       scale_x_continuous(sec.axis = dup_axis( breaks = log(2)/c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), labels = c(2,3,5,7,14,Inf,-14,-7,-5,-3,-2), name="doubling time"))+
-      scale_alpha_continuous(range=c(0,maxAlpha),guide="none")+
+      scale_alpha_identity(guide="none")+
       coord_cartesian(xlim=rlim, ylim=ilim)
     
     if (populationAdj) p2 = p2+ylab("incidence/1M")
+    
+    p2=p2+facet_wrap(vars(plotDate))
     
     #browser()  
     return(p2)
@@ -1581,7 +1601,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     ))
   },
 
-  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates(1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), ...) {
+  plotIncidenceQuantiles = function(covidTimeseries, denominatorExpr=NULL, colour=NULL, events = self$datasets$getSignificantDates(1), dates=NULL, ribbons=TRUE, ylim=c(0,NA), pointSize=0.25, ...) {
     
     if (!all(c("Est.value", "Est.Quantile.0.025.value", "Est.Quantile.0.975.value", "Est.Quantile.0.25.value", "Est.Quantile.0.75.value") %in% colnames(covidTimeseries))) {
       df = covidTimeseriesFormat(covidTimeseries)  %>% 
@@ -1628,7 +1648,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           geom_ribbon(aes(ymin=yMin1, ymax=yMax1, group=!!colour, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
           geom_ribbon(aes(ymin=yMin2, ymax=yMax2, group=!!colour, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
-        geom_point(aes(y=y,colour=!!colour),size=0.25, alpha=0.5, shape=16,show.legend = FALSE)+
+        geom_point(aes(y=y,colour=!!colour),size=pointSize, alpha=0.5, shape=16,show.legend = FALSE)+
         geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
         geom_line(aes(y=yMid,colour=!!colour,...))
     } else {
@@ -1638,7 +1658,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
         geom_ribbon(aes(ymin=yMin1, ymax=yMax1, ...),colour = NA,fill="black",alpha=0.05,show.legend = FALSE) +
         geom_ribbon(aes(ymin=yMin2, ymax=yMax2, ...),colour = NA,fill="black",alpha=0.065,show.legend = FALSE)
       p2 = p2 + 
-        geom_point(aes(y=y),colour="black",size=0.25, alpha=0.5, shape=16,show.legend = FALSE)+
+        geom_point(aes(y=y),colour="black",size=pointSize, alpha=0.5, shape=16,show.legend = FALSE)+
         geom_point(data=df %>% filter(Anomaly),mapping=aes(x=date,y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
         geom_line(data=df,mapping=aes(x=date,y=yMid,...))
     }
