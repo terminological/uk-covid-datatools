@@ -20,6 +20,7 @@ Caching and dataset management
 \item \href{#method-download}{\code{DataProvider$download()}}
 \item \href{#method-downloadDaily}{\code{DataProvider$downloadDaily()}}
 \item \href{#method-normaliseGender}{\code{DataProvider$normaliseGender()}}
+\item \href{#method-normaliseDemographics}{\code{DataProvider$normaliseDemographics()}}
 \item \href{#method-normaliseAgeCat}{\code{DataProvider$normaliseAgeCat()}}
 \item \href{#method-cutByAge}{\code{DataProvider$cutByAge()}}
 \item \href{#method-breakFromCats}{\code{DataProvider$breakFromCats()}}
@@ -41,6 +42,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New provider pipeline
 \subsection{Usage}{
@@ -62,6 +64,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-downloadAndUnzip"></a>}}
+\if{latex}{\out{\hypertarget{method-downloadAndUnzip}{}}}
 \subsection{Method \code{downloadAndUnzip()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$downloadAndUnzip(id, url, pattern)}\if{html}{\out{</div>}}
@@ -70,6 +73,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-downloadAndUntar"></a>}}
+\if{latex}{\out{\hypertarget{method-downloadAndUntar}{}}}
 \subsection{Method \code{downloadAndUntar()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$downloadAndUntar(id, url, pattern)}\if{html}{\out{</div>}}
@@ -78,6 +82,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-download"></a>}}
+\if{latex}{\out{\hypertarget{method-download}{}}}
 \subsection{Method \code{download()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$download(id, url, type = "csv")}\if{html}{\out{</div>}}
@@ -86,6 +91,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-downloadDaily"></a>}}
+\if{latex}{\out{\hypertarget{method-downloadDaily}{}}}
 \subsection{Method \code{downloadDaily()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$downloadDaily(id, url, type = "csv")}\if{html}{\out{</div>}}
@@ -94,6 +100,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-normaliseGender"></a>}}
+\if{latex}{\out{\hypertarget{method-normaliseGender}{}}}
 \subsection{Method \code{normaliseGender()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$normaliseGender(gender, na.value = NA_character_)}\if{html}{\out{</div>}}
@@ -101,7 +108,23 @@ the provider
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-normaliseDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-normaliseDemographics}{}}}
+\subsection{Method \code{normaliseDemographics()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProvider$normaliseDemographics(
+  df,
+  genderVars = c("gender", "sex"),
+  ethnicityVars = c("ethnicity_final", "ethnicity_category", "ethnicity_full"),
+  residentialVars = c("cat", "residence_type"),
+  na.value = NA_character_
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-normaliseAgeCat"></a>}}
+\if{latex}{\out{\hypertarget{method-normaliseAgeCat}{}}}
 \subsection{Method \code{normaliseAgeCat()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$normaliseAgeCat(ageCat)}\if{html}{\out{</div>}}
@@ -110,6 +133,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-cutByAge"></a>}}
+\if{latex}{\out{\hypertarget{method-cutByAge}{}}}
 \subsection{Method \code{cutByAge()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$cutByAge(age, ageBreaks = NULL)}\if{html}{\out{</div>}}
@@ -118,6 +142,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-breakFromCats"></a>}}
+\if{latex}{\out{\hypertarget{method-breakFromCats}{}}}
 \subsection{Method \code{breakFromCats()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$breakFromCats(ageCat)}\if{html}{\out{</div>}}
@@ -126,6 +151,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-labelsFromBreaks"></a>}}
+\if{latex}{\out{\hypertarget{method-labelsFromBreaks}{}}}
 \subsection{Method \code{labelsFromBreaks()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$labelsFromBreaks(ageBreaks)}\if{html}{\out{</div>}}
@@ -134,14 +160,15 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-ageCatToFactor"></a>}}
+\if{latex}{\out{\hypertarget{method-ageCatToFactor}{}}}
 \subsection{Method \code{ageCatToFactor()}}{
 ordered factor from age range labels
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProvider$ageCatToFactor(
   ageCat,
-  ageLabels = c("0-4", "<5", "5-9", "5-14", "10-14", "15-19", "15-24", "20-24", "25-29",
-    "25-34", "30-34", "35-39", "35-44", "40-44", "45-49", "45-54", "50-54", "55-59",
-    "55-64", "60-64", "65-69", "65-74", "70-74", "75-79", "75-84", "80+", "85+",
+  ageLabels = c("0-4", "<5", "5-9", "5-14", "10-14", "15-19", "15-24", "20-24",
+    "25-29", "25-34", "30-34", "35-39", "35-44", "40-44", "45-49", "45-54", "50-54",
+    "55-59", "55-64", "60-64", "65-69", "65-74", "70-74", "75-79", "75-84", "80+", "85+",
     "unknown")
 )}\if{html}{\out{</div>}}
 }
@@ -161,6 +188,7 @@ an ordered factor of age categories
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-ageToAgeCat"></a>}}
+\if{latex}{\out{\hypertarget{method-ageToAgeCat}{}}}
 \subsection{Method \code{ageToAgeCat()}}{
 create an ordered factor of ages from a continuous age
 \subsection{Usage}{
@@ -186,6 +214,7 @@ an ordered factor of age categories
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

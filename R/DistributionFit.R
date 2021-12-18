@@ -170,6 +170,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   
   withSingleDistribution = function(dist, paramDf, bootstraps = 1000, epiestimMode = FALSE, ...) {
     dots = rlang::list2(...)
+    currentBS = max(c(self$bootstraps$bootstrapNumber,0))
     distParams = names(DistributionFit$conversionFrom[[dist]])
     # is the distribution fully specified in terms of the native parameters for that distribution?
     if (all(distParams %in% paramDf$param) & !any(is.na(c(paramDf$mean,paramDf$sd)))) {
@@ -187,12 +188,12 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
         print(list(mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper))
         if (!is.null(d$lower) & !is.null(d$upper) & is.finite(d$lower) & is.finite(d$upper)) {
           return(tibble(
-            bootstrapNumber = 1:bootstraps,
+            bootstrapNumber = (1:bootstraps)+currentBS,
             value = msm::rtnorm(n=bootstraps, mean = d$mean, sd = d$sd, lower = d$lower, upper = d$upper)
           ))
         } else {
           return(tibble(
-            bootstrapNumber = 1:bootstraps,
+            bootstrapNumber = (1:bootstraps)+currentBS,
             value = rnorm(n=bootstraps, mean = d$mean, sd = d$sd)
           ))
         }
@@ -204,6 +205,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
       # Creating a set of bootstraps here is done by use moments to infer sampling distribution of mean and
       # standard deviation and sampling in the mean / sd space.
       converted = DistributionFit$convertParameters(dist = dist, paramDf = paramDf, bootstraps = bootstraps, epiestimMode = epiestimMode, ...)
+      converted$bootstraps = converted$bootstraps %>% mutate(bootstrapNumber = bootstrapNumber+currentBS)
       self$bootstraps = self$bootstraps %>% bind_rows(converted$bootstraps %>% mutate(...))
       self$fittedModels = self$fittedModels %>% bind_rows(converted$fittedModels %>% mutate(...))
     } else {
@@ -218,9 +220,9 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
   fromBootstrappedDistributions = function(fittedDistributions, confint=c(0.025,0.975), ...) {
     self$setModels(unique(fittedDistributions$dist))
     cols = colnames(fittedDistributions)
-    grps = sapply(cols[!(cols %in% c("bootstrapNumber","dist","param","value"))], as.symbol)
+    self$grps = unname(sapply(cols[!(cols %in% c("bootstrapNumber","dist","param","value"))], as.symbol))
     self$bootstraps = fittedDistributions
-    self$fittedModels = fittedDistributions %>% group_by(!!!grps,dist,param) %>% summarise(mean=mean(value),sd=sd(value),lower=quantile(value,confint[1]),upper=quantile(value,confint[2]))
+    self$fittedModels = fittedDistributions %>% group_by(!!!self$grps,dist,param) %>% summarise(mean=mean(value),sd=sd(value),lower=quantile(value,confint[1]),upper=quantile(value,confint[2])) %>% ungroup() %>% group_by(!!!self$grps)
     self$censored = FALSE
   },
   
@@ -697,12 +699,17 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     else return(tmp)
   },
   
-  discreteProbabilities = function(q, summarise=TRUE) {
+  discreteProbabilities = function(q, summarise=TRUE, truncate=FALSE) {
     tmp = self$calculateCumulativeDistributions(q, summarise=FALSE) %>% ungroup() %>% 
       group_by(across(c(-value,-cumulative))) %>% 
       arrange(value) %>%
       mutate(discreteProbability = cumulative-lag(cumulative, default = 0)) %>%
       select(-cumulative)
+    if (truncate) {
+      tmp = tmp %>%
+        group_by(across(c(-value,-discreteProbability))) %>%
+        mutate(discreteProbability = discreteProbability/sum(discreteProbability))
+    }
     if (summarise) return(tmp %>% self$sevenNumbers(discreteProbability))
     else return(tmp)
   },
@@ -762,7 +769,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     ) %>% mutate(
       `Distribution` = ifelse(shift>0, paste0(`Distribution`, "(shifted ",shift,")"), `Distribution`)
     )
-    return(tmp)
+    return(tmp %>% group_by(!!!grps))
   },
   
   printDistributionDetail = function(confint = c(0.025,0.975)) {
@@ -783,7 +790,7 @@ DistributionFit = R6::R6Class("DistributionFit", inherit=PassthroughFilesystemCa
     if ("n" %in% names(tmp)) tmp = tmp %>% mutate(n = first(na.omit(n)))
     if ("bic" %in% names(tmp)) tmp = tmp %>% mutate(bic= first(na.omit(bic)))
     if ("loglik" %in% names(tmp)) tmp = tmp %>% mutate(loglik= first(na.omit(loglik)))
-    return(tmp)
+    return(tmp %>% group_by(!!!grps))
   },
   
   ## TODO: integrate following functions: ----
@@ -1109,7 +1116,7 @@ DistributionFit$convertParameters = function(
       # we need to infer shape parameters for nakagmai distribution from moments
       # we actually have more information that we need to do this as scale is fixed
       # however the expression is a bit of a pig and needs to be solved numerically
-      browser()
+      # browser()
       fn = function(tmp_shape) nakaSd(tmp_shape, sdScale)-sdOfSd
       root = uniroot(f = fn, lower = 0.5, upper = 10000, extendInt="yes", check.conv=FALSE)
       sdShape = root$root

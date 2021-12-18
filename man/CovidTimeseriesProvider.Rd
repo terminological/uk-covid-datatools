@@ -23,6 +23,7 @@ General covid  processing
 \item \href{#method-fillAbsentAllRegions}{\code{CovidTimeseriesProvider$fillAbsentAllRegions()}}
 \item \href{#method-fillAbsentByRegion}{\code{CovidTimeseriesProvider$fillAbsentByRegion()}}
 \item \href{#method-fixDatesAndNames}{\code{CovidTimeseriesProvider$fixDatesAndNames()}}
+\item \href{#method-fixDates}{\code{CovidTimeseriesProvider$fixDates()}}
 \item \href{#method-timeseriesQA}{\code{CovidTimeseriesProvider$timeseriesQA()}}
 \item \href{#method-describeErrors}{\code{CovidTimeseriesProvider$describeErrors()}}
 \item \href{#method-describe}{\code{CovidTimeseriesProvider$describe()}}
@@ -46,12 +47,14 @@ General covid  processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New timeseries provider pipeline
 \subsection{Usage}{
@@ -73,6 +76,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-setTruncation"></a>}}
+\if{latex}{\out{\hypertarget{method-setTruncation}{}}}
 \subsection{Method \code{setTruncation()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$setTruncation(listDays)}\if{html}{\out{</div>}}
@@ -81,6 +85,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-trimNAs"></a>}}
+\if{latex}{\out{\hypertarget{method-trimNAs}{}}}
 \subsection{Method \code{trimNAs()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$trimNAs(r0Timeseries)}\if{html}{\out{</div>}}
@@ -89,6 +94,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-complete"></a>}}
+\if{latex}{\out{\hypertarget{method-complete}{}}}
 \subsection{Method \code{complete()}}{
 Take a set of timeseries and add in missing dates as NAs. Preserves source, type, statistic differences in timeseries length. 
 intially Fills all regions to be the same length but with trim trailing NAs
@@ -102,6 +108,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-completeAllRegions"></a>}}
+\if{latex}{\out{\hypertarget{method-completeAllRegions}{}}}
 \subsection{Method \code{completeAllRegions()}}{
 Take a set of timeseries and add in missing dates as NAs. Preserves source, type, statistic differences in timeseries length. 
 intially Fills all regions to be the same length but with trim trailing NAs
@@ -115,6 +122,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fillAbsent"></a>}}
+\if{latex}{\out{\hypertarget{method-fillAbsent}{}}}
 \subsection{Method \code{fillAbsent()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$fillAbsent(covidTimeseries, completeDates = FALSE)}\if{html}{\out{</div>}}
@@ -123,6 +131,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fillAbsentAllRegions"></a>}}
+\if{latex}{\out{\hypertarget{method-fillAbsentAllRegions}{}}}
 \subsection{Method \code{fillAbsentAllRegions()}}{
 Take a set of regional timeseries, finds the full list of regions and the whole timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
 explicitly filling in missing values. This is suitable for use for a incidence derived from a line list where some dates and regions will not be observed
@@ -136,6 +145,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fillAbsentByRegion"></a>}}
+\if{latex}{\out{\hypertarget{method-fillAbsentByRegion}{}}}
 \subsection{Method \code{fillAbsentByRegion()}}{
 Take a set of timeseries and fills any missing values with zero (if incidence) or the previous value (if cumulative)
 explicitly filling in zeros for missing values. This is suitable for use for a incidence derived from a line list where some dates will not be
@@ -150,6 +160,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fixDatesAndNames"></a>}}
+\if{latex}{\out{\hypertarget{method-fixDatesAndNames}{}}}
 \subsection{Method \code{fixDatesAndNames()}}{
 Take a set of timeseries and fixes any non standard names, truncates time series by truncate days. 
 intially Fills all regions to be the same length but with trim trailing NAs
@@ -162,7 +173,22 @@ a covidTimeseriesFormat dataframe
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-fixDates"></a>}}
+\if{latex}{\out{\hypertarget{method-fixDates}{}}}
+\subsection{Method \code{fixDates()}}{
+Take a set of timeseries and fixes any non standard names, truncates time series by truncate days. 
+intially Fills all regions to be the same length but with trim trailing NAs
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$fixDates(covidTimeseries, truncate = NULL)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-timeseriesQA"></a>}}
+\if{latex}{\out{\hypertarget{method-timeseriesQA}{}}}
 \subsection{Method \code{timeseriesQA()}}{
 Check timeseries conforms
 \subsection{Usage}{
@@ -172,6 +198,7 @@ Check timeseries conforms
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-describeErrors"></a>}}
+\if{latex}{\out{\hypertarget{method-describeErrors}{}}}
 \subsection{Method \code{describeErrors()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$describeErrors(covidTimeseries, valueVar = "value")}\if{html}{\out{</div>}}
@@ -180,6 +207,7 @@ Check timeseries conforms
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-describe"></a>}}
+\if{latex}{\out{\hypertarget{method-describe}{}}}
 \subsection{Method \code{describe()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CovidTimeseriesProvider$describe(covidTimeseries, ...)}\if{html}{\out{</div>}}
@@ -188,6 +216,7 @@ Check timeseries conforms
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -689,6 +689,23 @@ UKCodeMappingProvider = R6::R6Class("UKCodeMappingProvider", inherit=DataProvide
     if(nrow(tmp2) > nrow(df)) message("Some codes have more than one parents, i.e. hierarchical nesting is not one to one and duplicates have been created.")
     tmp2 = tmp2 %>% self$findNamesByCode(codeVar = !!parentCodeVar, outputNameVar = !!parentNameVar, outputCodeTypeVar = !!parentCodeTypeVar, codeTypes = parentCodeTypes)
     return(tmp2)
+  },
+  
+  getHRGCodes = function(...) {
+    out = self$getSaved("HRG_CODES",..., orElse = function(...) {
+      zipFile = tempfile()
+      download.file(
+        "https://nhs-prod.global.ssl.fastly.net/binaries/content/assets/website-assets/services/national-casemix-office/hrg4-2020-21-local-payment-grouper-v2-covid-19/hrg4-202021-local-payment-grouper-covid19-code-to-group-v2.zip",
+        destfile = zipFile
+      )
+      zipContents = archive::archive(zipFile)
+      unzipDir = tempdir()
+      archive::archive_extract(zipFile,files = 1, unzipDir)
+      hrgs = readxl::read_excel(fs::path(unzipDir, zipContents$path[[1]]), sheet="HRG")
+      colnames(hrgs) = c("code","description","status")
+      return(hrgs)
+    })
+    return(out)
   }
 ))
 

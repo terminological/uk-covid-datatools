@@ -40,12 +40,14 @@ Process chess data
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New chess processing pipeline
 \subsection{Usage}{
@@ -67,6 +69,7 @@ the processor
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-chessQuality"></a>}}
+\if{latex}{\out{\hypertarget{method-chessQuality}{}}}
 \subsection{Method \code{chessQuality()}}{
 Chess data metrics on a hospital by hospital basis
 \subsection{Usage}{
@@ -96,6 +99,7 @@ a data frame of stats by trust representing reporting quality.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-chessItuSubset"></a>}}
+\if{latex}{\out{\hypertarget{method-chessItuSubset}{}}}
 \subsection{Method \code{chessItuSubset()}}{
 The subset of the CHESS data of patients which are admitted to ITU
 
@@ -125,6 +129,7 @@ a data frame of stats by trust representing reporting quality.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-chessAdmissionSubset"></a>}}
+\if{latex}{\out{\hypertarget{method-chessAdmissionSubset}{}}}
 \subsection{Method \code{chessAdmissionSubset()}}{
 The subset of the CHESS data of patients from hospitals that appear to be reporting all admissions
 
@@ -154,6 +159,7 @@ a data frame of stats by trust representing reporting quality.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-chessDefaultFilter"></a>}}
+\if{latex}{\out{\hypertarget{method-chessDefaultFilter}{}}}
 \subsection{Method \code{chessDefaultFilter()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ChessProcessingPipeline$chessDefaultFilter(CHESSdf = self$getCHESS(), ...)}\if{html}{\out{</div>}}
@@ -162,6 +168,7 @@ a data frame of stats by trust representing reporting quality.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-cleanseCHESSData"></a>}}
+\if{latex}{\out{\hypertarget{method-cleanseCHESSData}{}}}
 \subsection{Method \code{cleanseCHESSData()}}{
 Cleanses CHESS data set and adds a few fields
 
@@ -190,6 +197,7 @@ cleansed CHESS data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -15,6 +15,92 @@ SPIM private data
 ## ------------------------------------------------
 
 coxData = coxData \%>\% interpretSGene()
+#' @description Load incidence from line list
+#' 
+#' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+#' @return a covidTimeseriesFormat dataframe
+getLineListIncidence = function(ll=NULL, ageBreaks = NULL, gender=FALSE, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
+  filterExpr = enexpr(filterExpr)
+  subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
+  if(!identical(ll,NULL)) {
+    tmp = ll  \%>\% collect()
+  } else {
+    tmp = self$getLineList(...) \%>\% collect()
+  }
+  path = attr(tmp,"paths")
+  out2 = self$getSaved("LINE-LIST-INCIDENCE", params=list(tmp, ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes, gender), ..., orElse = function (...) covidTimeseriesFormat({
+    if(!identical(filterExpr,NULL)) 
+      tmp = tmp \%>\% filter(!!filterExpr)
+    tmp = tmp \%>\% dplyr::mutate(ageCat = age \%>\% self$cutByAge(ageBreaks)) 
+    if (gender) {
+      tmp = tmp \%>\% dplyr::mutate(gender=self$normaliseGender(sex))
+    } else {
+      tmp = tmp \%>\% dplyr::mutate(gender=NA_character_)
+    }
+    if(!identical(subgroup,NULL)) {
+      tmp = tmp \%>\% dplyr::mutate(subgroup=!!subgroup)
+    } else {
+      tmp = tmp \%>\% dplyr::mutate(subgroup=NA_character_)
+    }
+    if(specimenOrReport == "report")
+      tmp = tmp \%>\% dplyr::mutate(date = as.Date(lab_report_date))
+    else
+      tmp = tmp \%>\% dplyr::mutate(date = as.Date(specimen_date))
+    
+    selectByRegion = function(df, code, codeType, name) {
+      code = ensym(code)
+      name = ensym(name)
+      # check column exists
+      if(!(as_label(code) \%in\% colnames(df))) return(tibble())
+      df = df \%>\% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) \%>\% 
+        dplyr::mutate(
+          code = ifelse(is.na(code),"E99999999",code),
+          name = ifelse(is.na(code),"Unknown (England)",name)
+        ) \%>\%
+        dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) \%>\% 
+        dplyr::summarise(value = n()) 
+      return(df)
+    }
+    
+    out = NULL
+    if ("CTRY" \%in\% codeTypes) {
+      england = tmp \%>\% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") \%>\% 
+        dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) \%>\% 
+        dplyr::summarise(value = n())
+      out = out \%>\% bind_rows(england)
+    }
+    
+    if ("NHSER" \%in\% codeTypes) {
+      nhser = tmp \%>\% selectByRegion(NHSER_code, "NHSER", NHSER_name)
+      isNhser = nhser \%>\% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+      
+      if(!isNhser) {
+        nhser = tmp \%>\% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) \%>\% 
+          dplyr::inner_join(
+            self$codes$getMappings() \%>\% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
+            by=c("code"="fromCode")
+          ) \%>\%
+          dplyr::ungroup() \%>\%
+          dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) \%>\%
+          dplyr::rename(code = toCode, codeType=toCodeType)
+      }
+      out = out \%>\% bind_rows(nhser)
+    }
+    
+    if ("PHEC" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(PHEC_code, "PHEC", PHEC_name))}
+    if ("UA" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(UTLA_code, "UA", UTLA_name))}
+    if ("LAD" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(LTLA_code, "LAD", LTLA_name))}
+    if ("LSOA" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(LSOA_code, "LSOA", LSOA_name))}
+    
+    out = out \%>\% dplyr::mutate(source="line list",statistic = "case", type="incidence")
+    out = out \%>\% self$fixDatesAndNames(truncate)
+    out = out \%>\% self$fillAbsent(completeDates=TRUE)
+    out = out \%>\% dplyr::ungroup()
+    return(out)
+  }))
+  attr(out2,"paths") = path
+  return(out2 \%>\% as_tibble())
+},
 }
 \section{Super classes}{
 \code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{SPIMDatasetProvider}
@@ -23,29 +109,51 @@ coxData = coxData \%>\% interpretSGene()
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{SPIMDatasetProvider$new()}}
+\item \href{#method-finalize}{\code{SPIMDatasetProvider$finalize()}}
 \item \href{#method-getPaths}{\code{SPIMDatasetProvider$getPaths()}}
+\item \href{#method-getLineListLatest}{\code{SPIMDatasetProvider$getLineListLatest()}}
+\item \href{#method-getAllLatest}{\code{SPIMDatasetProvider$getAllLatest()}}
 \item \href{#method-getLatest}{\code{SPIMDatasetProvider$getLatest()}}
 \item \href{#method-getNewerThan}{\code{SPIMDatasetProvider$getNewerThan()}}
 \item \href{#method-getSpecificDates}{\code{SPIMDatasetProvider$getSpecificDates()}}
 \item \href{#method-getLatestRawFile}{\code{SPIMDatasetProvider$getLatestRawFile()}}
+\item \href{#method-getRawFile}{\code{SPIMDatasetProvider$getRawFile()}}
+\item \href{#method-getSQLLite}{\code{SPIMDatasetProvider$getSQLLite()}}
+\item \href{#method-getTable}{\code{SPIMDatasetProvider$getTable()}}
+\item \href{#method-batchLoadTable}{\code{SPIMDatasetProvider$batchLoadTable()}}
+\item \href{#method-getDeathsLineList}{\code{SPIMDatasetProvider$getDeathsLineList()}}
+\item \href{#method-getVAMLineList}{\code{SPIMDatasetProvider$getVAMLineList()}}
+\item \href{#method-getCTASLineList}{\code{SPIMDatasetProvider$getCTASLineList()}}
+\item \href{#method-getVaccinationLineList}{\code{SPIMDatasetProvider$getVaccinationLineList()}}
+\item \href{#method-getSGeneLineList}{\code{SPIMDatasetProvider$getSGeneLineList()}}
+\item \href{#method-getLineList}{\code{SPIMDatasetProvider$getLineList()}}
+\item \href{#method-getAdmissionLineList}{\code{SPIMDatasetProvider$getAdmissionLineList()}}
+\item \href{#method-getLinkedVaccinations}{\code{SPIMDatasetProvider$getLinkedVaccinations()}}
+\item \href{#method-getLinkedCtas}{\code{SPIMDatasetProvider$getLinkedCtas()}}
+\item \href{#method-getLinkedDeaths}{\code{SPIMDatasetProvider$getLinkedDeaths()}}
+\item \href{#method-getLinkedGenomics}{\code{SPIMDatasetProvider$getLinkedGenomics()}}
+\item \href{#method-getCombinedGenomics}{\code{SPIMDatasetProvider$getCombinedGenomics()}}
+\item \href{#method-getMasterPersonIndex}{\code{SPIMDatasetProvider$getMasterPersonIndex()}}
+\item \href{#method-getAdmissionEpisodes}{\code{SPIMDatasetProvider$getAdmissionEpisodes()}}
+\item \href{#method-getAdmissionEpisodesLink}{\code{SPIMDatasetProvider$getAdmissionEpisodesLink()}}
+\item \href{#method-getIncidenceFromLineList}{\code{SPIMDatasetProvider$getIncidenceFromLineList()}}
+\item \href{#method-getDeathsLineListIncidence}{\code{SPIMDatasetProvider$getDeathsLineListIncidence()}}
+\item \href{#method-getLineListIncidence}{\code{SPIMDatasetProvider$getLineListIncidence()}}
+\item \href{#method-getOutcomeEvents}{\code{SPIMDatasetProvider$getOutcomeEvents()}}
+\item \href{#method-getDiagnosisEvents}{\code{SPIMDatasetProvider$getDiagnosisEvents()}}
+\item \href{#method-getVaccinationEvents}{\code{SPIMDatasetProvider$getVaccinationEvents()}}
+\item \href{#method-getEventTimeline}{\code{SPIMDatasetProvider$getEventTimeline()}}
+\item \href{#method-getAugmentedEventTimeline}{\code{SPIMDatasetProvider$getAugmentedEventTimeline()}}
 \item \href{#method-getOneOneOne}{\code{SPIMDatasetProvider$getOneOneOne()}}
 \item \href{#method-getOneOneOneLineList}{\code{SPIMDatasetProvider$getOneOneOneLineList()}}
 \item \href{#method-getOneOneOneIncidence}{\code{SPIMDatasetProvider$getOneOneOneIncidence()}}
-\item \href{#method-getDeathsLineList}{\code{SPIMDatasetProvider$getDeathsLineList()}}
-\item \href{#method-getDeathsLineListIncidence}{\code{SPIMDatasetProvider$getDeathsLineListIncidence()}}
 \item \href{#method-getVoc351LineList}{\code{SPIMDatasetProvider$getVoc351LineList()}}
-\item \href{#method-getVAMLineList}{\code{SPIMDatasetProvider$getVAMLineList()}}
-\item \href{#method-getCTASLineList}{\code{SPIMDatasetProvider$getCTASLineList()}}
-\item \href{#method-getImmunizationLineList}{\code{SPIMDatasetProvider$getImmunizationLineList()}}
 \item \href{#method-getImmunizationLineListIncidence}{\code{SPIMDatasetProvider$getImmunizationLineListIncidence()}}
 \item \href{#method-getImmunizationFraction}{\code{SPIMDatasetProvider$getImmunizationFraction()}}
-\item \href{#method-getSGeneLineList}{\code{SPIMDatasetProvider$getSGeneLineList()}}
 \item \href{#method-interpretSGene}{\code{SPIMDatasetProvider$interpretSGene()}}
 \item \href{#method-getSGeneEras}{\code{SPIMDatasetProvider$getSGeneEras()}}
 \item \href{#method-getSDropoutFreqency}{\code{SPIMDatasetProvider$getSDropoutFreqency()}}
-\item \href{#method-getLineList}{\code{SPIMDatasetProvider$getLineList()}}
 \item \href{#method-augmentLineListWithLSOA}{\code{SPIMDatasetProvider$augmentLineListWithLSOA()}}
-\item \href{#method-getLineListIncidence}{\code{SPIMDatasetProvider$getLineListIncidence()}}
 \item \href{#method-getInfectionEpisodes}{\code{SPIMDatasetProvider$getInfectionEpisodes()}}
 \item \href{#method-getNegatives}{\code{SPIMDatasetProvider$getNegatives()}}
 \item \href{#method-getSeroprevalence}{\code{SPIMDatasetProvider$getSeroprevalence()}}
@@ -78,6 +186,7 @@ coxData = coxData \%>\% interpretSGene()
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
@@ -86,6 +195,7 @@ coxData = coxData \%>\% interpretSGene()
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDates">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDates}{\code{ukcovidtools::CovidTimeseriesProvider$fixDates()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
@@ -95,6 +205,7 @@ coxData = coxData \%>\% interpretSGene()
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$new(providerController, fileProvider, ...)}\if{html}{\out{</div>}}
@@ -102,7 +213,17 @@ coxData = coxData \%>\% interpretSGene()
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-finalize"></a>}}
+\if{latex}{\out{\hypertarget{method-finalize}{}}}
+\subsection{Method \code{finalize()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$finalize()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPaths"></a>}}
+\if{latex}{\out{\hypertarget{method-getPaths}{}}}
 \subsection{Method \code{getPaths()}}{
 Search a file path for the
 \subsection{Usage}{
@@ -121,7 +242,26 @@ raw line list data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLineListLatest"></a>}}
+\if{latex}{\out{\hypertarget{method-getLineListLatest}{}}}
+\subsection{Method \code{getLineListLatest()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListLatest()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAllLatest"></a>}}
+\if{latex}{\out{\hypertarget{method-getAllLatest}{}}}
+\subsection{Method \code{getAllLatest()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getAllLatest(filters = names(self$filter))}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getLatest"></a>}}
+\if{latex}{\out{\hypertarget{method-getLatest}{}}}
 \subsection{Method \code{getLatest()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLatest(search)}\if{html}{\out{</div>}}
@@ -130,6 +270,7 @@ raw line list data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNewerThan"></a>}}
+\if{latex}{\out{\hypertarget{method-getNewerThan}{}}}
 \subsection{Method \code{getNewerThan()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getNewerThan(search, date = as.Date("2020-01-01"))}\if{html}{\out{</div>}}
@@ -138,6 +279,7 @@ raw line list data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSpecificDates"></a>}}
+\if{latex}{\out{\hypertarget{method-getSpecificDates}{}}}
 \subsection{Method \code{getSpecificDates()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSpecificDates(search, dates)}\if{html}{\out{</div>}}
@@ -146,6 +288,7 @@ raw line list data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getLatestRawFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getLatestRawFile}{}}}
 \subsection{Method \code{getLatestRawFile()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLatestRawFile(filter, to = getwd())}\if{html}{\out{</div>}}
@@ -153,35 +296,61 @@ raw line list data set
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getOneOneOne"></a>}}
-\subsection{Method \code{getOneOneOne()}}{
-Load 111 data
+\if{html}{\out{<a id="method-getRawFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getRawFile}{}}}
+\subsection{Method \code{getRawFile()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOne(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getOneOneOneLineList"></a>}}
-\subsection{Method \code{getOneOneOneLineList()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneLineList(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getRawFile(path, to = getwd())}\if{html}{\out{</div>}}
 }
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getOneOneOneIncidence"></a>}}
-\subsection{Method \code{getOneOneOneIncidence()}}{
+\if{html}{\out{<a id="method-getSQLLite"></a>}}
+\if{latex}{\out{\hypertarget{method-getSQLLite}{}}}
+\subsection{Method \code{getSQLLite()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneIncidence(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSQLLite(reset = FALSE)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getTable"></a>}}
+\if{latex}{\out{\hypertarget{method-getTable}{}}}
+\subsection{Method \code{getTable()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getTable(
+  table,
+  params = NULL,
+  ...,
+  orElse,
+  nocache = NULL,
+  debug = NULL,
+  con = self$getSQLLite(),
+  indexes = list(),
+  uniqueIndexes = list()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-batchLoadTable"></a>}}
+\if{latex}{\out{\hypertarget{method-batchLoadTable}{}}}
+\subsection{Method \code{batchLoadTable()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$batchLoadTable(
+  table,
+  csvPath,
+  wrangleBatch,
+  indexes = "FINALID",
+  uniqueIndexes = "record_id",
+  ...
+)}\if{html}{\out{</div>}}
 }
 
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDeathsLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getDeathsLineList}{}}}
 \subsection{Method \code{getDeathsLineList()}}{
 Load line list
 \subsection{Usage}{
@@ -200,11 +369,200 @@ raw line list data set
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getVAMLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getVAMLineList}{}}}
+\subsection{Method \code{getVAMLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVAMLineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getCTASLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getCTASLineList}{}}}
+\subsection{Method \code{getCTASLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCTASLineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getVaccinationLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getVaccinationLineList}{}}}
+\subsection{Method \code{getVaccinationLineList()}}{
+Load immunizations line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVaccinationLineList(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+raw line list data set
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getSGeneLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getSGeneLineList}{}}}
+\subsection{Method \code{getSGeneLineList()}}{
+Load line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSGeneLineList(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+raw line list data set
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getLineList}{}}}
+\subsection{Method \code{getLineList()}}{
+Load line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineList(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+raw line list data set
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAdmissionLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getAdmissionLineList}{}}}
+\subsection{Method \code{getAdmissionLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getAdmissionLineList(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLinkedVaccinations"></a>}}
+\if{latex}{\out{\hypertarget{method-getLinkedVaccinations}{}}}
+\subsection{Method \code{getLinkedVaccinations()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLinkedVaccinations(
+  ...,
+  immunisations = self$getVaccinationLineList()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLinkedCtas"></a>}}
+\if{latex}{\out{\hypertarget{method-getLinkedCtas}{}}}
+\subsection{Method \code{getLinkedCtas()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLinkedCtas(..., ctas = self$getCTASLineList())}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLinkedDeaths"></a>}}
+\if{latex}{\out{\hypertarget{method-getLinkedDeaths}{}}}
+\subsection{Method \code{getLinkedDeaths()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLinkedDeaths(..., deaths = self$getDeathsLineList())}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLinkedGenomics"></a>}}
+\if{latex}{\out{\hypertarget{method-getLinkedGenomics}{}}}
+\subsection{Method \code{getLinkedGenomics()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLinkedGenomics(..., genomics = self$getVAMLineList())}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getCombinedGenomics"></a>}}
+\if{latex}{\out{\hypertarget{method-getCombinedGenomics}{}}}
+\subsection{Method \code{getCombinedGenomics()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCombinedGenomics(
+  ...,
+  variant_designation = ukcovidtools::variantDesignation,
+  linked_genomics = self$getLinkedGenomics(),
+  linked_ctas = self$getLinkedCtas(),
+  ignore_missing = FALSE
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getMasterPersonIndex"></a>}}
+\if{latex}{\out{\hypertarget{method-getMasterPersonIndex}{}}}
+\subsection{Method \code{getMasterPersonIndex()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getMasterPersonIndex(
+  ...,
+  admissions = self$getAdmissionLineList(),
+  cases = self$getLineList(),
+  linked_ctas = self$getLinkedCtas(),
+  linked_deaths = self$getLinkedDeaths(),
+  linked_genomics = self$getLinkedGenomics(),
+  sgene = self$getSGeneLineList(),
+  linked_vaccinations = self$getLinkedVaccinations()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAdmissionEpisodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getAdmissionEpisodes}{}}}
+\subsection{Method \code{getAdmissionEpisodes()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getAdmissionEpisodes(
+  ...,
+  admissions = self$getAdmissionLineList()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAdmissionEpisodesLink"></a>}}
+\if{latex}{\out{\hypertarget{method-getAdmissionEpisodesLink}{}}}
+\subsection{Method \code{getAdmissionEpisodesLink()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getAdmissionEpisodesLink(
+  ...,
+  admissions = self$getAdmissionLineList()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getIncidenceFromLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getIncidenceFromLineList}{}}}
+\subsection{Method \code{getIncidenceFromLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getIncidenceFromLineList(
+  linelist,
+  dateVar,
+  codeExpr,
+  codeType,
+  statistic,
+  ageBreaks = NULL,
+  genderExpr = FALSE,
+  excludeExpr = FALSE,
+  subgroupExpr = NULL,
+  noteExpr = NULL,
+  unmatchedCode = NA_character_,
+  unmatchedName = NA_character_,
+  source = "phe linked data",
+  validCodes = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDeathsLineListIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-getDeathsLineListIncidence}{}}}
 \subsection{Method \code{getDeathsLineListIncidence()}}{
 Load deaths data from linelist - does not preserve ethnicity
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getDeathsLineListIncidence(
+  dll = NULL,
   ageBreaks = NULL,
   deathOrReport = "death",
   cutoff = 28,
@@ -229,7 +587,136 @@ a covidTimeseriesFormat dataframe
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLineListIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-getLineListIncidence}{}}}
+\subsection{Method \code{getLineListIncidence()}}{
+Load incidence from line list
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListIncidence(
+  ll = NULL,
+  ageBreaks = NULL,
+  gender = FALSE,
+  specimenOrReport = "specimen",
+  subgroup = "pillar",
+  filterExpr = NULL,
+  codeTypes = c("CTRY", "NHSER"),
+  truncate = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a covidTimeseriesFormat dataframe
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOutcomeEvents"></a>}}
+\if{latex}{\out{\hypertarget{method-getOutcomeEvents}{}}}
+\subsection{Method \code{getOutcomeEvents()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOutcomeEvents(
+  ...,
+  admissions = self$getAdmissionLineList(),
+  deaths = self$getDeathsLineList(),
+  admit_episodes = self$getAdmissionEpisodes()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getDiagnosisEvents"></a>}}
+\if{latex}{\out{\hypertarget{method-getDiagnosisEvents}{}}}
+\subsection{Method \code{getDiagnosisEvents()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getDiagnosisEvents(
+  ...,
+  cases = self$getLineList(),
+  sgene = self$getSGeneLineList(),
+  genomics = self$getVAMLineList(),
+  ctas = self$getLinkedCtas()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getVaccinationEvents"></a>}}
+\if{latex}{\out{\hypertarget{method-getVaccinationEvents}{}}}
+\subsection{Method \code{getVaccinationEvents()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVaccinationEvents(
+  ...,
+  linked_vaccination = self$getLinkedVaccinations()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getEventTimeline"></a>}}
+\if{latex}{\out{\hypertarget{method-getEventTimeline}{}}}
+\subsection{Method \code{getEventTimeline()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getEventTimeline(
+  ...,
+  outcome_events = self$getOutcomeEvents(),
+  diagnosis_events = self$getDiagnosisEvents(),
+  vaccination_events = self$getVaccinationEvents()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAugmentedEventTimeline"></a>}}
+\if{latex}{\out{\hypertarget{method-getAugmentedEventTimeline}{}}}
+\subsection{Method \code{getAugmentedEventTimeline()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getAugmentedEventTimeline(
+  ...,
+  event_timeline = self$getEventTimeline()
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOne"></a>}}
+\if{latex}{\out{\hypertarget{method-getOneOneOne}{}}}
+\subsection{Method \code{getOneOneOne()}}{
+Load 111 data
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOne(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOneLineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getOneOneOneLineList}{}}}
+\subsection{Method \code{getOneOneOneLineList()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneLineList(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getOneOneOneIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-getOneOneOneIncidence}{}}}
+\subsection{Method \code{getOneOneOneIncidence()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getOneOneOneIncidence(dateFrom = Sys.Date() - 28, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getVoc351LineList"></a>}}
+\if{latex}{\out{\hypertarget{method-getVoc351LineList}{}}}
 \subsection{Method \code{getVoc351LineList()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVoc351LineList(...)}\if{html}{\out{</div>}}
@@ -237,35 +724,8 @@ a covidTimeseriesFormat dataframe
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getVAMLineList"></a>}}
-\subsection{Method \code{getVAMLineList()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getVAMLineList(...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getCTASLineList"></a>}}
-\subsection{Method \code{getCTASLineList()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getCTASLineList(...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getImmunizationLineList"></a>}}
-\subsection{Method \code{getImmunizationLineList()}}{
-Load immunizations line list
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationLineList(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-raw line list data set
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getImmunizationLineListIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-getImmunizationLineListIncidence}{}}}
 \subsection{Method \code{getImmunizationLineListIncidence()}}{
 Load incidence from line list
 \subsection{Usage}{
@@ -287,26 +747,6 @@ Load incidence from line list
 }
 \subsection{Returns}{
 a covidTimeseriesFormat dataframe
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getImmunizationFraction"></a>}}
-\subsection{Method \code{getImmunizationFraction()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationFraction(ageBreaks = NULL, ...)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getSGeneLineList"></a>}}
-\subsection{Method \code{getSGeneLineList()}}{
-Load line list
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSGeneLineList(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-raw line list data set
 Interpret S gene status according to various cut off values
 function to help interpret S gene CT values in context of N gene and ORF gene to give S gene status. 
 With the defaults this produces the same result as the sgtf_30 column in the source SGTF line list
@@ -314,7 +754,17 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getImmunizationFraction"></a>}}
+\if{latex}{\out{\hypertarget{method-getImmunizationFraction}{}}}
+\subsection{Method \code{getImmunizationFraction()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getImmunizationFraction(ageBreaks = NULL, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-interpretSGene"></a>}}
+\if{latex}{\out{\hypertarget{method-interpretSGene}{}}}
 \subsection{Method \code{interpretSGene()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$interpretSGene(
@@ -348,6 +798,92 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{coxData = coxData \%>\% interpretSGene()
+#' @description Load incidence from line list
+#' 
+#' @param ageBreaks - a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)
+#' @return a covidTimeseriesFormat dataframe
+getLineListIncidence = function(ll=NULL, ageBreaks = NULL, gender=FALSE, specimenOrReport="specimen", subgroup="pillar", filterExpr=NULL, codeTypes = c("CTRY","NHSER"), truncate=NULL, ...) {
+  filterExpr = enexpr(filterExpr)
+  subgroup = tryCatch(ensym(subgroup), error = function(e) NULL)
+  if(!identical(ll,NULL)) {
+    tmp = ll  \%>\% collect()
+  } else {
+    tmp = self$getLineList(...) \%>\% collect()
+  }
+  path = attr(tmp,"paths")
+  out2 = self$getSaved("LINE-LIST-INCIDENCE", params=list(tmp, ageBreaks, specimenOrReport,as_label(subgroup), as_label(filterExpr), codeTypes, gender), ..., orElse = function (...) covidTimeseriesFormat({
+    if(!identical(filterExpr,NULL)) 
+      tmp = tmp \%>\% filter(!!filterExpr)
+    tmp = tmp \%>\% dplyr::mutate(ageCat = age \%>\% self$cutByAge(ageBreaks)) 
+    if (gender) {
+      tmp = tmp \%>\% dplyr::mutate(gender=self$normaliseGender(sex))
+    } else {
+      tmp = tmp \%>\% dplyr::mutate(gender=NA_character_)
+    }
+    if(!identical(subgroup,NULL)) {
+      tmp = tmp \%>\% dplyr::mutate(subgroup=!!subgroup)
+    } else {
+      tmp = tmp \%>\% dplyr::mutate(subgroup=NA_character_)
+    }
+    if(specimenOrReport == "report")
+      tmp = tmp \%>\% dplyr::mutate(date = as.Date(lab_report_date))
+    else
+      tmp = tmp \%>\% dplyr::mutate(date = as.Date(specimen_date))
+    
+    selectByRegion = function(df, code, codeType, name) {
+      code = ensym(code)
+      name = ensym(name)
+      # check column exists
+      if(!(as_label(code) \%in\% colnames(df))) return(tibble())
+      df = df \%>\% dplyr::mutate(code = !!code, codeType=codeType, name=!!name) \%>\% 
+        dplyr::mutate(
+          code = ifelse(is.na(code),"E99999999",code),
+          name = ifelse(is.na(code),"Unknown (England)",name)
+        ) \%>\%
+        dplyr::group_by( code,codeType,name,date, ageCat, gender,subgroup) \%>\% 
+        dplyr::summarise(value = n()) 
+      return(df)
+    }
+    
+    out = NULL
+    if ("CTRY" \%in\% codeTypes) {
+      england = tmp \%>\% dplyr::mutate(code = "E92000001", codeType= "CTRY", name="England") \%>\% 
+        dplyr::group_by(code,codeType,name,date, ageCat, gender,subgroup) \%>\% 
+        dplyr::summarise(value = n())
+      out = out \%>\% bind_rows(england)
+    }
+    
+    if ("NHSER" \%in\% codeTypes) {
+      nhser = tmp \%>\% selectByRegion(NHSER_code, "NHSER", NHSER_name)
+      isNhser = nhser \%>\% self$codes$allPresentAndCorrect(codeTypes=c("NHSER","PSEUDO"))
+      
+      if(!isNhser) {
+        nhser = tmp \%>\% selectByRegion(NHSER_code, "NHSER19CDH", NHSER_name) \%>\% 
+          dplyr::inner_join(
+            self$codes$getMappings() \%>\% dplyr::filter(fromCodeType=="NHSER19CDH" & toCodeType=="NHSER"), 
+            by=c("code"="fromCode")
+          ) \%>\%
+          dplyr::ungroup() \%>\%
+          dplyr::select(-code,-codeType, -fromCodeType,-rel,-weight) \%>\%
+          dplyr::rename(code = toCode, codeType=toCodeType)
+      }
+      out = out \%>\% bind_rows(nhser)
+    }
+    
+    if ("PHEC" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(PHEC_code, "PHEC", PHEC_name))}
+    if ("UA" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(UTLA_code, "UA", UTLA_name))}
+    if ("LAD" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(LTLA_code, "LAD", LTLA_name))}
+    if ("LSOA" \%in\% codeTypes) {out = out \%>\% bind_rows(tmp \%>\% selectByRegion(LSOA_code, "LSOA", LSOA_name))}
+    
+    out = out \%>\% dplyr::mutate(source="line list",statistic = "case", type="incidence")
+    out = out \%>\% self$fixDatesAndNames(truncate)
+    out = out \%>\% self$fillAbsent(completeDates=TRUE)
+    out = out \%>\% dplyr::ungroup()
+    return(out)
+  }))
+  attr(out2,"paths") = path
+  return(out2 \%>\% as_tibble())
+},
 }
 \if{html}{\out{</div>}}
 
@@ -356,6 +892,7 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSGeneEras"></a>}}
+\if{latex}{\out{\hypertarget{method-getSGeneEras}{}}}
 \subsection{Method \code{getSGeneEras()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSGeneEras(
@@ -371,6 +908,7 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSDropoutFreqency"></a>}}
+\if{latex}{\out{\hypertarget{method-getSDropoutFreqency}{}}}
 \subsection{Method \code{getSDropoutFreqency()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getSDropoutFreqency(
@@ -389,19 +927,8 @@ Defaults are S:30,ORF:30,N:30,Control:Inf
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getLineList"></a>}}
-\subsection{Method \code{getLineList()}}{
-Load line list
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineList(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-raw line list data set
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-augmentLineListWithLSOA"></a>}}
+\if{latex}{\out{\hypertarget{method-augmentLineListWithLSOA}{}}}
 \subsection{Method \code{augmentLineListWithLSOA()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$augmentLineListWithLSOA(
@@ -413,36 +940,8 @@ raw line list data set
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getLineListIncidence"></a>}}
-\subsection{Method \code{getLineListIncidence()}}{
-Load incidence from line list
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getLineListIncidence(
-  ll = NULL,
-  ageBreaks = NULL,
-  gender = FALSE,
-  specimenOrReport = "specimen",
-  subgroup = "pillar",
-  filterExpr = NULL,
-  codeTypes = c("CTRY", "NHSER"),
-  truncate = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{ageBreaks}}{- a list of ages which form the cut points for breaking continuous ages into ranges (or NULL for a single age category)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a covidTimeseriesFormat dataframe
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getInfectionEpisodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getInfectionEpisodes}{}}}
 \subsection{Method \code{getInfectionEpisodes()}}{
 Combine line list and S-gene line list to get a list of infection episodes
 
@@ -481,6 +980,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNegatives"></a>}}
+\if{latex}{\out{\hypertarget{method-getNegatives}{}}}
 \subsection{Method \code{getNegatives()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getNegatives(
@@ -493,6 +993,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSeroprevalence"></a>}}
+\if{latex}{\out{\hypertarget{method-getSeroprevalence}{}}}
 \subsection{Method \code{getSeroprevalence()}}{
 Load the seroprevalance file
 \subsection{Usage}{
@@ -505,6 +1006,7 @@ raw FF100 data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSeroprevalenceTestIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-getSeroprevalenceTestIncidence}{}}}
 \subsection{Method \code{getSeroprevalenceTestIncidence()}}{
 Load seroprevalence data from linelist
 \subsection{Usage}{
@@ -524,6 +1026,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFF100"></a>}}
+\if{latex}{\out{\hypertarget{method-getFF100}{}}}
 \subsection{Method \code{getFF100()}}{
 Load ff100 file
 \subsection{Usage}{
@@ -536,6 +1039,7 @@ raw FF100 data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCHESS"></a>}}
+\if{latex}{\out{\hypertarget{method-getCHESS}{}}}
 \subsection{Method \code{getCHESS()}}{
 Load the CHESS dataset from a path
 \subsection{Usage}{
@@ -555,6 +1059,7 @@ raw CHESS data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSARI"></a>}}
+\if{latex}{\out{\hypertarget{method-getSARI}{}}}
 \subsection{Method \code{getSARI()}}{
 Load the CHESS dataset from a path
 \subsection{Usage}{
@@ -574,6 +1079,7 @@ raw CHESS data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCHESSSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-getCHESSSummary}{}}}
 \subsection{Method \code{getCHESSSummary()}}{
 Load Chess summary file
 \subsection{Usage}{
@@ -583,6 +1089,7 @@ Load Chess summary file
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSARISummary"></a>}}
+\if{latex}{\out{\hypertarget{method-getSARISummary}{}}}
 \subsection{Method \code{getSARISummary()}}{
 Load Sari summary file
 \subsection{Usage}{
@@ -592,6 +1099,7 @@ Load Sari summary file
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFourNationsCases"></a>}}
+\if{latex}{\out{\hypertarget{method-getFourNationsCases}{}}}
 \subsection{Method \code{getFourNationsCases()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SPIMDatasetProvider$getFourNationsCases(truncate = NULL, ...)}\if{html}{\out{</div>}}
@@ -600,6 +1108,7 @@ Load Sari summary file
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSPIMextract"></a>}}
+\if{latex}{\out{\hypertarget{method-getSPIMextract}{}}}
 \subsection{Method \code{getSPIMextract()}}{
 Load the SPI-M aggregated data spreadsheet
 \subsection{Usage}{
@@ -612,6 +1121,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTheSPIMFireHose"></a>}}
+\if{latex}{\out{\hypertarget{method-getTheSPIMFireHose}{}}}
 \subsection{Method \code{getTheSPIMFireHose()}}{
 Load the SPI-M and public data
 \subsection{Usage}{
@@ -624,6 +1134,7 @@ a covidTimeseriesFormat dataframe
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -37,6 +37,7 @@ SPIM private data
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
@@ -45,6 +46,7 @@ SPIM private data
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDates">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDates}{\code{ukcovidtools::CovidTimeseriesProvider$fixDates()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
@@ -54,6 +56,7 @@ SPIM private data
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{JuniperDatasetProvider$new(providerController, fileProvider, ...)}\if{html}{\out{</div>}}
@@ -62,6 +65,7 @@ SPIM private data
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getBristolData"></a>}}
+\if{latex}{\out{\hypertarget{method-getBristolData}{}}}
 \subsection{Method \code{getBristolData()}}{
 Load Bristol data
 \subsection{Usage}{
@@ -81,6 +85,7 @@ raw Bristol data set
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-bristolSurvivalSubset"></a>}}
+\if{latex}{\out{\hypertarget{method-bristolSurvivalSubset}{}}}
 \subsection{Method \code{bristolSurvivalSubset()}}{
 Load Bristol survival subset
 \subsection{Usage}{
@@ -100,6 +105,7 @@ Bristol survival subset
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

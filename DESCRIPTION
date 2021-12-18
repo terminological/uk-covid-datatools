@@ -13,6 +13,7 @@ Encoding: UTF-8
 LazyData: true
 Imports:
     dplyr,
+    dbplyr,
     dtplyr,
     data.table,
     EpiEstim,
@@ -38,6 +39,6 @@ Suggests:
     rmarkdown,
     testthat (>= 2.1.0)
 VignetteBuilder: knitr
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.2
 Depends: 
     R (>= 2.10)

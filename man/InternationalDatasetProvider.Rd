@@ -37,12 +37,14 @@ international datasets
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{InternationalDatasetProvider$new(providerController, path, ...)}\if{html}{\out{</div>}}
@@ -51,6 +53,7 @@ international datasets
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-spainAgeBreakdown"></a>}}
+\if{latex}{\out{\hypertarget{method-spainAgeBreakdown}{}}}
 \subsection{Method \code{spainAgeBreakdown()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{InternationalDatasetProvider$spainAgeBreakdown()}\if{html}{\out{</div>}}
@@ -59,6 +62,7 @@ international datasets
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-italyTimeseries"></a>}}
+\if{latex}{\out{\hypertarget{method-italyTimeseries}{}}}
 \subsection{Method \code{italyTimeseries()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{InternationalDatasetProvider$italyTimeseries()}\if{html}{\out{</div>}}
@@ -67,6 +71,7 @@ international datasets
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

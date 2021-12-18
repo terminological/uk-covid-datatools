@@ -1,19 +1,19 @@
 # Shared functions and definitions
 
-#' SQL like filtering in data tables
-#'
-#' allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is
-#' based on regex.
-#'
-#' %	Represents zero or more characters	bl% finds bl, black, blue, and blob
-#' _	Represents a single character	h_t finds hot, hat, and hit
-#' []	Represents any single character within the brackets	h[oa]t finds hot and hat, but not hit
-#' ^	Represents any character not in the brackets	h[^oa]t finds hit, but not hot and hat
-#' -	Represents a range of characters	c[a-b]t finds cat and cbt
-#' TODO: escaped sql
-#'
-#' @import dplyr
-#' @export
+#' #' SQL like filtering in data tables
+#' #'
+#' #' allow a sql like syntax in data tables. N.b. conflict with data.table's definition of like which is
+#' #' based on regex.
+#' #'
+#' #' %	Represents zero or more characters	bl% finds bl, black, blue, and blob
+#' #' _	Represents a single character	h_t finds hot, hat, and hit
+#' #' []	Represents any single character within the brackets	h[oa]t finds hot and hat, but not hit
+#' #' ^	Represents any character not in the brackets	h[^oa]t finds hit, but not hot and hat
+#' #' -	Represents a range of characters	c[a-b]t finds cat and cbt
+#' #' TODO: escaped sql
+#' #'
+#' #' @import dplyr
+#' #' @export
 "%like%" = function(vector, like, ignore.case = TRUE, fixed = FALSE) {
   pattern = like %>% stringr::str_replace_all("%",".*") %>% stringr::str_replace_all("_",".")
   if (is.factor(vector)) {
@@ -23,6 +23,117 @@
     grepl(pattern, vector, ignore.case = ignore.case, fixed = fixed)
   }
 }
+
+deleteTempTables = function(con, prefix="zz_tmp", debug=NULL) {
+  if (identical(debug,NULL)) {
+    debug = getOption("ukcovid.cache.debug", FALSE)
+  }
+  x= DBI::dbListTables(con)
+  tables = x[x %>% stringr::str_starts(prefix)]
+  sapply(tables, function(x) {
+    DBI::dbRemoveTable(con,x)
+  })
+  if(debug) message("Deleted: ",paste0(tables,collapse=", "))
+  invisible(tables)
+}
+
+#' Grouping preserving compute
+#'
+#' The standard compute function messes with the grouping of a dataframe leading to weirdness. There are some 
+#' other edge cases where grouping a data frame before an arrange causes issues. Some of these can be handled
+#' by the window_order and associated functions
+#'
+#' @param remote_df 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+compute <- function(remote_df, name = NULL, temporary = FALSE, nocache = NULL, debug=NULL, params=NULL, prefix = NULL, ...) {
+  if (identical(nocache,NULL)) {
+    nocache = getOption("ukcovid.cache.disabled", FALSE)
+  }
+  if (identical(debug,NULL)) {
+    debug = getOption("ukcovid.cache.debug", FALSE)
+  }
+  if(identical(name,NULL)) {
+    if(identical(prefix,NULL)) prefix = "zz_tmp"
+    if(identical(params,NULL)) {
+      name = paste0(prefix,"_",digest::digest(dbplyr::sql_render(remote_df),algo="md5"))
+    } else {
+      name = paste0(prefix,"_",digest::digest(
+        list(sql=dbplyr::sql_render(remote_df),params=params),
+        algo="md5"))
+    }
+  } else {
+    if(!identical(params,NULL)) {
+      if(!identical(prefix,NULL)) {
+        name = paste0(prefix,"_",name,"_",digest::digest(params,algo="md5"))
+      } else {
+        name = paste0(name,"_",digest::digest(params,algo="md5"))
+      }
+    }
+  }
+  if (name %in% DBI::dbListTables(remote_df$src$con)) {
+    if (!nocache) {
+      if(debug) message("Re-using cached version of: ",name)
+      return(tbl(remote_df$src$con,name))
+    } else {
+      if(debug) message("Deleting old version of: ",name)
+      DBI::dbRemoveTable(remote_df$src$con,name)
+    }
+  }
+  existing_groups <- groups(remote_df)
+  if(debug) message("Computing new version of: ",name)
+  remote_df <-
+    remote_df %>%
+    dplyr::compute(name = name, temporary = temporary, ...)
+  remote_df <-
+    tbl(remote_df$src$con, dbplyr::sql_render(remote_df))
+  remote_df <-
+    group_by(remote_df, !!!existing_groups)
+  return(remote_df)
+}
+
+#' Grouping preserving semi temporary compute
+#'
+#' The standard compute function messes with the grouping of a dataframe leading to weirdness. There are some 
+#' other edge cases where grouping a data frame before an arrange causes issues. Some of these can be handled
+#' by the window_order and associated functions
+#'
+#' @param remote_df 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+computeTemp <- function(remote_df, prefix = "zz_tmp", temporary = FALSE, nocache=FALSE, params=NULL, ...) {
+  compute(remote_df, temporary = temporary, nocache = nocache, params = params, name=NULL, ...)
+}
+
+
+#' @param remote_df 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+collect <- function(remote_df, ...) {
+  raw = remote_df %>% dplyr::collect(...)
+  isoDateString = function(x) return(is.character(x) & all(na.omit(stringr::str_detect(x,"[0-9]{4}-[0-9]{2}-[0-9]{2}"))) & !all(is.na(x)))
+  raw = raw %>% mutate(across(where(isoDateString), ~ as.Date(.x, "%Y-%m-%d")))
+  maybeJulian = function(x) {return(is.double(x) & all(na.omit(x>=julianday.Date("1970-01-01"))) & all(na.omit(x<=julianday.Date("2100-01-01"))) & !all(is.na(x)))}
+  raw = raw %>% mutate(across(matches(".*(D|d)ate.*") & where(maybeJulian), ~ as.Date(.x-julianday.Date("1970-01-01"), "1970-01-01")))
+  return(raw)
+}
+
+julianday.Date = function(.x,...) {
+  as.numeric(as.Date(.x,...))+2440587.5
+}
+
 
 #
 # identifyCovidOutlier = function(incidences) {
@@ -256,6 +367,37 @@ highlightList = function(vector, highlightList, backgroundColour = "grey80") {
     out[[key]]=highlightList[[key]]
   }
   return(out)
+}
+
+shortLabel = function(name) {
+  name %>% 
+    stringr::str_replace_all("[^A-Za-z]"," ") %>%
+    stringr::str_replace_all("(?i)nhs|foundation|trust","") %>%
+    abbreviate(minlength = 3)
+}
+
+datedFig = function(name) {
+  return(paste0(here::here(name),"-",Sys.Date()))
+}
+
+#' A filename regulising function
+#' @param directory the directory to set as output
+#' @param datedFile - shoudl files be dated in their file name
+#' @param  datedSubdirectory - should files be put in a dated subdirectory?
+#' @return a function with a single argument that determines the filename.
+#' @export
+output = function(directory = here::here("output"), datedFile=TRUE, datedSubdirectory=FALSE) {
+  directory = fs::path_norm(directory)
+  fs::dir_create(directory)
+  message("directing output to: ",directory)
+  return(function(filename) {
+    if(datedSubdirectory) {
+      directory = fs::path(directory,Sys.Date())
+    }
+    ext = fs::path_ext(filename)
+    if(datedFile) filename = paste0(fs::path_ext_remove(filename),"-",Sys.Date()) %>% fs::path_ext_set(ext)
+    fs::path(directory,filename)
+  })
 }
 
 # scale_colour_highlight_d = function(..., highlightList, backgroundColour="grey80") {

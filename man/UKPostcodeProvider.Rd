@@ -40,12 +40,14 @@ Get a provider of UK postcodes
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -54,6 +56,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFullONS"></a>}}
+\if{latex}{\out{\hypertarget{method-getFullONS}{}}}
 \subsection{Method \code{getFullONS()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getFullONS(...)}\if{html}{\out{</div>}}
@@ -62,6 +65,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getOutcodeCentroids"></a>}}
+\if{latex}{\out{\hypertarget{method-getOutcodeCentroids}{}}}
 \subsection{Method \code{getOutcodeCentroids()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$getOutcodeCentroids(...)}\if{html}{\out{</div>}}
@@ -70,6 +74,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-lookupFeatures"></a>}}
+\if{latex}{\out{\hypertarget{method-lookupFeatures}{}}}
 \subsection{Method \code{lookupFeatures()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$lookupFeatures(df, postcodeVar = "pcd", onspdVars)}\if{html}{\out{</div>}}
@@ -78,6 +83,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-lookupWeightedFeatureByOutcode"></a>}}
+\if{latex}{\out{\hypertarget{method-lookupWeightedFeatureByOutcode}{}}}
 \subsection{Method \code{lookupWeightedFeatureByOutcode()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$lookupWeightedFeatureByOutcode(
@@ -90,6 +96,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-lookupLocation"></a>}}
+\if{latex}{\out{\hypertarget{method-lookupLocation}{}}}
 \subsection{Method \code{lookupLocation()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKPostcodeProvider$lookupLocation(df, postcodeVar = "pcd")}\if{html}{\out{</div>}}
@@ -98,6 +105,7 @@ Get a provider of UK postcodes
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

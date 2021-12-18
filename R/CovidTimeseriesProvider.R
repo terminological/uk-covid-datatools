@@ -1,6 +1,4 @@
 #' General covid  processing
-#' @import ggplot2
-#' @import msm
 #' @export
 CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataProvider, public = list(
   
@@ -247,6 +245,28 @@ CovidTimeseriesProvider = R6::R6Class("CovidTimeseriesProvider", inherit=DataPro
     return(tmp5)
   },
   
+  #' @description Take a set of timeseries and fixes any non standard names, truncates time series by truncate days. 
+  #' intially Fills all regions to be the same length but with trim trailing NAs
+  #' @return a covidTimeseriesFormat dataframe
+  fixDates = function(covidTimeseries, truncate=NULL) {
+    tmp5 = covidTimeseriesFormat(covidTimeseries)
+    if(!("note" %in% colnames(tmp5))) tmp5 = tmp5 %>% dplyr::mutate(note=NA_character_)
+    
+    truncations = tibble::tibble(
+      statistic = names(self$truncation),
+      tmpTrunc = unlist(self$truncation))
+    
+    tmp5 = tmp5 %>% 
+      dplyr::ungroup() %>%
+      # dplyr::select(-name) %>%
+      dplyr::left_join(truncations,by="statistic") %>%
+      dplyr::mutate(tmpTrunc = ifelse(is.null(truncate), ifelse(is.na(tmpTrunc),0,tmpTrunc), truncate)) %>%
+      dplyr::group_by(code,codeType,name,source,subgroup,statistic,gender,ageCat,type) %>% 
+      dplyr::filter(date <= max(date-tmpTrunc)) %>%
+      dplyr::select(-tmpTrunc) %>%
+      dplyr::ungroup()
+    return(tmp5)
+  },
   
   
   

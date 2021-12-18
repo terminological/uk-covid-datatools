@@ -21,6 +21,9 @@ NHS datasets
 \item \href{#method-getTomWhiteCases}{\code{NHSDatasetProvider$getTomWhiteCases()}}
 \item \href{#method-getTomWhiteIndicators}{\code{NHSDatasetProvider$getTomWhiteIndicators()}}
 \item \href{#method-getNHSDeaths}{\code{NHSDatasetProvider$getNHSDeaths()}}
+\item \href{#method-getNHSAdmissions}{\code{NHSDatasetProvider$getNHSAdmissions()}}
+\item \href{#method-getNHSCapacityEstimate}{\code{NHSDatasetProvider$getNHSCapacityEstimate()}}
+\item \href{#method-getPHELADCases}{\code{NHSDatasetProvider$getPHELADCases()}}
 \item \href{#method-getPHEDashboard}{\code{NHSDatasetProvider$getPHEDashboard()}}
 \item \href{#method-getPHEApiNations}{\code{NHSDatasetProvider$getPHEApiNations()}}
 \item \href{#method-getPHEApiNHSRegions}{\code{NHSDatasetProvider$getPHEApiNHSRegions()}}
@@ -28,6 +31,7 @@ NHS datasets
 \item \href{#method-getPHEPaginatedData}{\code{NHSDatasetProvider$getPHEPaginatedData()}}
 \item \href{#method-getPHEApi}{\code{NHSDatasetProvider$getPHEApi()}}
 \item \href{#method-getCLIMB}{\code{NHSDatasetProvider$getCLIMB()}}
+\item \href{#method-getLTLALineages}{\code{NHSDatasetProvider$getLTLALineages()}}
 \item \href{#method-getCOGUK}{\code{NHSDatasetProvider$getCOGUK()}}
 \item \href{#method-getTiers}{\code{NHSDatasetProvider$getTiers()}}
 \item \href{#method-getTheFireHose}{\code{NHSDatasetProvider$getTheFireHose()}}
@@ -51,6 +55,7 @@ NHS datasets
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
@@ -59,6 +64,7 @@ NHS datasets
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDates">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDates}{\code{ukcovidtools::CovidTimeseriesProvider$fixDates()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
@@ -68,6 +74,7 @@ NHS datasets
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -76,6 +83,7 @@ NHS datasets
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getGoogleMobility"></a>}}
+\if{latex}{\out{\hypertarget{method-getGoogleMobility}{}}}
 \subsection{Method \code{getGoogleMobility()}}{
 Load google mobility file aligned with LAD codes
 \subsection{Usage}{
@@ -88,6 +96,7 @@ google mobility 0 custom format
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSignificantDates"></a>}}
+\if{latex}{\out{\hypertarget{method-getSignificantDates}{}}}
 \subsection{Method \code{getSignificantDates()}}{
 Load curated significant dates file
 \subsection{Usage}{
@@ -100,6 +109,7 @@ public 111 data including pathways and online, pre and post april. Codes are CCG
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPublicOneOneOne"></a>}}
+\if{latex}{\out{\hypertarget{method-getPublicOneOneOne}{}}}
 \subsection{Method \code{getPublicOneOneOne()}}{
 Load public 111 summary file
 \subsection{Usage}{
@@ -112,6 +122,7 @@ public 111 data including pathways and online, pre and post april. Codes are CCG
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTomWhiteCases"></a>}}
+\if{latex}{\out{\hypertarget{method-getTomWhiteCases}{}}}
 \subsection{Method \code{getTomWhiteCases()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getTomWhiteCases(truncate = 4, ...)}\if{html}{\out{</div>}}
@@ -120,6 +131,7 @@ public 111 data including pathways and online, pre and post april. Codes are CCG
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTomWhiteIndicators"></a>}}
+\if{latex}{\out{\hypertarget{method-getTomWhiteIndicators}{}}}
 \subsection{Method \code{getTomWhiteIndicators()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getTomWhiteIndicators(truncate = 4, ...)}\if{html}{\out{</div>}}
@@ -128,6 +140,7 @@ public 111 data including pathways and online, pre and post april. Codes are CCG
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSDeaths"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSDeaths}{}}}
 \subsection{Method \code{getNHSDeaths()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getNHSDeaths(truncate = 7, ...)}\if{html}{\out{</div>}}
@@ -135,7 +148,35 @@ public 111 data including pathways and online, pre and post april. Codes are CCG
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getNHSAdmissions"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSAdmissions}{}}}
+\subsection{Method \code{getNHSAdmissions()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getNHSAdmissions(truncate = 0, ...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getNHSCapacityEstimate"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSCapacityEstimate}{}}}
+\subsection{Method \code{getNHSCapacityEstimate()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getNHSCapacityEstimate(window = 28)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getPHELADCases"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHELADCases}{}}}
+\subsection{Method \code{getPHELADCases()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHELADCases(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEDashboard"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEDashboard}{}}}
 \subsection{Method \code{getPHEDashboard()}}{
 Get UK outbreak timeseries data
 \subsection{Usage}{
@@ -150,6 +191,7 @@ and combining the results.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEApiNations"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEApiNations}{}}}
 \subsection{Method \code{getPHEApiNations()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHEApiNations(...)}\if{html}{\out{</div>}}
@@ -158,6 +200,7 @@ and combining the results.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEApiNHSRegions"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEApiNHSRegions}{}}}
 \subsection{Method \code{getPHEApiNHSRegions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHEApiNHSRegions(...)}\if{html}{\out{</div>}}
@@ -166,6 +209,7 @@ and combining the results.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEApiNHSTrusts"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEApiNHSTrusts}{}}}
 \subsection{Method \code{getPHEApiNHSTrusts()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHEApiNHSTrusts(...)}\if{html}{\out{</div>}}
@@ -174,6 +218,7 @@ and combining the results.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEPaginatedData"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEPaginatedData}{}}}
 \subsection{Method \code{getPHEPaginatedData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHEPaginatedData(filters, structure)}\if{html}{\out{</div>}}
@@ -197,6 +242,7 @@ list      Comprehensive list of dictionaries containing all
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEApi"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEApi}{}}}
 \subsection{Method \code{getPHEApi()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getPHEApi(
@@ -211,6 +257,7 @@ list      Comprehensive list of dictionaries containing all
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCLIMB"></a>}}
+\if{latex}{\out{\hypertarget{method-getCLIMB}{}}}
 \subsection{Method \code{getCLIMB()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getCLIMB(...)}\if{html}{\out{</div>}}
@@ -218,7 +265,22 @@ list      Comprehensive list of dictionaries containing all
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getLTLALineages"></a>}}
+\if{latex}{\out{\hypertarget{method-getLTLALineages}{}}}
+\subsection{Method \code{getLTLALineages()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getLTLALineages(
+  window = 3,
+  lineagesExpr = 5,
+  fitPoisson = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCOGUK"></a>}}
+\if{latex}{\out{\hypertarget{method-getCOGUK}{}}}
 \subsection{Method \code{getCOGUK()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getCOGUK(...)}\if{html}{\out{</div>}}
@@ -227,6 +289,7 @@ list      Comprehensive list of dictionaries containing all
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTiers"></a>}}
+\if{latex}{\out{\hypertarget{method-getTiers}{}}}
 \subsection{Method \code{getTiers()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getTiers(...)}\if{html}{\out{</div>}}
@@ -235,6 +298,7 @@ list      Comprehensive list of dictionaries containing all
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTheFireHose"></a>}}
+\if{latex}{\out{\hypertarget{method-getTheFireHose}{}}}
 \subsection{Method \code{getTheFireHose()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSDatasetProvider$getTheFireHose(...)}\if{html}{\out{</div>}}
@@ -243,6 +307,7 @@ list      Comprehensive list of dictionaries containing all
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

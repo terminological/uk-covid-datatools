@@ -16,6 +16,14 @@
 # "subgroup" -  a subgroup for source specific factors (e.g. subtypes of symptoms, severity of cases) or NA if none
 # "note" - any other info
 
+allowableStatistics = c(
+  "case","death","icu admission","hospital admission",
+  "ae visit","discharge","symptom","triage","serology",
+  "test","information seeking","negative test","ari admission","immunization",
+  "non covid hospital admission","hospital capacity","non covid icu admission","icu capacity"
+  )
+allowableTypes = c("incidence","prevalence","cumulative","background","bias","fraction")
+
 #' The covid timeseries format 
 #' @return A dataframe that is specific to the covid timeseries format.
 #' @export
@@ -23,8 +31,8 @@ covidTimeseriesFormat = ensurer::ensures_that(
   is.data.frame(.) ~ "not a data frame",
   all(c("code","name","codeType","statistic","source","ageCat","gender","type","value","subgroup","date") %in% colnames(.)) ~ "missing columns",
   lubridate::is.Date(.$date) ~ "incorrect date format",
-  all(unique(.$statistic) %in% c("case","death","icu admission","hospital admission","discharge","symptom","triage","serology","test","information seeking","negative test","ari admission","immunization")) ~ "unknown statistic value",
-  all(unique(.$type) %in% c("incidence","prevalence","cumulative","background","bias","fraction")) ~ "unknown type value",
+  all(unique(.$statistic) %in% allowableStatistics) ~ "unknown statistic value",
+  all(unique(.$type) %in% allowableTypes) ~ "unknown type value",
   length(unique(.$code)) == length(unique(paste0(.$code,.$name))) ~ "more than one code/name combination per code"
 )
 

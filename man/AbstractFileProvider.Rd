@@ -21,6 +21,7 @@ File providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New file provider
 \subsection{Usage}{
@@ -42,6 +43,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listFiles}{}}}
 \subsection{Method \code{listFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{AbstractFileProvider$listFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -60,6 +62,7 @@ a dataframe containing the full path relative to root of this provider (path) an
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listAllFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listAllFiles}{}}}
 \subsection{Method \code{listAllFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{AbstractFileProvider$listAllFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -71,6 +74,7 @@ a dataframe containing the full path relative to root of this provider (path) of
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-relativePath"></a>}}
+\if{latex}{\out{\hypertarget{method-relativePath}{}}}
 \subsection{Method \code{relativePath()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{AbstractFileProvider$relativePath(parts)}\if{html}{\out{</div>}}
@@ -79,6 +83,7 @@ a dataframe containing the full path relative to root of this provider (path) of
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{AbstractFileProvider$print()}\if{html}{\out{</div>}}
@@ -87,6 +92,7 @@ a dataframe containing the full path relative to root of this provider (path) of
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

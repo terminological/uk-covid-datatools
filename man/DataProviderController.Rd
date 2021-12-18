@@ -25,6 +25,7 @@ Control data sources
 \item \href{#method-metawardProcessor}{\code{DataProviderController$metawardProcessor()}}
 \item \href{#method-loadSpimSources}{\code{DataProviderController$loadSpimSources()}}
 \item \href{#method-fileProvider}{\code{DataProviderController$fileProvider()}}
+\item \href{#method-cacheProvider}{\code{DataProviderController$cacheProvider()}}
 \item \href{#method-clone}{\code{DataProviderController$clone()}}
 }
 }
@@ -40,6 +41,7 @@ Control data sources
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New provider controller
 \subsection{Usage}{
@@ -62,6 +64,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-unloadCaches"></a>}}
+\if{latex}{\out{\hypertarget{method-unloadCaches}{}}}
 \subsection{Method \code{unloadCaches()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$unloadCaches()}\if{html}{\out{</div>}}
@@ -70,6 +73,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-updateCodes"></a>}}
+\if{latex}{\out{\hypertarget{method-updateCodes}{}}}
 \subsection{Method \code{updateCodes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$updateCodes()}\if{html}{\out{</div>}}
@@ -78,6 +82,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-updateSPIMDatasets"></a>}}
+\if{latex}{\out{\hypertarget{method-updateSPIMDatasets}{}}}
 \subsection{Method \code{updateSPIMDatasets()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$updateSPIMDatasets()}\if{html}{\out{</div>}}
@@ -86,6 +91,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-updateDatasets"></a>}}
+\if{latex}{\out{\hypertarget{method-updateDatasets}{}}}
 \subsection{Method \code{updateDatasets()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$updateDatasets()}\if{html}{\out{</div>}}
@@ -94,6 +100,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-timeseriesProcessor"></a>}}
+\if{latex}{\out{\hypertarget{method-timeseriesProcessor}{}}}
 \subsection{Method \code{timeseriesProcessor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$timeseriesProcessor(...)}\if{html}{\out{</div>}}
@@ -102,6 +109,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-chessProcessor"></a>}}
+\if{latex}{\out{\hypertarget{method-chessProcessor}{}}}
 \subsection{Method \code{chessProcessor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$chessProcessor(...)}\if{html}{\out{</div>}}
@@ -110,6 +118,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-survivalProcessor"></a>}}
+\if{latex}{\out{\hypertarget{method-survivalProcessor}{}}}
 \subsection{Method \code{survivalProcessor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$survivalProcessor(...)}\if{html}{\out{</div>}}
@@ -118,6 +127,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-metawardProcessor"></a>}}
+\if{latex}{\out{\hypertarget{method-metawardProcessor}{}}}
 \subsection{Method \code{metawardProcessor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$metawardProcessor(...)}\if{html}{\out{</div>}}
@@ -126,6 +136,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-loadSpimSources"></a>}}
+\if{latex}{\out{\hypertarget{method-loadSpimSources}{}}}
 \subsection{Method \code{loadSpimSources()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$loadSpimSources(fileProvider, ...)}\if{html}{\out{</div>}}
@@ -134,6 +145,7 @@ Title
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fileProvider"></a>}}
+\if{latex}{\out{\hypertarget{method-fileProvider}{}}}
 \subsection{Method \code{fileProvider()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataProviderController$fileProvider(
@@ -158,7 +170,17 @@ Title
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-cacheProvider"></a>}}
+\if{latex}{\out{\hypertarget{method-cacheProvider}{}}}
+\subsection{Method \code{cacheProvider()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataProviderController$cacheProvider(wd)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

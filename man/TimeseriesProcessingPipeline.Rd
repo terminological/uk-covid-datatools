@@ -28,8 +28,12 @@ General timeseries processing
 \item \href{#method-completeAndRemoveAnomalies}{\code{TimeseriesProcessingPipeline$completeAndRemoveAnomalies()}}
 \item \href{#method-smoothAndSlopeTimeseries}{\code{TimeseriesProcessingPipeline$smoothAndSlopeTimeseries()}}
 \item \href{#method-logIncidenceStats}{\code{TimeseriesProcessingPipeline$logIncidenceStats()}}
-\item \href{#method-estimateGrowthRate}{\code{TimeseriesProcessingPipeline$estimateGrowthRate()}}
+\item \href{#method-estimatePoissonGrowthRate}{\code{TimeseriesProcessingPipeline$estimatePoissonGrowthRate()}}
 \item \href{#method-estimateGrowthRate2}{\code{TimeseriesProcessingPipeline$estimateGrowthRate2()}}
+\item \href{#method-estimateGrowthRate}{\code{TimeseriesProcessingPipeline$estimateGrowthRate()}}
+\item \href{#method-estimateBaselineGrowthRate}{\code{TimeseriesProcessingPipeline$estimateBaselineGrowthRate()}}
+\item \href{#method-estimateRtFromGrowthRate}{\code{TimeseriesProcessingPipeline$estimateRtFromGrowthRate()}}
+\item \href{#method-estimateRtJepidemic}{\code{TimeseriesProcessingPipeline$estimateRtJepidemic()}}
 \item \href{#method-estimateRtQuick}{\code{TimeseriesProcessingPipeline$estimateRtQuick()}}
 \item \href{#method-estimateRt}{\code{TimeseriesProcessingPipeline$estimateRt()}}
 \item \href{#method-defaultOffsetAssumptions}{\code{TimeseriesProcessingPipeline$defaultOffsetAssumptions()}}
@@ -43,6 +47,7 @@ General timeseries processing
 \item \href{#method-estimateVolatilty}{\code{TimeseriesProcessingPipeline$estimateVolatilty()}}
 \item \href{#method-plotRt}{\code{TimeseriesProcessingPipeline$plotRt()}}
 \item \href{#method-plotGrowthRate}{\code{TimeseriesProcessingPipeline$plotGrowthRate()}}
+\item \href{#method-minMaxDate}{\code{TimeseriesProcessingPipeline$minMaxDate()}}
 \item \href{#method-plotGrowthIncidence}{\code{TimeseriesProcessingPipeline$plotGrowthIncidence()}}
 \item \href{#method-gogPlot}{\code{TimeseriesProcessingPipeline$gogPlot()}}
 \item \href{#method-plotEvents}{\code{TimeseriesProcessingPipeline$plotEvents()}}
@@ -69,6 +74,7 @@ General timeseries processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
@@ -77,6 +83,7 @@ General timeseries processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDates">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDates}{\code{ukcovidtools::CovidTimeseriesProvider$fixDates()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
@@ -86,6 +93,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -94,6 +102,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-incidenceFromCumulative"></a>}}
+\if{latex}{\out{\hypertarget{method-incidenceFromCumulative}{}}}
 \subsection{Method \code{incidenceFromCumulative()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$incidenceFromCumulative(covidTimeseries, ...)}\if{html}{\out{</div>}}
@@ -102,6 +111,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-cumulativeFromIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-cumulativeFromIncidence}{}}}
 \subsection{Method \code{cumulativeFromIncidence()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$cumulativeFromIncidence(covidTimeseries, ...)}\if{html}{\out{</div>}}
@@ -110,6 +120,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateRagged"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateRagged}{}}}
 \subsection{Method \code{aggregateRagged()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateRagged(
@@ -126,6 +137,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateAge"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateAge}{}}}
 \subsection{Method \code{aggregateAge()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateAge(covidTimeseries, fn = sum, ...)}\if{html}{\out{</div>}}
@@ -134,6 +146,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateGender"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateGender}{}}}
 \subsection{Method \code{aggregateGender()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateGender(covidTimeseries, fn = sum, ...)}\if{html}{\out{</div>}}
@@ -142,6 +155,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateSubgroup"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateSubgroup}{}}}
 \subsection{Method \code{aggregateSubgroup()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateSubgroup(covidTimeseries, fn = sum, ...)}\if{html}{\out{</div>}}
@@ -150,6 +164,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateSource"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateSource}{}}}
 \subsection{Method \code{aggregateSource()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateSource(
@@ -163,6 +178,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-aggregateGeography"></a>}}
+\if{latex}{\out{\hypertarget{method-aggregateGeography}{}}}
 \subsection{Method \code{aggregateGeography()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$aggregateGeography(
@@ -184,7 +200,9 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-imputeAndWeeklyAverage"></a>}}
+\if{latex}{\out{\hypertarget{method-imputeAndWeeklyAverage}{}}}
 \subsection{Method \code{imputeAndWeeklyAverage()}}{
+Low tech smoothing and missing value imputation, based on a log1p transform and a sgolayfilter to preserve ends of timeseries. This also does anomaly detection and is the one stop shop to minimally clean a timeseries.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$imputeAndWeeklyAverage(
   covidTimeseries,
@@ -193,57 +211,118 @@ General timeseries processing
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{window}}{- the window length for the rolling average}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+- the timeseries with an Imputed.value, a RollMean.value column and an Imputed flag.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-removeZeroDays"></a>}}
+\if{latex}{\out{\hypertarget{method-removeZeroDays}{}}}
 \subsection{Method \code{removeZeroDays()}}{
+Identify and make NA any days for which the timeseries contains no non zero values
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$removeZeroDays(r0Timeseries, valueVar = "value")}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{valueVar}}{- the value to look at}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+- the same timeseries with totally missing days replaced with NA
+TODO: do we want to store the original somewhere?
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-completeAndRemoveAnomalies"></a>}}
+\if{latex}{\out{\hypertarget{method-completeAndRemoveAnomalies}{}}}
 \subsection{Method \code{completeAndRemoveAnomalies()}}{
+Ensure completeness timeseries and remove anomalies. Anomolies are detected as improbable observations based on a an approximate log normal of surrounding obs.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$completeAndRemoveAnomalies(
   r0Timeseries,
-  outlier_min = 10,
-  outlier_sd = 5,
   window = 9,
+  p = 0.999,
+  min = 1,
   valueVar = "value",
   originalValueVar = "value.original",
-  precision = 1e-05,
   allowZeroDays = FALSE
-)}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-smoothAndSlopeTimeseries"></a>}}
-\subsection{Method \code{smoothAndSlopeTimeseries()}}{
-Calculate an estimate of rate of change of Rt using a loess
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$smoothAndSlopeTimeseries(
-  r0Timeseries,
-  smoothExpr,
-  ...,
-  window = 14,
-  leftSided = TRUE
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{R0timeseries}}{a grouped df contianing R0 timeseries including a date and a `Median(R)` column from EpiEstim}
+\item{\code{window}}{- the window over which to check anomaly status (defaults to 9)}
+
+\item{\code{p}}{- how unlikely is an oservation before removed.}
+
+\item{\code{min}}{- the minimum SD allowed (to prevent runs of identical values causing issues)}
+
+\item{\code{valueVar}}{- the column to screen}
+
+\item{\code{originalValueVar}}{- the column to save to originals to}
+
+\item{\code{allowZeroDays}}{- whether to identify dates for which there are zero counts across all groups. This helps in the detection of totally missing days.}
+
+\item{\code{r0timeseries}}{a time series includeing incidence totals}
+
+\item{\code{smoothExpr}}{an expression to evaluate in the context of the dataframe to generate a variable to be smoothed (e.g. log(value+1))}
+
+\item{\code{...}}{- not used}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+an timeseries with Anomaly column
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-smoothAndSlopeTimeseries"></a>}}
+\if{latex}{\out{\hypertarget{method-smoothAndSlopeTimeseries}{}}}
+\subsection{Method \code{smoothAndSlopeTimeseries()}}{
+Calculate an estimate of central value and rate of change of a value using a loess smoother. This makes no assumptions and can be used for any statistic.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$smoothAndSlopeTimeseries(
+  r0Timeseries,
+  smoothExpr,
+  ...,
+  window = 21
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{smoothExpr}}{an expression to evaluate in the context of the dataframe to generate a variable to be smoothed (e.g. log(value+1))}
+
+\item{\code{...}}{- not used}
+
+\item{\code{window}}{- the smoothing window (defaults to 21)}
+
+\item{\code{r0timeseries}}{a timeseries including a date}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+an timeseries augmented with estimates of the smoothExpr and first derivative of the smoothExpr.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-logIncidenceStats"></a>}}
+\if{latex}{\out{\hypertarget{method-logIncidenceStats}{}}}
 \subsection{Method \code{logIncidenceStats()}}{
+Calculates a basket of stats based on
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$logIncidenceStats(
   covidTimeseries,
@@ -255,29 +334,182 @@ Calculate an estimate of rate of change of Rt using a loess
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covidTimeseries}}{a covid timeseries data frame}
+
+\item{\code{window}}{- the length of the smoothing window (default 21)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe with groupwise growth rate estimates
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimatePoissonGrowthRate"></a>}}
+\if{latex}{\out{\hypertarget{method-estimatePoissonGrowthRate}{}}}
+\subsection{Method \code{estimatePoissonGrowthRate()}}{
+Calculates a growth rate timeseries using a fitted quasipoisson model fitted using sliding windows on the assumption growth is constant over the window this is for comparison and estmiateGrowthRate(...) is almost always better
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimatePoissonGrowthRate(
+  covidTimeseries,
+  window = 21,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covidTimeseries}}{a covid timeseries data frame}
+
+\item{\code{window}}{- the length of the smoothing window (default 21)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe with groupwise growth rate estimates
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGrowthRate2"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGrowthRate2}{}}}
+\subsection{Method \code{estimateGrowthRate2()}}{
+Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate2(
+  covidTimeseries,
+  window = 14,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covidTimeseries}}{a covid timeseries data frame}
+
+\item{\code{window}}{- the length of the smoothing window (default 21)}
+
+\item{\code{weekendEffect}}{- the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay}
+
+\item{\code{polynomialDegree}}{- improves fit at risk of overfitting. default 1 (linear)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe with groupwise growth rate estimates
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGrowthRate"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGrowthRate}{}}}
 \subsection{Method \code{estimateGrowthRate()}}{
+Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate(
   covidTimeseries,
   window = 14,
-  growthRateWindow = 7,
-  leftSided = TRUE,
+  weekendEffect = 0.75,
+  polynomialDegree = 1,
+  nearestNeigbours = FALSE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covidTimeseries}}{a covid timeseries data frame}
+
+\item{\code{window}}{- the length of the smoothing window (default 21)}
+
+\item{\code{weekendEffect}}{- the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay}
+
+\item{\code{polynomialDegree}}{- improves fit at risk of overfitting. default 1 (linear)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe with groupwise growth rate estimates
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateBaselineGrowthRate"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateBaselineGrowthRate}{}}}
+\subsection{Method \code{estimateBaselineGrowthRate()}}{
+Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateBaselineGrowthRate(
+  covidTimeseries,
+  facets = vars(name, code, codeType),
+  window = 14,
+  weekendEffect = 0.75,
+  polynomialDegree = 1,
+  nearestNeigbours = FALSE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covidTimeseries}}{a covid timeseries data frame}
+
+\item{\code{facets}}{}
+
+\item{\code{window}}{- the length of the smoothing window (default 21)}
+
+\item{\code{weekendEffect}}{- the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay}
+
+\item{\code{polynomialDegree}}{- improves fit at risk of overfitting. default 1 (linear)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a dataframe with groupwise growth rate estimates
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateRtFromGrowthRate"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateRtFromGrowthRate}{}}}
+\subsection{Method \code{estimateRtFromGrowthRate()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRtFromGrowthRate(
+  covidTimeseries,
+  bootstraps = 1000,
+  growthVar = "Growth.value",
+  growthSEVar = "Growth.SE.value",
+  serialIntervals = self$serial,
+  joinBy = character(),
+  rawEstimates = FALSE,
+  quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
   ...
 )}\if{html}{\out{</div>}}
 }
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGrowthRate2"></a>}}
-\subsection{Method \code{estimateGrowthRate2()}}{
+\if{html}{\out{<a id="method-estimateRtJepidemic"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateRtJepidemic}{}}}
+\subsection{Method \code{estimateRtJepidemic()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateGrowthRate2(
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRtJepidemic(
   covidTimeseries,
-  window = 21,
-  weekendEffect = 0.75,
+  window = 7,
+  valueVar = "Imputed.value",
+  serialIntervals = self$serial,
+  joinBy = intersect(colnames(df), colnames(si)),
+  valueIsPoissonRate = (valueVar \%in\% c("RollMean.value", "Est.value")),
+  priorR0 = 1,
+  priorR0Sd = 2,
+  adaptivePrior = 1.25,
+  minIncidence = 100,
+  bootstraps = 1000,
+  minWindow = 7,
+  maxWindow = max(c(window, 21)),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -285,6 +517,7 @@ Calculate an estimate of rate of change of Rt using a loess
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateRtQuick"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateRtQuick}{}}}
 \subsection{Method \code{estimateRtQuick()}}{
 Calculates a survival R(t) curve on grouped data
 \subsection{Usage}{
@@ -315,6 +548,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateRt"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateRt}{}}}
 \subsection{Method \code{estimateRt()}}{
 Calculates a survival R(t) curve on grouped data
 \subsection{Usage}{
@@ -353,6 +587,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-defaultOffsetAssumptions"></a>}}
+\if{latex}{\out{\hypertarget{method-defaultOffsetAssumptions}{}}}
 \subsection{Method \code{defaultOffsetAssumptions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultOffsetAssumptions()}\if{html}{\out{</div>}}
@@ -361,6 +596,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-defaultCorrectionFactor"></a>}}
+\if{latex}{\out{\hypertarget{method-defaultCorrectionFactor}{}}}
 \subsection{Method \code{defaultCorrectionFactor()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultCorrectionFactor()}\if{html}{\out{</div>}}
@@ -369,6 +605,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-defaultR0Assumptions"></a>}}
+\if{latex}{\out{\hypertarget{method-defaultR0Assumptions}{}}}
 \subsection{Method \code{defaultR0Assumptions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$defaultR0Assumptions()}\if{html}{\out{</div>}}
@@ -377,6 +614,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-adjustRtConfidence"></a>}}
+\if{latex}{\out{\hypertarget{method-adjustRtConfidence}{}}}
 \subsection{Method \code{adjustRtConfidence()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtConfidence(
@@ -389,6 +627,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-adjustRtDates"></a>}}
+\if{latex}{\out{\hypertarget{method-adjustRtDates}{}}}
 \subsection{Method \code{adjustRtDates()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtDates(
@@ -402,6 +641,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-adjustGrowthRateDates"></a>}}
+\if{latex}{\out{\hypertarget{method-adjustGrowthRateDates}{}}}
 \subsection{Method \code{adjustGrowthRateDates()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustGrowthRateDates(
@@ -415,6 +655,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-adjustRtCorrFac"></a>}}
+\if{latex}{\out{\hypertarget{method-adjustRtCorrFac}{}}}
 \subsection{Method \code{adjustRtCorrFac()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$adjustRtCorrFac(
@@ -428,6 +669,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateRtWithAssumptions"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateRtWithAssumptions}{}}}
 \subsection{Method \code{estimateRtWithAssumptions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$estimateRtWithAssumptions(
@@ -447,6 +689,7 @@ a dataframe with groupwise Rt estimates
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateVolatilty"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateVolatilty}{}}}
 \subsection{Method \code{estimateVolatilty()}}{
 calculate a volatility statistic for the timeseries based on previous N days
 \subsection{Usage}{
@@ -470,14 +713,13 @@ calculate a volatility statistic for the timeseries based on previous N days
 \if{html}{\out{</div>}}
 }
 \subsection{Details}{
-This will not work well for timeseries with NAs
-
 $x+y=z$
 }
 
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotRt"></a>}}
+\if{latex}{\out{\hypertarget{method-plotRt}{}}}
 \subsection{Method \code{plotRt()}}{
 Plot the EpiEstim output in a standard way
 \subsection{Usage}{
@@ -515,6 +757,7 @@ Plot the EpiEstim output in a standard way
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGrowthRate"></a>}}
+\if{latex}{\out{\hypertarget{method-plotGrowthRate}{}}}
 \subsection{Method \code{plotGrowthRate()}}{
 Plot the growth rate
 \subsection{Usage}{
@@ -550,7 +793,17 @@ Plot the growth rate
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-minMaxDate"></a>}}
+\if{latex}{\out{\hypertarget{method-minMaxDate}{}}}
+\subsection{Method \code{minMaxDate()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$minMaxDate(groupedCovidRtTimeseries, buffer = 0)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGrowthIncidence"></a>}}
+\if{latex}{\out{\hypertarget{method-plotGrowthIncidence}{}}}
 \subsection{Method \code{plotGrowthIncidence()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotGrowthIncidence(
@@ -558,13 +811,21 @@ Plot the growth rate
   plotDates = NULL,
   timespan = 15,
   colour = NULL,
+  shape = NULL,
+  populationDenominatorExpr = population/1e+06,
   populationAdj = TRUE,
   showConfInt = TRUE,
   showHistorical = TRUE,
   maxAlpha = 0.6,
-  rlim = c(-0.15, 0.15),
-  ilim = c(0, NA),
-  maxSize = 6,
+  rlim = NULL,
+  ilim = NULL,
+  size = 1,
+  labellingFilterExpr = Est.value/population > quantile(Est.value/population, 0.75),
+  labellingCriteriaExpr = Est.value/population * 1e+06 * exp(Growth.value),
+  labels = 0,
+  labellingExpr = shortLabel(name),
+  highlightExpr = NULL,
+  tableText = 6,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -572,6 +833,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-gogPlot"></a>}}
+\if{latex}{\out{\hypertarget{method-gogPlot}{}}}
 \subsection{Method \code{gogPlot()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$gogPlot(...)}\if{html}{\out{</div>}}
@@ -580,6 +842,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotEvents"></a>}}
+\if{latex}{\out{\hypertarget{method-plotEvents}{}}}
 \subsection{Method \code{plotEvents()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotEvents(
@@ -593,6 +856,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDefault"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDefault}{}}}
 \subsection{Method \code{plotDefault()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotDefault(
@@ -608,6 +872,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotIncidenceQuantiles"></a>}}
+\if{latex}{\out{\hypertarget{method-plotIncidenceQuantiles}{}}}
 \subsection{Method \code{plotIncidenceQuantiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotIncidenceQuantiles(
@@ -618,6 +883,7 @@ Plot the growth rate
   dates = NULL,
   ribbons = TRUE,
   ylim = c(0, NA),
+  pointSize = 0.25,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -625,6 +891,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotIncidenceRollmean"></a>}}
+\if{latex}{\out{\hypertarget{method-plotIncidenceRollmean}{}}}
 \subsection{Method \code{plotIncidenceRollmean()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{TimeseriesProcessingPipeline$plotIncidenceRollmean(
@@ -640,6 +907,7 @@ Plot the growth rate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

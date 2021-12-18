@@ -21,6 +21,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$new(
@@ -34,6 +35,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDaily"></a>}}
+\if{latex}{\out{\hypertarget{method-getDaily}{}}}
 \subsection{Method \code{getDaily()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getDaily(id, orElse, ...)}\if{html}{\out{</div>}}
@@ -42,6 +44,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getHashCached"></a>}}
+\if{latex}{\out{\hypertarget{method-getHashCached}{}}}
 \subsection{Method \code{getHashCached()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$getHashCached(
@@ -56,6 +59,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-unloadCache"></a>}}
+\if{latex}{\out{\hypertarget{method-unloadCache}{}}}
 \subsection{Method \code{unloadCache()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{PassthroughFilesystemCache$unloadCache()}\if{html}{\out{</div>}}
@@ -64,6 +68,7 @@ Caching and dataset management
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSaved"></a>}}
+\if{latex}{\out{\hypertarget{method-getSaved}{}}}
 \subsection{Method \code{getSaved()}}{
 a pass through 2 level cache (memory / saved file / orElse function)
 \subsection{Usage}{
@@ -80,6 +85,7 @@ a pass through 2 level cache (memory / saved file / orElse function)
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

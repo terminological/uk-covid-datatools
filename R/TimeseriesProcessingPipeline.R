@@ -1,6 +1,5 @@
 #' General timeseries processing
 #' @import ggplot2
-#' @import msm
 #' @export
 TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inherit=CovidTimeseriesProvider, public = list(
   
@@ -717,7 +716,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             TRUE ~ weekendEffect)
         )
         
-        if(all(na.omit(tmp$value) == 0)) {
+        if(sum(na.omit(tmp$value) != 0) < polynomialDegree) {
           
           d$Est.value = 0
           d$Est.SE.value = NA_real_
@@ -743,8 +742,10 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           suppressWarnings({
             #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
             
+            tryCatch({
             tmp_intercept_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
             tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
+            }, error = browser)
             
             # if(any(is.na(tmp_intercept$fit))) 
             #   tmp_intercept = predict(tmp_intercept_model, d$time, band="global", se.fit=TRUE)
@@ -825,6 +826,372 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
       return(groupedDf %>% ungroup())
     }})
+  },
+  
+  #' @description Calculates a growth rate timeseries using a fitted quasipoisson model and locally fitted polynomials
+  #' @param covidTimeseries a covid timeseries data frame
+  #' @param facets 
+  #' @param window - the length of the smoothing window (default 21)
+  #' @param weekendEffect - the downweighting of figures from Saturday, Sunday and Monday to account for weekend delay
+  #' @param polynomialDegree - improves fit at risk of overfitting. default 1 (linear)
+  #' @return a dataframe with groupwise growth rate estimates
+  estimateBaselineGrowthRate = function(covidTimeseries, facets = vars(name,code,codeType), window = 14, weekendEffect = 0.75, polynomialDegree = 1, nearestNeigbours = FALSE, ... ) {
+    tmp = covidTimeseries
+    # browser()
+    for(facet in facets) {
+       tmp = tmp %>% mutate(!!facet := "all")
+    }
+    
+    if ("population" %in% colnames(covidTimeseries)) {
+      tmp = tmp %>% covidStandardDateGrouping() %>% summarise(value = sum(value), Baseline.population = sum(population))
+    } else {
+      tmp = tmp %>% covidStandardDateGrouping() %>% summarise(value = sum(value))
+    }
+    tmp = tmp %>% self$estimateGrowthRate(window = window,weekendEffect = weekendEffect, polynomialDegree = polynomialDegree, nearestNeigbours = nearestNeigbours, ...)
+    tmp = tmp %>% rename_with(.cols = starts_with("Growth"), .fn = ~ paste0("Baseline.",.x))
+    tmp = tmp %>% rename_with(.cols = starts_with("Est"), .fn = ~ paste0("Baseline.",.x))
+    tmp = tmp %>% covidStandardSelect(starts_with("Baseline"))
+    tmp = tmp %>% rename(Baseline.value = value)
+    for(facet in facets) {
+      tmp = tmp %>% select(-!!facet)
+    }
+    tmp = covidTimeseries %>% inner_join(tmp, by=covidStandardJoins(sapply(facets,as_label)))
+    return(tmp)
+  },
+  
+  
+  
+  ## growth rate advantage ----
+  # TODO convert to use standard format instead of all estimates...
+  # doAdvantage = function(
+  #   allEstimates,
+  #   gtAssumptions,
+  #   names = unname(unlist(nationalClusters)),
+  #   sources="infection episodes",
+  #   datasets="Symptomatic",
+  #   methods = unique(allEstimates$method),
+  #   gtSource = unique(gtAssumptions$source),
+  #   ...
+  # ) {
+  #   
+  #   # browser()
+  #   
+  #   tsp$getSaved(id = "ADVANTAGE",params = list(allEstimates,gtAssumptions,names,sources,datasets,methods,gtSource), ..., function(...) {
+  #     
+  #     gtAssumptions = gtAssumptions %>% filter(source %in% gtSource)
+  #     
+  #     filteredTS = allEstimates %>% 
+  #       filter(source %in% sources) %>%
+  #       filter(dataset %in% datasets) %>%
+  #       filter(method %in% methods) %>% 
+  #       filter(name %in% names) %>% 
+  #       mutate(name = name %>% ordered(names)) %>%
+  #       filter(!is.na(Growth) & !is.na(Growth.SE))
+  #     
+  #     # filteredTS = filteredTS %>% group_by(source,date,subgroup,dataset,method,name)
+  #     # browser()
+  #     
+  #     discGRToR = function(r, d) {
+  #       
+  #       d$p = purrr::map2(d$a,d$y,function(a,y) y/(a - lag(a,default=0)))
+  #       
+  #       R = pmap(list(r,d$a,d$y,d$p), function(r,a,y,p) {
+  #         # tmp = r/sum(y*(exp(-r*lag(a,default=0))-exp(-r*a))/(a - lag(a,default=0)))
+  #         tmp = r/sum(p*(exp(-r*lag(a,default=0))-exp(-r*a)))
+  #         # if(!is.finite(tmp)) browser()
+  #         return(tmp)
+  #       })
+  #       # browser()
+  #       return(unlist(R))
+  #     }
+  #     
+  #     grpComparison = gtAssumptions %>% rename(gtSource = source) %>% group_by(subgroup, gtSource) %>% group_modify(function(d,g,...) {
+  #       
+  #       subgroupfilteredTS = filteredTS %>% filter(subgroup==g$subgroup) %>% select(-subgroup) %>% mutate(
+  #         # this is the num / denominator of the fractions above. 
+  #         # and is probably an R estimate
+  #         # keep this as a list column for now
+  #         bootstrap = map2( Growth, Growth.SE, function(mean,sd) {
+  #           tibble(
+  #             id = 1:nrow(d),
+  #             # alpha = gtAssumptions$alpha,
+  #             # beta = gtAssumptions$beta,
+  #             sample_r = rnorm(nrow(d),mean,sd), 
+  #             R = ( 1 + sample_r/d$beta ) ^ d$alpha,
+  #             R_disc = discGRToR(sample_r, d)
+  #           )
+  #         })
+  #         # ) %>% mutate(
+  #         #   R.mean = purrr::map_dbl(bootstrap, function(.x) mean(.x$R)),
+  #         #   R.sd = purrr::map_dbl(bootstrap, function(.x) sd(.x$R))
+  #       )
+  #       
+  #       return(subgroupfilteredTS)
+  #     })  
+  #     
+  #     # browser()
+  #     
+  #     disadv = grpComparison %>% filter(subgroup == "negative")
+  #     adv = grpComparison %>% filter(subgroup == "positive")
+  #     
+  #     compare = adv %>% inner_join(disadv, by=c("gtSource","source","date","dataset","method","name"), suffix=c(".adv",".disadv"))
+  #     
+  #     # calculate the ratio for each bootstrap.
+  #     compare2 = compare %>% mutate(bootstrap = purrr::map2(bootstrap.adv, bootstrap.disadv, function(adv,disadv) {
+  #       adv %>% inner_join(disadv, by="id", suffix=c(".adv",".disadv")) %>% mutate(
+  #         transadv_cont = R.adv/R.disadv,
+  #         transadv = R_disc.adv/R_disc.disadv
+  #       )
+  #     })) %>% select(-bootstrap.adv, -bootstrap.disadv)
+  #     
+  #     return(compare2)
+  #   })
+  # }
+  # 
+  # summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, combineGt = FALSE, completeDominance=NULL, zeroSpos=NULL) {
+  #   # Options are:
+  #   
+  #   if(combineDays) {
+  #     compare2 = compare %>% 
+  #       mutate(name = as.character(name)) %>% 
+  #       inner_join(completeDominance %>% select(name=area,date), by="name",suffix=c("",".after")) %>% 
+  #       inner_join(zeroSpos %>% select(name=area,date), by="name",suffix=c("",".before")) %>% 
+  #       filter(date > date.after & date < date.before)
+  #   } else {
+  #     compare2 = compare %>%
+  #       mutate(
+  #         date.after = min(date)-1,
+  #         date.before = max(date)+1
+  #       )
+  #   }
+  #   
+  #   compare2 = compare2 %>% unnest(bootstrap)
+  #   
+  #   # Summarise bootstraps for each day
+  #   compare2 = compare2 %>% group_by(source,dataset,name)
+  #   # merge methods
+  #   if (!combineGt) compare2 = compare2 %>% group_by(gtSource, .add=TRUE)
+  #   if (!mergeModels) compare2 = compare2 %>% group_by(method, .add=TRUE)
+  #   # Summarise bootstraps for all days
+  #   if (!combineDays) {
+  #     compare2 = compare2 %>% group_by(date, .add=TRUE)
+  #   } else {
+  #     compare2 = compare2 %>% group_by(date.after,date.before, .add=TRUE)
+  #   }
+  #   
+  #   # browser()
+  #   # grps == compare2 %>% groups()
+  #   # compare2 = compare2 %>% summarise(
+  #   #     bootstrap = bind_rows(bootstrap),
+  #   #     bootstrap.adv = bind_rows(bootstrap.adv),
+  #   #     bootstrap.disadv = bind_rows(bootstrap.disadv),
+  #   # )
+  #   
+  #   out = compare2 %>% summarise(
+  #     transadv.mean = mean(transadv),
+  #     transadv.sd = sd(transadv),
+  #     
+  #     transadv.Quantile.0.025 = quantile(transadv,0.025),
+  #     transadv.Quantile.0.25 = quantile(transadv,0.25),
+  #     transadv.Quantile.0.5 = quantile(transadv,0.5),
+  #     transadv.Quantile.0.75 = quantile(transadv,0.75),
+  #     transadv.Quantile.0.975 = quantile(transadv,0.975),
+  #     
+  #     R.adv.mean = mean(R_disc.adv),
+  #     R.adv.sd = sd(R_disc.adv),
+  #     R.disadv.mean = mean(R_disc.disadv),
+  #     R.disadv.sd = sd(R_disc.disadv)
+  #   )
+  #   
+  #   return(out)
+  #   
+  # }
+  
+  ## reproduction number ----
+  
+  estimateRtFromGrowthRate = function(
+    covidTimeseries, 
+    bootstraps=1000,
+    growthVar = "Growth.value", 
+    growthSEVar = "Growth.SE.value", 
+    serialIntervals = self$serial,
+    joinBy = character(),
+    rawEstimates = FALSE,
+    quantiles = c(0.025,0.25,0.5,0.75,0.975),
+    ...) {
+    
+    growthVar = ensym(growthVar)
+    growthSEVar =  ensym(growthSEVar)
+    
+    df = covidTimeseries %>% dplyr::filter(type=="incidence") 
+    si = serialIntervals$getInfectivityProfile()
+    
+    if (!as_label(growthVar) %in% colnames(df)) {
+      df = df %>% self$estimateGrowthRate(...)
+    }
+    
+    collision = intersect(setdiff(colnames(df),names(joinBy)),setdiff(colnames(si),joinBy))
+    if(length(collision) > 0) {
+      stop("Naming collision detected. Did you mis-specify joinBy? Affected columns were: ",collision)
+    }
+    if(length(joinBy) > 0) {
+      message("Differentially applying serial interval by facets: ",joinBy)
+    }
+    
+    self$getHashCached(object = df, operation="ESTIM-RT-FROM-GR", params=list(bootstraps, si, growthVar, growthSEVar, joinBy, rawEstimates, quantiles), ... , orElse = function (ts, ...) {
+      
+      # TODO: detect name collisions
+      si %>% group_modify(function(d1,g1,...) {
+        
+        # Iterate over the serial interval distributions types in the provider
+        
+        # d1 = si %>% ungroup() %>% filter(row_number()==1) %>% select(y,a)
+        # g1 = si %>% ungroup() %>% filter(row_number()==1) %>% select(-y,-a)
+        message("Serial interval: ", g1 %>% unite(m, everything(), sep=", ", na.rm=TRUE) %>% pull(m))
+        
+        # grab the y matrix from the list column
+        y_cols = d1$y[[1]]
+        a = d1$a[[1]]
+        # figure out how many bootstraps we need:
+        bootsPerInf = max(c(bootstraps %/% dim(y)[2],1))
+        # lose the zero values in y and a, if present (which they will be):
+        if (a[1]==0) {
+          y_cols = y_cols[-1,]
+          a = a[-1]
+        }
+        # get the infectivity profiles as a list of vectors, each bootstrap profile will be a vector.
+        ys = asplit(y_cols, MARGIN=2)
+        
+        # filter df items that match something in the serial interval provider. 
+        # the default cross join setting joinBy=character() should let everything through (tested - good to know this works)
+        tmpDf = df %>% semi_join(g1, joinBy)
+        # If nothing matches use unfiltered
+        # if (nrow(tmpDf) == 0) tmpDf = df
+        
+        tmpDf %>% covidStandardGrouping() %>% group_modify(function(d2,g2,...) {
+          
+          message("Timeseries: ", g2 %>% unite(m, everything(), sep=", ", na.rm=TRUE) %>% pull(m))
+          
+          # Iterate over the different timeseries in the filtered covid timeseries
+          #g2 = tmpDf %>% covidStandardGrouping() %>% group_data() %>% filter(row_number()==1) %>% select(-.rows)
+          #d2 = tmpDf %>% covidStandardGrouping() %>% semi_join(g2) %>% ungroup() %>% select(-covidStandardJoins())
+          
+          d3 = d2 %>% mutate(R = map2(!!growthVar, !!growthSEVar, function(mean_r,sd_r) {
+            
+            r_samples = rnorm(bootsPerInf*length(ys),mean_r,sd_r)
+            rs = asplit(matrix(r_samples,nrow=length(ys)), MARGIN=1)
+            # browser()
+            out = map2(rs,ys,function(r10,y) {
+              # browser()
+              R10 = sapply(r10, function(r) {
+                # browser()
+                R = r/sum(y*(exp(-r*lag(a,default=0))-exp(-r*a))/(a - lag(a,default=0)))
+              })
+            })
+            R_out = as.vector(sapply(out,c))
+            if(rawEstimates) return(R_out)
+            R_q = quantile(R_out, quantiles)
+            names(R_q) = paste0("Rt.Quantile.",quantiles)
+            R_summ = enframe(R_q) %>% pivot_wider() %>% mutate(Rt.value = mean(R_out), Rt.SE.value = sd(R_out))
+            return(R_summ)
+          }))
+          
+          if(rawEstimates) return(d3)
+          return(d3 %>% unnest(R))
+          
+        }) %>% return()
+        # This is the part of the timeseries which is relevant to the given group of serial intervals
+        
+      }) %>% return()
+      #This is combined now with serial interval metadata. The details of the serial interval can be got from the serial interval provider.
+      
+    }) %>% return()
+  },
+  
+  estimateRtJepidemic = function(
+    covidTimeseries, 
+    window = 7,
+    valueVar = "Imputed.value", 
+    serialIntervals = self$serial,
+    joinBy = intersect(colnames(df),colnames(si)),
+    valueIsPoissonRate = (valueVar %in% c("RollMean.value","Est.value")),
+    priorR0 = 1, priorR0Sd=2, adaptivePrior = 1.25, minIncidence = 100, bootstraps=1000, minWindow = 7, maxWindow = max(c(window,21)),
+    # quantiles = c(0.025,0.25,0.5,0.75,0.975), jepidemic does not support custon quantiles although this is possible in the collector.
+    ...) {
+    
+    df = covidTimeseries %>% dplyr::filter(type=="incidence") 
+    
+    # Fill in missing values.
+    if(!valueVar %in% colnames(covidTimeseries)) {
+      if (valueVar %in% c("RollMean.value","Imputed.value")) {
+        df = df %>% self$imputeAndWeeklyAverage(...)
+      } else if (valueVar == "Est.value") {
+        df = df %>% self$estimateGrowthRate(window=14,...)
+      }
+    } 
+    
+    df = df %>% covidStandardGrouping()
+    
+    si = serialIntervals$getInfectivityProfile()
+    # valueVar = ensym(valueVar)
+    
+    collision = intersect(setdiff(colnames(df),names(joinBy)),setdiff(colnames(si),joinBy))
+    if(length(collision) > 0) {
+      stop("Naming collision detected. Did you mis-specify joinBy? Affected columns were: ",collision)
+    }
+    if(length(joinBy) > 0) {
+      message("Differentially applying serial interval by facets: ",joinBy)
+    }
+    
+    self$getHashCached(object = df, operation="ESTIM-RT-JEPI", params=list(bootstraps, si, valueVar, joinBy, maxWindow, valueIsPoissonRate, priorR0, priorR0Sd, adaptivePrior, minIncidence, window), ... , orElse = function (ts, ...) {
+      
+      if(minIncidence > 0) {
+        estim2 = J$CoriEstimator$new(r0Mean = priorR0,r0SD = priorR0Sd,maxWindow = maxWindow)
+        estim2$selectAdaptiveWindow(incidenceSum = 100,minWindow = minWindow)
+      } else {
+        estim2 = J$CoriEstimator$new(r0Mean = priorR0,r0SD = priorR0Sd,maxWindow = window)
+        estim2$selectSpecificWindow(window = window)
+      }
+      if (adaptivePrior < 1) {
+        estim2$withDefaultPrior()
+      } else {
+        estim2$withAdaptivePrior(factor = adaptivePrior)
+      }
+      
+      estim2$collectMixtureQuantiles()
+      estim2$inMiddleOfTimeseries()
+      
+      si %>% group_modify(function(d1,g1,...) {
+        
+        # Iterate over the serial interval distributions types in the provider
+        message("Serial interval: ", g1 %>% unite(m, everything(), sep=", ", na.rm=TRUE) %>% pull(m))
+        
+        # grab the y matrix from the list column
+        y_cols = d1$y[[1]]
+        a = d1$a[[1]]
+        if (any(a-lag(a,default=-1) != 1)) stop("Cori estimator needs daily spaced infectivity profiles but these are irregular.")
+        estim2$withInfectivityProfileMatrix(y_cols)
+        bootsPerInf = max(c(bootstraps %/% dim(y_cols)[2],1))
+        
+        # filter df items that match something in the serial interval provider. 
+        # the default cross join setting joinBy=character() should let everything through (tested - good to know this works)
+        tmpDf = df %>% semi_join(g1, joinBy)
+
+        if (valueIsPoissonRate) {
+          d3 = estim2$estimateRtFromRates(tmpDf,dateColName = "date", rateColName = valueVar, samplesPerProfile = bootsPerInf)
+        } else {
+          d3 = estim2$estimateRt(tmpDf,dateColName = "date", incidenceColName = valueVar)    
+        }
+        
+        return(d3)
+        
+      }) -> allRt
+      #This is combined now with serial interval metadata. The details of the serial interval can be got from the serial interval provider.
+      
+      rm(estim2)
+      return(allRt)
+      
+    }) %>% return()
   },
   
   #' @description Calculates a survival R(t) curve on grouped data
@@ -1421,9 +1788,35 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     return(as.Date(groupedCovidRtTimeseries %>% summarise(p = max(date,na.rm = TRUE)) %>% pull(p) %>% min(na.rm = TRUE) - buffer, "1970-01-01"))
   },
   
-  plotGrowthIncidence = function(groupedCovidRtTimeseries, plotDates = NULL, timespan=15, colour=NULL, shape=NULL, populationAdj = TRUE, showConfInt = TRUE, showHistorical = TRUE, maxAlpha=0.6, rlim=NULL, ilim=NULL, size=1, ...) {
+  plotGrowthIncidence = function(
+      groupedCovidRtTimeseries, 
+      plotDates = NULL, timespan=15, colour=NULL, shape=NULL, 
+      populationDenominatorExpr = population/1000000,
+      populationAdj = TRUE, 
+      showConfInt = TRUE, 
+      showHistorical = TRUE, maxAlpha=0.6, rlim=NULL, ilim=NULL, size=1, 
+      labellingFilterExpr = Est.value/population > quantile(Est.value/population,0.75),
+      labellingCriteriaExpr = Est.value/population*1000000*exp(Growth.value), 
+      labels = 0,
+      labellingExpr = shortLabel(name),
+      highlightExpr = NULL,
+      tableText=6,
+      ...
+    ) {
+    
+    populationDenominatorExpr = enexpr(populationDenominatorExpr)
     colour = enexpr(colour)
     shape = enexpr(shape)
+    labellingFilterExpr = enexpr(labellingFilterExpr)
+    labellingCriteriaExpr = enexpr(labellingCriteriaExpr)
+    labellingExpr = enexpr(labellingExpr)
+    highlightExpr = enexpr(highlightExpr)
+    
+    if (identical(highlightExpr,NULL)) {
+      if (labels>0) {highlightExpr = as.symbol("isLabelled")}
+      else {highlightExpr = TRUE}
+    }
+    
     if(length(maxAlpha==1)) maxAlpha = c(maxAlpha,maxAlpha)
     
     grps = groupedCovidRtTimeseries %>% groups()
@@ -1448,7 +1841,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     }
     
     
-    if(populationAdj & !("population" %in% colnames(df))) {
+    if(populationAdj & any(all.names(populationDenominatorExpr)=="population") & !("population" %in% colnames(df))) {
       df = df %>% self$demog$findDemographics()
     }
     
@@ -1469,9 +1862,9 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     if (populationAdj) {
       subsetDf = subsetDf %>%
         mutate(
-          incidence = Est.value/population*1000000,
-          incidenceLow = Est.Quantile.0.025.value/population*1000000,
-          incidenceHi = Est.Quantile.0.975.value/population*1000000,
+          incidence = Est.value/!!populationDenominatorExpr,
+          incidenceLow = Est.Quantile.0.025.value/!!populationDenominatorExpr,
+          incidenceHi = Est.Quantile.0.975.value/!!populationDenominatorExpr,
           growth = Growth.Quantile.0.5.value,
           growthLow = Growth.Quantile.0.025.value,
           growthHi = Growth.Quantile.0.975.value
@@ -1522,21 +1915,99 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       }
     }
     
-    p2 = ggplot(subsetDf, aes(x=growth, y=incidence, group=tmpGrpId, !!!variable), !!!fixed)
+    fullDf = subsetDf
+    
+    # Just the final point of each path 
     
     points = subsetDf %>% filter(timeOffset==0)
+    # The points with labels
+    labPoint = points %>% 
+      filter(!!labellingFilterExpr) %>% 
+      mutate(
+        label = !!labellingExpr,
+        criteria = !!labellingCriteriaExpr
+      ) %>% 
+      arrange(desc(criteria)) %>% 
+      filter(row_number()<=labels)
+    subsetDf$isLabelled = subsetDf$tmpGrpId %in% labPoint$tmpGrpId
+    
+    subsetDf = subsetDf %>% filter(!!highlightExpr)
+    isHighlighted = (nrow(fullDf) != nrow(subsetDf))
+    
+    p2 = ggplot()
+    
     p2 = p2 +
       geom_vline(xintercept = 0, colour="grey40")
     if(showConfInt) p2 = p2 +  
-      geom_errorbar(data = points,mapping=aes(ymin=incidenceLow, ymax=incidenceHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)+
-      geom_errorbar(data = points,mapping=aes(xmin=growthLow, xmax= growthHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)
-    p2 = p2+
-      geom_path(aes(alpha=fade*maxAlpha[2]),linejoin = "round",lineend = "round")
+      geom_errorbar(data = points,mapping=aes(x=growth, ymin=incidenceLow, ymax=incidenceHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)+
+      geom_errorbar(data = points,mapping=aes(y =incidence,xmin=growthLow, xmax= growthHi),colour="grey50",size=0.5,alpha=maxAlpha[1],width=0)
+    #aes(x=growth, y=incidence, group=tmpGrpId, !!!variable), !!!fixed
+    if (isHighlighted) {
+      # TODO: grey out background select out points by some criteria. plot the path with a fixed grey value
+      # plot the selected paths as below
       
+      p2 = p2+
+        geom_path(data=fullDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[2]*2/3),size = size*0.5*2/3, linejoin = "round",lineend = "round",colour="grey70")
+      tmpFixed = fixed
+      tmpVariable = variable
+      tmpFixed$colour = "grey70"
+      tmpVariable$colour = NULL
+      # browser()
+      if(showHistorical) {
+        #p2 = p2 + geom_point(data=fullDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1], !!!tmpVariable),size=size,stat="identity",position="identity",!!! tmpFixed)
+        p2 = p2 + rlang::exec(
+          geom_point,
+          !!!c(list(
+            data=fullDf, 
+            mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1]*2/3, !!!tmpVariable),
+            size=size*0.5,
+            stat="identity",
+            position="identity"), tmpFixed))
+      } else {
+        #p2 = p2 + geom_point(data=fullDf %>% filter(timeOffset==0), mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1], !!!tmpVariable),size=size,stat="identity",position="identity", !!! tmpFixed)
+        p2 = p2 + rlang::exec(
+          geom_point, 
+          !!!c(list(
+            data=fullDf %>% filter(timeOffset==0), 
+            mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1]*2/3, !!!tmpVariable),
+            size=size*0.5,
+            stat="identity",
+            position="identity"), tmpFixed))
+      }
+    } 
+    
+    # this highlighted subset gets plotted regardless
+    p2 = p2+rlang::exec(
+      geom_path,
+      !!!c(list(
+        data=subsetDf, 
+        mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[2], !!!variable), 
+        size=size*2/3,
+        stat="identity",
+        position="identity", 
+        linejoin = "round", 
+        lineend = "round"), fixed))
+    
     if(showHistorical) {
-      p2 = p2 + geom_point(data=subsetDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!!fixed)
+      # p2 = p2 + geom_point(data=subsetDf, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!! fixed)
+      p2 = p2 + rlang::exec(
+        geom_point,
+        !!!c(list(
+          data=subsetDf, 
+          mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=fade*maxAlpha[1], !!!variable),
+          size=size,
+          stat="identity",
+          position="identity"), fixed))
     } else {
-      p2 = p2 + geom_point(data=points, mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!!fixed)
+      #p2 = p2 + geom_point(data=subsetDf %>% filter(timeOffset==0), mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1], !!!variable),size=size,stat="identity",position="identity",!!! fixed)
+      p2 = p2 + rlang::exec(
+        geom_point,
+        !!!c(list(
+          data=subsetDf %>% filter(timeOffset==0), 
+          mapping=aes(x=growth, y=incidence, group=tmpGrpId, alpha=maxAlpha[1], !!!variable),
+          size=size,
+          stat="identity",
+          position="identity"), fixed))
     }
     
     p2 = p2 +
@@ -1549,8 +2020,30 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
     
     p2=p2+facet_wrap(vars(plotDate))
     
+    
+    
+    if (labels>0) {
+      
+      p2=p2+ggrepel::geom_label_repel(
+        data = labPoint,
+        mapping=aes(x=growth,y=incidence,label=label),
+        inherit.aes = FALSE,
+        min.segment.length = 0, segment.colour = "blue",colour="blue",fill="#F0F0F0A0",size=2,segment.size=0.25,nudge_x = +0.05,nudge_y = +0.025)
+      
+      p3 = standardPrintOutput::simpleFigureTable(labPoint %>% select(label,name) %>% distinct() %>% arrange(label),pts = tableText)
+      out = list(
+        plot = p2,
+        legend = p3
+      )
+      
+    } else {
+      
+      out = p2
+      
+    }
+    
     #browser()  
-    return(p2)
+    return(out)
   },
   
   gogPlot = function(...) self$plotGrowthIncidence(...),
@@ -1697,9 +2190,128 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
       geom_point(data=df %>% filter(Anomaly),mapping=aes(y=y),colour="red",size=0.5, alpha=1, shape=16,show.legend = FALSE) +
       geom_line(aes(y=yMid,...),alpha=1)
     return(p2)
-  }#,
+  },
   
-  # ## convert to sts ----
+  
+  
+  ## MAP PLOT ----
+  
+  
+  plotLabelledMap = function(map, 
+     fillExpr, fillLimit = c(NA,NA), fillName="incidence/1M", hardFillLimit=c(TRUE,FALSE),
+     labellingFilterExpr = Est.value/population > quantile(Est.value/population,0.75),
+     labellingCriteriaExpr = Est.value/population*1000000*exp(Growth.value), 
+     labels = 6,
+     labellingExpr = shortLabel(name),
+     insetMapShape = self$geog$getMap("NHSER20") %>% filter(name=="London"),
+     insetTrim = FALSE,
+     insetPos.x = Inf, 
+     insetPos.y = Inf,
+     insetWidth = 0.4,
+     insetVjust = 1,
+     insetHjust = 1,
+     fillFunction = scale_fill_viridis_c, fillBreaks=waiver(), fillLabels=waiver(),
+     facets = vars(date),
+     tableText=6,
+     ... 
+  ) {
+    
+    fillDots = rlang::list2(...)
+    
+    fillExpr = enexpr(fillExpr)
+    labellingFilterExpr = enexpr(labellingFilterExpr)
+    labellingCriteriaExpr = enexpr(labellingCriteriaExpr)
+    labellingExpr = enexpr(labellingExpr)
+    
+    map = map %>% mutate(fillValue = scales::squish(!!fillExpr,fillLimit)) %>% ungroup() %>% sf::st_as_sf()
+    limits = range(fillLimit[hardFillLimit],map$fillValue,na.rm = TRUE)
+    
+    shapeFilter = insetMapShape %>% ungroup() %>% summarise() %>% sf::st_buffer(-0.01)
+    lonMap = map %>% filter(sf::st_intersects(shapeFilter,.,sparse = FALSE))
+    if (insetTrim) lonMap = lonMap %>% sf::st_intersection(insetMapShape)
+    #ggplot(lonMap)+geom_sf()+geom_sf(data=lonNHSER,fill=NA,colour="black",size=0.5)
+    
+    
+    if(nrow(lonMap) > 0) {
+      insPlots = lonMap %>% group_by(!!!facets) %>% group_modify(function(d,g, ...) {
+        
+        p2a_ins = ggplot(d) + 
+          geom_sf(aes(fill=fillValue),size = 0.05,colour="grey") + 
+          geom_sf(data=insetMapShape, fill=NA,size=0.1,colour="white") +
+          theme_void() + 
+          do.call(fillFunction,args = c(list(breaks=fillBreaks, labels=fillLabels, limit=limits, guide="none"), fillDots))
+        
+        # x range
+        xr = ggplot_build(p2a_ins)$layout$panel_params[[1]]$x_range
+        # N.b. should be x.range but not for sf objects
+        
+        # y range
+        yr = ggplot_build(p2a_ins)$layout$panel_params[[1]]$y_range
+        
+        return(tibble(label=list(p2a_ins), aspect = (xr[2]-xr[1])/(yr[2]-yr[1])))
+      })
+    } else {
+      insPlots = NULL
+    }
+    
+    asp = min(insPlots$aspect)
+    
+    if(is.null(insPlots)) {
+      p2a = ggplot()
+    } else {
+      p2a = ggplot() + 
+        # Add in inset
+        ggpp::geom_plot(data=insPlots, mapping=aes(label=label), x=insetPos.x, y=insetPos.y,vp.width = insetWidth,vp.height = insetWidth/asp, vjust=insetVjust,hjust=insetHjust)
+    }
+    p2a = p2a +
+      geom_sf(data = map, mapping=aes(fill=fillValue),size = 0.05,colour="grey") + 
+      standardPrintOutput::defaultMapLayout() + 
+      fillFunction(breaks=fillBreaks, labels=fillLabels, limit=limits, name=fillName, ...) + 
+      standardPrintOutput::smallLegend(textSize = 6,spaceLegend = 1) + 
+      theme(legend.text = element_text(angle = 30, vjust = 1, hjust=1))
+    
+    if (labels>0) {
+      
+      labPoint = map %>% 
+        covidStandardDateGrouping(name,code) %>% 
+        filter(!!labellingFilterExpr) %>% 
+        mutate(criteria = !!labellingCriteriaExpr) %>% 
+        arrange(desc(criteria)) %>% 
+        filter(row_number()<=labels)
+      # browser()
+      mapLabs = labPoint %>% ungroup() %>%
+        sf::st_centroid() %>%
+        mutate(
+          x=sf::st_coordinates(.)[,"X"], 
+          y=sf::st_coordinates(.)[,"Y"],
+          label = !!labellingExpr
+        ) %>% 
+        as_tibble()
+      
+      p2b = p2a + ggrepel::geom_label_repel(
+        data = mapLabs,
+        mapping=aes(x=x,y=y,label=label),
+        inherit.aes = FALSE,
+        min.segment.length = 0, segment.colour = "blue",colour="blue",fill="#F0F0F0A0",size=2,segment.size=0.25,nudge_x = -1)
+      p2 = standardPrintOutput::simpleFigureTable(mapLabs %>% select(label,name) %>% distinct() %>% arrange(label),pts = tableText)
+      
+    } else {
+      
+      p2b = p2a
+      p2 = NA
+      mapLabs = NA
+      
+    }
+    
+    
+    
+    return(list(plot = p2b, legend=p2, labelDf = mapLabs))
+    
+  }
+  
+  
+  
+  # TODO: convert to sts
   # toSts = function(covidTimeseries, valueExpr) {
   #   
   # }
@@ -1709,19 +2321,3 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
 
 
 
-# completeTimeseries = ensurer::ensures_that(
-#   .$
-#   . %>% covidStandardGrouping() %>% dplyr::mutate(check = lead(date)==date) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be unique"
-#   . %>% covidStandardGrouping() %>% dplyr::mutate(check = lead(date)==date+1) %>% dplyr::pull(check) %>% all(na.rm=TRUE) ~ "Dates must be contiguous"
-# )
-# 
-# nonNegativeIncidence = ensurer::ensures_that(
-#   . %>% dplyr::mutate(check = (statistic != "incidence" | !is.na(value))) %>% pull(check) %>% all() ~ "Incidence values cannot be NA",
-#   . %>% dplyr::mutate(check = (statistic != "incidence" | value >=0)) %>% pull(check) %>% all() ~ "Incidence values cannot be negative."
-# )
-# 
-# covidTimeseriesFormat = ensurer::ensures_that(
-#   +covidTimeseriesFormat,
-#   +completeTimeseries,
-#   +nonNegativeIncidence
-# )

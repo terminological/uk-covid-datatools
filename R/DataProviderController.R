@@ -127,7 +127,7 @@ DataProviderController = R6::R6Class("DataProviderController", inherit = Passthr
     if(cfg$type == "local") {
       prov = LocalFileProvider$new(cfg)
     } else if(cfg$type == "s3") {
-      prov = S3FileProvider$new(cfg)
+      prov = S3FileProvider$new(cfg, cache=self$directory)
     }  else if(cfg$type == "sftp-over-ssh") {
       prov = SFTPOverSSHFileProvider$new(cfg)
     } else if(cfg$type == "sftp") {

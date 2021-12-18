@@ -34,7 +34,7 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
     
     getHashCached = function(object, operation, params = NULL, orElse, ...) {
       #dots = rlang::list2(...)
-      id = paste0(operation,"-",as.character(openssl::md5(serialize(object, connection = NULL))))
+      id = paste0(operation,"-",as.character(digest::digest(object, algo="md5")))
       self$getSaved(id=id, dir=self$tmpWd, params=params, orElse=orElse, object, ...)
     },
     
@@ -61,17 +61,20 @@ PassthroughFilesystemCache = R6::R6Class("PassthroughFilesystemCache",
       if (identical(nocache,NULL)) {
         nocache = getOption("ukcovid.cache.disabled", self$nocache)
       }
+      if (identical(debug,NULL)) {
+        debug = getOption("ukcovid.cache.debug", self$debug)
+      }
       if (identical(dir,NULL)) {
         dir = self$wd
       }
-      id = paste0(id,"-",openssl::md5(serialize(deparse(orElse),connection=NULL)))
+      id = paste0(id,"-",digest::digest(deparse(orElse), algo="md5"))
       # 
       # if(length(dots)>0) {
       #   dots = dots[order(names(dots))]
       #   id = paste0(id,"-",as.character(openssl::md5(serialize(dots, connection = NULL))))
       # }
       if(!identical(params,NULL)) {
-        id = paste0(id,"-",as.character(openssl::md5(serialize(params, connection = NULL))))
+        id = paste0(id,"-",as.character(digest::digest(params, algo="md5")))
       }
       filename = paste0(dir,"/",id,".rda")
       if(nocache) {

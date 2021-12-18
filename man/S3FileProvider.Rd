@@ -19,6 +19,7 @@ Read only file providers
 \item \href{#method-listAllFiles}{\code{S3FileProvider$listAllFiles()}}
 \item \href{#method-listFiles}{\code{S3FileProvider$listFiles()}}
 \item \href{#method-getFile}{\code{S3FileProvider$getFile()}}
+\item \href{#method-getZip}{\code{S3FileProvider$getZip()}}
 \item \href{#method-print}{\code{S3FileProvider$print()}}
 \item \href{#method-clone}{\code{S3FileProvider$clone()}}
 }
@@ -33,6 +34,7 @@ Read only file providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 SFTP over SSH tunnel file provider
 \subsection{Usage}{
@@ -42,6 +44,7 @@ SFTP over SSH tunnel file provider
   key = config$accesskey,
   secret = config$secretkey,
   region = config$region,
+  cache = tempdir(check = TRUE),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -69,6 +72,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-finalize"></a>}}
+\if{latex}{\out{\hypertarget{method-finalize}{}}}
 \subsection{Method \code{finalize()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$finalize()}\if{html}{\out{</div>}}
@@ -77,6 +81,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listAllFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listAllFiles}{}}}
 \subsection{Method \code{listAllFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$listAllFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -85,6 +90,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listFiles}{}}}
 \subsection{Method \code{listFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$listFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -93,6 +99,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getFile}{}}}
 \subsection{Method \code{getFile()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$getFile(filename)}\if{html}{\out{</div>}}
@@ -100,7 +107,17 @@ the provider
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getZip"></a>}}
+\if{latex}{\out{\hypertarget{method-getZip}{}}}
+\subsection{Method \code{getZip()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$getZip(filename, asFile = FALSE)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{S3FileProvider$print()}\if{html}{\out{</div>}}
@@ -109,6 +126,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

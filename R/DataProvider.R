@@ -75,6 +75,56 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
        TRUE ~ "unknown")
    },
    
+   normaliseDemographics = function(df, 
+         genderVars = c("gender","sex"), 
+         ethnicityVars = c("ethnicity_final","ethnicity_category","ethnicity_full"), 
+         residentialVars = c("cat","residence_type"),
+         na.value=NA_character_
+      ) {
+      
+      if (any(colnames(df) %in% ethnicityVars)) {
+         ethnicityVarLabel = head(colnames(df)[colnames(df) %in% ethnicityVars],1)
+         join = c("ethnicity_final")
+         names(join) = ethnicityVarLabel
+         df = df %>% left_join(ukcovidtools::ethnicityLookup, by=join)
+      }
+      
+      if (any(colnames(df) %in% genderVars)) {
+         genderVar = as.symbol(head(colnames(df)[colnames(df) %in% genderVars],1))
+         df = df %>% mutate(
+            gender = case_when(
+               is.na(!!genderVar) ~ na.value,
+               !!genderVar %>% stringr::str_detect("f|F") ~ "female",
+               !!genderVar %>% stringr::str_detect("m|M") ~ "male",
+               !!genderVar %>% stringr::str_detect("u|U") ~ "unknown",
+               TRUE ~ "unknown"))
+      }
+      
+      if (any(colnames(df) %in% residentialVars)) {
+         residentialVar = as.symbol(head(colnames(df)[colnames(df) %in% residentialVars],1))
+         df = df %>% mutate(
+            residential_category = case_when(
+               is.na(!!residentialVar) ~ na.value,
+               !!residentialVar == 'Residential dwelling (including houses, flats, sheltered accommodation)' ~ "Residential",
+               !!residentialVar == 'Care/Nursing home' ~ "Care home",
+               !!residentialVar == 'Undetermined'~"Unknown",
+               !!residentialVar == 'Medical facilities (including hospitals and hospices, and mental health)'~"Other",
+               !!residentialVar == 'Other property classifications'~"Other",
+               !!residentialVar == 'House in multiple occupancy (HMO)' ~ "Residential",
+               !!residentialVar == 'Prisons, detention centres, secure units'~"Other",
+               !!residentialVar == 'Residential institution (including residential education)'~"Other",
+               !!residentialVar == 'No fixed abode'~"Other",
+               !!residentialVar == 'Overseas address'~"Other",
+               !!residentialVar %>% stringr::str_detect("(C|c)are") ~ "Care home",
+               !!residentialVar %>% stringr::str_detect("(N|n)ursing") ~ "Care home",
+               !!residentialVar %>% stringr::str_starts("Residential") ~ "Residential",
+               TRUE ~ "Other"
+            )
+         )
+      }
+      return(df)
+   },
+   
    normaliseAgeCat = function(ageCat) {
       tmp_ageCat = ageCat %>% as.character() %>% stringr::str_replace(">([0-9]+)","\\1-120") %>% stringr::str_replace("<([0-9]+)","0-\\1") %>% stringr::str_replace("([0-9]+)\\+","\\1-120")
       tmp_ageCat = ifelse(is.na(tmp_ageCat) | tmp_ageCat == "0-120" | stringr::str_to_lower(tmp_ageCat)=="unknown","120-120",tmp_ageCat)
@@ -168,4 +218,5 @@ DataProvider = R6::R6Class("DataProvider", inherit=PassthroughFilesystemCache,
    
    
  ))
+
 

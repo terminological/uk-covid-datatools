@@ -22,12 +22,14 @@ UK Geography
 \item \href{#method-getContainedIn}{\code{UKGeographyProvider$getContainedIn()}}
 \item \href{#method-interpolateByArea}{\code{UKGeographyProvider$interpolateByArea()}}
 \item \href{#method-createNeighbourNetwork}{\code{UKGeographyProvider$createNeighbourNetwork()}}
+\item \href{#method-getValidCodesForMap}{\code{UKGeographyProvider$getValidCodesForMap()}}
 \item \href{#method-standardiseMap}{\code{UKGeographyProvider$standardiseMap()}}
 \item \href{#method-saveShapefile}{\code{UKGeographyProvider$saveShapefile()}}
 \item \href{#method-loadAllMaps}{\code{UKGeographyProvider$loadAllMaps()}}
 \item \href{#method-createCatchment}{\code{UKGeographyProvider$createCatchment()}}
 \item \href{#method-preview}{\code{UKGeographyProvider$preview()}}
 \item \href{#method-plot}{\code{UKGeographyProvider$plot()}}
+\item \href{#method-plotLabelledMap}{\code{UKGeographyProvider$plotLabelledMap()}}
 \item \href{#method-clone}{\code{UKGeographyProvider$clone()}}
 }
 }
@@ -48,12 +50,14 @@ UK Geography
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -62,6 +66,7 @@ UK Geography
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMapList"></a>}}
+\if{latex}{\out{\hypertarget{method-getMapList}{}}}
 \subsection{Method \code{getMapList()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getMapList()}\if{html}{\out{</div>}}
@@ -70,6 +75,7 @@ UK Geography
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMap"></a>}}
+\if{latex}{\out{\hypertarget{method-getMap}{}}}
 \subsection{Method \code{getMap()}}{
 get a map as an sf object
 \subsection{Usage}{
@@ -86,6 +92,7 @@ get a map as an sf object
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getPHEDashboardMap"></a>}}
+\if{latex}{\out{\hypertarget{method-getPHEDashboardMap}{}}}
 \subsection{Method \code{getPHEDashboardMap()}}{
 
 \subsection{Usage}{
@@ -95,6 +102,7 @@ get a map as an sf object
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getIntersection"></a>}}
+\if{latex}{\out{\hypertarget{method-getIntersection}{}}}
 \subsection{Method \code{getIntersection()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getIntersection(
@@ -109,6 +117,7 @@ get a map as an sf object
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getContainedIn"></a>}}
+\if{latex}{\out{\hypertarget{method-getContainedIn}{}}}
 \subsection{Method \code{getContainedIn()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getContainedIn(
@@ -123,6 +132,7 @@ get a map as an sf object
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-interpolateByArea"></a>}}
+\if{latex}{\out{\hypertarget{method-interpolateByArea}{}}}
 \subsection{Method \code{interpolateByArea()}}{
 interpolate a variable from one set of shapes to another
 \subsection{Usage}{
@@ -160,6 +170,7 @@ a dataframe containing the grouping columns, the outputIdVar and the interpolate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-createNeighbourNetwork"></a>}}
+\if{latex}{\out{\hypertarget{method-createNeighbourNetwork}{}}}
 \subsection{Method \code{createNeighbourNetwork()}}{
 create a neighbourhood network from a shapefile
 \subsection{Usage}{
@@ -187,7 +198,17 @@ an edge list of ids with from and to columns
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getValidCodesForMap"></a>}}
+\if{latex}{\out{\hypertarget{method-getValidCodesForMap}{}}}
+\subsection{Method \code{getValidCodesForMap()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$getValidCodesForMap(mapId, shape = self$getMap(mapId))}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-standardiseMap"></a>}}
+\if{latex}{\out{\hypertarget{method-standardiseMap}{}}}
 \subsection{Method \code{standardiseMap()}}{
 standardise all maps to a minimal set of attributes with consistent naming
 \subsection{Usage}{
@@ -197,6 +218,7 @@ standardise all maps to a minimal set of attributes with consistent naming
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveShapefile"></a>}}
+\if{latex}{\out{\hypertarget{method-saveShapefile}{}}}
 \subsection{Method \code{saveShapefile()}}{
 save a shapefile to disk in the current working directory
 \subsection{Usage}{
@@ -222,6 +244,7 @@ a dataframe containing the grouping columns, the outputIdVar and the interpolate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-loadAllMaps"></a>}}
+\if{latex}{\out{\hypertarget{method-loadAllMaps}{}}}
 \subsection{Method \code{loadAllMaps()}}{
 warm up caches
 \subsection{Usage}{
@@ -231,6 +254,7 @@ warm up caches
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-createCatchment"></a>}}
+\if{latex}{\out{\hypertarget{method-createCatchment}{}}}
 \subsection{Method \code{createCatchment()}}{
 create a catchment area map from
 \subsection{Usage}{
@@ -285,6 +309,7 @@ a dataframe containing the grouping columns, the outputIdVar and the interpolate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-preview"></a>}}
+\if{latex}{\out{\hypertarget{method-preview}{}}}
 \subsection{Method \code{preview()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$preview(
@@ -301,6 +326,7 @@ a dataframe containing the grouping columns, the outputIdVar and the interpolate
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plot"></a>}}
+\if{latex}{\out{\hypertarget{method-plot}{}}}
 \subsection{Method \code{plot()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$plot(shape = self$getMap(mapId), mapId = NA)}\if{html}{\out{</div>}}
@@ -308,7 +334,40 @@ a dataframe containing the grouping columns, the outputIdVar and the interpolate
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotLabelledMap"></a>}}
+\if{latex}{\out{\hypertarget{method-plotLabelledMap}{}}}
+\subsection{Method \code{plotLabelledMap()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKGeographyProvider$plotLabelledMap(
+  map,
+  fillExpr,
+  fillLimit = c(NA, NA),
+  fillName = "incidence/1M",
+  hardFillLimit = c(TRUE, FALSE),
+  labellingFilterExpr = Est.value/population > quantile(Est.value/population, 0.75),
+  labellingCriteriaExpr = Est.value/population * 1e+06 * exp(Growth.value),
+  labels = 6,
+  labellingExpr = shortLabel(name),
+  insetMapShape = self$getMap("NHSER20") \%>\% filter(name == "London"),
+  insetTrim = FALSE,
+  insetPos.x = Inf,
+  insetPos.y = Inf,
+  insetWidth = 0.4,
+  insetVjust = 1,
+  insetHjust = 1,
+  fillFunction = scale_fill_viridis_c,
+  fillBreaks = waiver(),
+  fillLabels = waiver(),
+  facets = vars(date),
+  tableText = 6,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

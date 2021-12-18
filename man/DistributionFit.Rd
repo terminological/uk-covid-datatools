@@ -21,6 +21,7 @@ General distribution fitting algorithms
 \item \href{#method-withSingleDistribution}{\code{DistributionFit$withSingleDistribution()}}
 \item \href{#method-fromBootstrappedDistributions}{\code{DistributionFit$fromBootstrappedDistributions()}}
 \item \href{#method-fromBootstrappedData}{\code{DistributionFit$fromBootstrappedData()}}
+\item \href{#method-fromBootstrappedCensoredData}{\code{DistributionFit$fromBootstrappedCensoredData()}}
 \item \href{#method-plot}{\code{DistributionFit$plot()}}
 \item \href{#method-extractFitted}{\code{DistributionFit$extractFitted()}}
 \item \href{#method-filterModels}{\code{DistributionFit$filterModels()}}
@@ -53,6 +54,7 @@ General distribution fitting algorithms
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 New distribution fitter
 \subsection{Usage}{
@@ -80,6 +82,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-setModels"></a>}}
+\if{latex}{\out{\hypertarget{method-setModels}{}}}
 \subsection{Method \code{setModels()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$setModels(
@@ -91,6 +94,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fromUncensoredData"></a>}}
+\if{latex}{\out{\hypertarget{method-fromUncensoredData}{}}}
 \subsection{Method \code{fromUncensoredData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$fromUncensoredData(
@@ -106,6 +110,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fromCensoredData"></a>}}
+\if{latex}{\out{\hypertarget{method-fromCensoredData}{}}}
 \subsection{Method \code{fromCensoredData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$fromCensoredData(
@@ -122,6 +127,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-withSingleDistribution"></a>}}
+\if{latex}{\out{\hypertarget{method-withSingleDistribution}{}}}
 \subsection{Method \code{withSingleDistribution()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$withSingleDistribution(
@@ -136,6 +142,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fromBootstrappedDistributions"></a>}}
+\if{latex}{\out{\hypertarget{method-fromBootstrappedDistributions}{}}}
 \subsection{Method \code{fromBootstrappedDistributions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$fromBootstrappedDistributions(
@@ -148,6 +155,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fromBootstrappedData"></a>}}
+\if{latex}{\out{\hypertarget{method-fromBootstrappedData}{}}}
 \subsection{Method \code{fromBootstrappedData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$fromBootstrappedData(
@@ -160,7 +168,23 @@ New distribution fitter
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-fromBootstrappedCensoredData"></a>}}
+\if{latex}{\out{\hypertarget{method-fromBootstrappedCensoredData}{}}}
+\subsection{Method \code{fromBootstrappedCensoredData()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DistributionFit$fromBootstrappedCensoredData(
+  bootstrappedDf,
+  lowerValueExpr = left,
+  upperValueExpr = right,
+  truncate = TRUE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plot"></a>}}
+\if{latex}{\out{\hypertarget{method-plot}{}}}
 \subsection{Method \code{plot()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$plot(
@@ -175,6 +199,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-extractFitted"></a>}}
+\if{latex}{\out{\hypertarget{method-extractFitted}{}}}
 \subsection{Method \code{extractFitted()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$extractFitted(
@@ -188,6 +213,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-filterModels"></a>}}
+\if{latex}{\out{\hypertarget{method-filterModels}{}}}
 \subsection{Method \code{filterModels()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$filterModels(...)}\if{html}{\out{</div>}}
@@ -196,6 +222,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-generateSamples"></a>}}
+\if{latex}{\out{\hypertarget{method-generateSamples}{}}}
 \subsection{Method \code{generateSamples()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$generateSamples(sampleExpr = 1000, seed = 101)}\if{html}{\out{</div>}}
@@ -204,6 +231,7 @@ New distribution fitter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-calculateDensities"></a>}}
+\if{latex}{\out{\hypertarget{method-calculateDensities}{}}}
 \subsection{Method \code{calculateDensities()}}{
 calculates a set of pdfs from bootstrapped distributions
 \subsection{Usage}{
@@ -223,6 +251,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-calculateCumulativeDistributions"></a>}}
+\if{latex}{\out{\hypertarget{method-calculateCumulativeDistributions}{}}}
 \subsection{Method \code{calculateCumulativeDistributions()}}{
 calculates a set of pdfs from bootstrapped distributions
 \subsection{Usage}{
@@ -242,6 +271,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-calculateQuantiles"></a>}}
+\if{latex}{\out{\hypertarget{method-calculateQuantiles}{}}}
 \subsection{Method \code{calculateQuantiles()}}{
 calculates a set of quantiles from bootstrapped distributions
 \subsection{Usage}{
@@ -261,14 +291,16 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-discreteProbabilities"></a>}}
+\if{latex}{\out{\hypertarget{method-discreteProbabilities}{}}}
 \subsection{Method \code{discreteProbabilities()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{DistributionFit$discreteProbabilities(q, summarise = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{DistributionFit$discreteProbabilities(q, summarise = TRUE, truncate = FALSE)}\if{html}{\out{</div>}}
 }
 
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-discreteSurvival"></a>}}
+\if{latex}{\out{\hypertarget{method-discreteSurvival}{}}}
 \subsection{Method \code{discreteSurvival()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$discreteSurvival(q, summarise = TRUE)}\if{html}{\out{</div>}}
@@ -277,6 +309,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-sampledProbabilities"></a>}}
+\if{latex}{\out{\hypertarget{method-sampledProbabilities}{}}}
 \subsection{Method \code{sampledProbabilities()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$sampledProbabilities(q, summarise = TRUE)}\if{html}{\out{</div>}}
@@ -285,6 +318,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-sevenNumbers"></a>}}
+\if{latex}{\out{\hypertarget{method-sevenNumbers}{}}}
 \subsection{Method \code{sevenNumbers()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$sevenNumbers(groupedDf, colVar)}\if{html}{\out{</div>}}
@@ -293,6 +327,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-printDistributionSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-printDistributionSummary}{}}}
 \subsection{Method \code{printDistributionSummary()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$printDistributionSummary(confint = c(0.025, 0.975))}\if{html}{\out{</div>}}
@@ -301,6 +336,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-printDistributionDetail"></a>}}
+\if{latex}{\out{\hypertarget{method-printDistributionDetail}{}}}
 \subsection{Method \code{printDistributionDetail()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DistributionFit$printDistributionDetail(confint = c(0.025, 0.975))}\if{html}{\out{</div>}}
@@ -309,6 +345,7 @@ a list of randomly selected bootstraps from the fitted models.
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-tsParameterizedConvolution"></a>}}
+\if{latex}{\out{\hypertarget{method-tsParameterizedConvolution}{}}}
 \subsection{Method \code{tsParameterizedConvolution()}}{
 applies a set of parameterised convolution functions groupwise to input data
 \subsection{Usage}{
@@ -351,6 +388,7 @@ a list of matrices
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-tsDiscreteConvolution"></a>}}
+\if{latex}{\out{\hypertarget{method-tsDiscreteConvolution}{}}}
 \subsection{Method \code{tsDiscreteConvolution()}}{
 applies a set of parameterised convolution functions groupwise to input data
 \subsection{Usage}{
@@ -387,6 +425,7 @@ a list of matrices
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-tsBootstrapConvolution"></a>}}
+\if{latex}{\out{\hypertarget{method-tsBootstrapConvolution}{}}}
 \subsection{Method \code{tsBootstrapConvolution()}}{
 executes a convolution using bootstrapped parameterized distributions
 \subsection{Usage}{
@@ -419,6 +458,7 @@ the full bootstrap result (i.e. not summarized) which can be futher convoluted (
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-summariseBootstrap"></a>}}
+\if{latex}{\out{\hypertarget{method-summariseBootstrap}{}}}
 \subsection{Method \code{summariseBootstrap()}}{
 summarise the result of a bootstrapped convolution using parameterized distributions
 \subsection{Usage}{
@@ -444,6 +484,7 @@ the full bootstrap result (i.e. not summarized) which can be futher convoluted (
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

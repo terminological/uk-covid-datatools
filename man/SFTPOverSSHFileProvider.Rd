@@ -29,12 +29,14 @@ Read only file providers
 \itemize{
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="listAllFiles">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-listAllFiles}{\code{ukcovidtools::AbstractFileProvider$listAllFiles()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="relativePath">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-relativePath}{\code{ukcovidtools::AbstractFileProvider$relativePath()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="getZip">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-getZip}{\code{ukcovidtools::ReadOnlyFileProvider$getZip()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="processFiles">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-processFiles}{\code{ukcovidtools::ReadOnlyFileProvider$processFiles()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 SFTP over SSH tunnel file provider
 \subsection{Usage}{
@@ -72,6 +74,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-finalize"></a>}}
+\if{latex}{\out{\hypertarget{method-finalize}{}}}
 \subsection{Method \code{finalize()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$finalize()}\if{html}{\out{</div>}}
@@ -80,6 +83,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-curlCommand"></a>}}
+\if{latex}{\out{\hypertarget{method-curlCommand}{}}}
 \subsection{Method \code{curlCommand()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$curlCommand(relativePath)}\if{html}{\out{</div>}}
@@ -88,6 +92,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSession"></a>}}
+\if{latex}{\out{\hypertarget{method-getSession}{}}}
 \subsection{Method \code{getSession()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$getSession()}\if{html}{\out{</div>}}
@@ -96,6 +101,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listFiles}{}}}
 \subsection{Method \code{listFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$listFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -104,6 +110,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getFile}{}}}
 \subsection{Method \code{getFile()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$getFile(filename)}\if{html}{\out{</div>}}
@@ -112,6 +119,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPOverSSHFileProvider$print()}\if{html}{\out{</div>}}
@@ -120,6 +128,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

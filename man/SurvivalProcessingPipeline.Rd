@@ -39,6 +39,7 @@ Survival data procesing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -47,6 +48,7 @@ Survival data procesing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-generateSurvivalData"></a>}}
+\if{latex}{\out{\hypertarget{method-generateSurvivalData}{}}}
 \subsection{Method \code{generateSurvivalData()}}{
 generate survival data and right censored data from
 \subsection{Usage}{
@@ -80,6 +82,7 @@ data set in survival format including status, time, left, right, ageCat columns
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-generateNoAgeSurvivalData"></a>}}
+\if{latex}{\out{\hypertarget{method-generateNoAgeSurvivalData}{}}}
 \subsection{Method \code{generateNoAgeSurvivalData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$generateNoAgeSurvivalData(
@@ -96,6 +99,7 @@ data set in survival format including status, time, left, right, ageCat columns
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMaxDate"></a>}}
+\if{latex}{\out{\hypertarget{method-getMaxDate}{}}}
 \subsection{Method \code{getMaxDate()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$getMaxDate(df, dateCols)}\if{html}{\out{</div>}}
@@ -104,6 +108,7 @@ data set in survival format including status, time, left, right, ageCat columns
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-transitionMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-transitionMatrix}{}}}
 \subsection{Method \code{transitionMatrix()}}{
 generate transition matrix with enquoted tidy column sepecifications
 \subsection{Usage}{
@@ -123,6 +128,7 @@ a transistion matrix
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-generateMultistateSurvivalData"></a>}}
+\if{latex}{\out{\hypertarget{method-generateMultistateSurvivalData}{}}}
 \subsection{Method \code{generateMultistateSurvivalData()}}{
 generate survival data and right censored data from a multistate model
 \subsection{Usage}{
@@ -155,6 +161,7 @@ data set in survival format including status, time, left, right, ageCat columns
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-createSurvivalSurfaces"></a>}}
+\if{latex}{\out{\hypertarget{method-createSurvivalSurfaces}{}}}
 \subsection{Method \code{createSurvivalSurfaces()}}{
 for a set of model parameters, calculate the distributions and median
 \subsection{Usage}{
@@ -180,6 +187,7 @@ an dataframe of ageCat and time varying surfaces, including pdfs, cdfs and media
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotSurvivalSurface"></a>}}
+\if{latex}{\out{\hypertarget{method-plotSurvivalSurface}{}}}
 \subsection{Method \code{plotSurvivalSurface()}}{
 plot a survival surface as a CDF
 \subsection{Usage}{
@@ -201,6 +209,7 @@ a plot of the survival surface (1-cdf)
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotIncidenceSurface"></a>}}
+\if{latex}{\out{\hypertarget{method-plotIncidenceSurface}{}}}
 \subsection{Method \code{plotIncidenceSurface()}}{
 plot a survival surface as a PDF
 \subsection{Usage}{
@@ -222,6 +231,7 @@ a plot of the survival surface as pdf
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotProbabilityMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-plotProbabilityMatrix}{}}}
 \subsection{Method \code{plotProbabilityMatrix()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SurvivalProcessingPipeline$plotProbabilityMatrix(
@@ -234,6 +244,7 @@ a plot of the survival surface as pdf
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

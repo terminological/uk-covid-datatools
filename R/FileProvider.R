@@ -39,7 +39,26 @@ AbstractFileProvider = R6::R6Class("AbstractFileProvider", public = list(
 #' Read only file providers
 #' @export
 ReadOnlyFileProvider = R6::R6Class("ReadOnlyFileProvider", inherit=AbstractFileProvider, public = list(
+  
   getFile = function(filename) stop("abstract function"),
+  
+  getZip = function(filename, asFile=FALSE, unzipDir = tempdir()) {
+    tmpFile = self$getFile(filename)
+    if(stringr::str_ends(filename,"zip")) {
+      # gets the first file in a zip archive
+      
+      unzipped = archive::archive(tmpFile)
+      fileout = paste0(unzipDir,"/",unzipped$path[[1]])
+      if (!fs::file_exists(fileout)) {
+        archive::archive_extract(tmpFile, files = 1, dir = unzipDir)
+      }
+      return(fileout)
+        
+    } else {
+      return(tmpFile)
+    }
+  },
+  
   processFiles = function(func, paths) {
       pathsDf = tibble::tibble(path = paths)
       out = pathsDf %>% purrr::pmap(function(path,...) {
@@ -170,17 +189,18 @@ S3FileProvider = R6::R6Class("S3FileProvider", inherit=ReadOnlyFileProvider, pub
   #' @param region - S3 region
   #' @param ... for compatibility
   #' @return the provider
-  initialize = function(config, bucket = config$bucket, key=config$accesskey, secret=config$secretkey, region=config$region, ...) {
+  initialize = function(config, bucket = config$bucket, key=config$accesskey, secret=config$secretkey, region=config$region, cache=tempdir(check = TRUE), ...) {
     super$initialize(sep="/")
     self$bucket=bucket
     self$key=key
     self$secret=secret
     self$region =region
-    self$tmpdir=paste0(tempdir(check = TRUE),"/s3/",sprintf("%1.0f",as.numeric(Sys.time())*1000))
+    self$tmpdir=paste0(cache,"/s3")
   },
   finalize = function() {
     message("Cleaning up S3...")
-    unlink(self$tmpdir, recursive=TRUE, force=TRUE)
+    oldfiles = file.info(list.files(self$tmpdir, recursive = TRUE, full.names = TRUE)) %>% filter(atime<Sys.Date()-5) %>% rownames()
+    unlink(oldfiles, force=TRUE)
   },
   listAllFiles = function(directory=".") {
     directory = self$relativePath(directory)
@@ -197,9 +217,14 @@ S3FileProvider = R6::R6Class("S3FileProvider", inherit=ReadOnlyFileProvider, pub
   },
   getFile = function(filename) {
     dir.create(self$tmpdir, showWarnings = FALSE, recursive = TRUE)
-    tmp = tempfile(tmpdir=self$tmpdir) # have to save locally :-(
-    aws.s3::save_object(filename,file=tmp,bucket = self$bucket, key = self$key, secret=self$secret, region=self$region)
+    tmp = paste0(self$tmpdir,"/",openssl::md5(serialize(filename, connection = NULL))) # have to save locally :-(
+    if (!fs::file_exists(tmp)) {
+      aws.s3::save_object(filename,file=tmp,bucket = self$bucket, key = self$key, secret=self$secret, region=self$region)
+    }
     return(tmp)
+  },
+  getZip = function(filename, asFile=FALSE) {
+    super$getZip(filename, asFile=asFile, unzipDir = paste0(self$tmpdir,"/unzip"))
   },
   print=function() {invisible(self)}
 ))

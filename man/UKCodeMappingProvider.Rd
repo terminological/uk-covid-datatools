@@ -29,6 +29,7 @@ Process UK ONS code maps
 \item \href{#method-findNamesByCode}{\code{UKCodeMappingProvider$findNamesByCode()}}
 \item \href{#method-allPresentAndCorrect}{\code{UKCodeMappingProvider$allPresentAndCorrect()}}
 \item \href{#method-parentCode}{\code{UKCodeMappingProvider$parentCode()}}
+\item \href{#method-getHRGCodes}{\code{UKCodeMappingProvider$getHRGCodes()}}
 \item \href{#method-clone}{\code{UKCodeMappingProvider$clone()}}
 }
 }
@@ -49,12 +50,14 @@ Process UK ONS code maps
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -63,6 +66,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getONSMappings"></a>}}
+\if{latex}{\out{\hypertarget{method-getONSMappings}{}}}
 \subsection{Method \code{getONSMappings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getONSMappings(...)}\if{html}{\out{</div>}}
@@ -71,6 +75,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getONSRegister"></a>}}
+\if{latex}{\out{\hypertarget{method-getONSRegister}{}}}
 \subsection{Method \code{getONSRegister()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getONSRegister(...)}\if{html}{\out{</div>}}
@@ -79,6 +84,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getManualMappings"></a>}}
+\if{latex}{\out{\hypertarget{method-getManualMappings}{}}}
 \subsection{Method \code{getManualMappings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getManualMappings(...)}\if{html}{\out{</div>}}
@@ -87,6 +93,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getODSMappings"></a>}}
+\if{latex}{\out{\hypertarget{method-getODSMappings}{}}}
 \subsection{Method \code{getODSMappings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getODSMappings(...)}\if{html}{\out{</div>}}
@@ -95,6 +102,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getODSCodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getODSCodes}{}}}
 \subsection{Method \code{getODSCodes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getODSCodes(...)}\if{html}{\out{</div>}}
@@ -103,6 +111,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getManualCodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getManualCodes}{}}}
 \subsection{Method \code{getManualCodes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getManualCodes(...)}\if{html}{\out{</div>}}
@@ -111,6 +120,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getMappings"></a>}}
+\if{latex}{\out{\hypertarget{method-getMappings}{}}}
 \subsection{Method \code{getMappings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getMappings(...)}\if{html}{\out{</div>}}
@@ -119,6 +129,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getTransitiveClosure"></a>}}
+\if{latex}{\out{\hypertarget{method-getTransitiveClosure}{}}}
 \subsection{Method \code{getTransitiveClosure()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getTransitiveClosure(...)}\if{html}{\out{</div>}}
@@ -127,6 +138,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getCodes}{}}}
 \subsection{Method \code{getCodes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getCodes(...)}\if{html}{\out{</div>}}
@@ -135,6 +147,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDescriptions"></a>}}
+\if{latex}{\out{\hypertarget{method-getDescriptions}{}}}
 \subsection{Method \code{getDescriptions()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getDescriptions(...)}\if{html}{\out{</div>}}
@@ -143,6 +156,7 @@ Process UK ONS code maps
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-findCodesByName"></a>}}
+\if{latex}{\out{\hypertarget{method-findCodesByName}{}}}
 \subsection{Method \code{findCodesByName()}}{
 Get codes from name
 \subsection{Usage}{
@@ -177,6 +191,7 @@ a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-findNamesByCode"></a>}}
+\if{latex}{\out{\hypertarget{method-findNamesByCode}{}}}
 \subsection{Method \code{findNamesByCode()}}{
 Get canonical names from code
 \subsection{Usage}{
@@ -210,6 +225,7 @@ a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-allPresentAndCorrect"></a>}}
+\if{latex}{\out{\hypertarget{method-allPresentAndCorrect}{}}}
 \subsection{Method \code{allPresentAndCorrect()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$allPresentAndCorrect(df, codeVar = "code", codeTypes)}\if{html}{\out{</div>}}
@@ -218,6 +234,7 @@ a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-parentCode"></a>}}
+\if{latex}{\out{\hypertarget{method-parentCode}{}}}
 \subsection{Method \code{parentCode()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$parentCode(
@@ -233,7 +250,17 @@ a dataframe containing nameVar, outputCodeVar, outputCodeTypeVar
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getHRGCodes"></a>}}
+\if{latex}{\out{\hypertarget{method-getHRGCodes}{}}}
+\subsection{Method \code{getHRGCodes()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{UKCodeMappingProvider$getHRGCodes(...)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

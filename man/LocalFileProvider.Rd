@@ -27,12 +27,14 @@ Read only file providers
 \itemize{
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="listAllFiles">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-listAllFiles}{\code{ukcovidtools::AbstractFileProvider$listAllFiles()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="relativePath">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-relativePath}{\code{ukcovidtools::AbstractFileProvider$relativePath()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="getZip">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-getZip}{\code{ukcovidtools::ReadOnlyFileProvider$getZip()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="processFiles">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-processFiles}{\code{ukcovidtools::ReadOnlyFileProvider$processFiles()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-absolutePath"></a>}}
+\if{latex}{\out{\hypertarget{method-absolutePath}{}}}
 \subsection{Method \code{absolutePath()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$absolutePath(parts)}\if{html}{\out{</div>}}
@@ -41,6 +43,7 @@ Read only file providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 Local filesystem provider
 \subsection{Usage}{
@@ -69,6 +72,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-listFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-listFiles}{}}}
 \subsection{Method \code{listFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$listFiles(directory = ".")}\if{html}{\out{</div>}}
@@ -77,6 +81,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getFile}{}}}
 \subsection{Method \code{getFile()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$getFile(filename)}\if{html}{\out{</div>}}
@@ -85,6 +90,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LocalFileProvider$print()}\if{html}{\out{</div>}}
@@ -93,6 +99,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

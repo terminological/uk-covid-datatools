@@ -45,12 +45,14 @@ Capacity data from NHS
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -59,6 +61,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getHospitals"></a>}}
+\if{latex}{\out{\hypertarget{method-getHospitals}{}}}
 \subsection{Method \code{getHospitals()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getHospitals(...)}\if{html}{\out{</div>}}
@@ -67,6 +70,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNightingales"></a>}}
+\if{latex}{\out{\hypertarget{method-getNightingales}{}}}
 \subsection{Method \code{getNightingales()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNightingales(...)}\if{html}{\out{</div>}}
@@ -75,6 +79,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSSiteIcuCatchment"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSSiteIcuCatchment}{}}}
 \subsection{Method \code{getNHSSiteIcuCatchment()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSSiteIcuCatchment(...)}\if{html}{\out{</div>}}
@@ -83,6 +88,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSTrustIcuCatchment"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSTrustIcuCatchment}{}}}
 \subsection{Method \code{getNHSTrustIcuCatchment()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSTrustIcuCatchment(...)}\if{html}{\out{</div>}}
@@ -91,6 +97,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSSiteAcuteCatchment"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSSiteAcuteCatchment}{}}}
 \subsection{Method \code{getNHSSiteAcuteCatchment()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSSiteAcuteCatchment(...)}\if{html}{\out{</div>}}
@@ -99,6 +106,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSTrustAcuteCatchment"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSTrustAcuteCatchment}{}}}
 \subsection{Method \code{getNHSTrustAcuteCatchment()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSTrustAcuteCatchment(...)}\if{html}{\out{</div>}}
@@ -107,6 +115,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSTrustAcuteDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSTrustAcuteDemographics}{}}}
 \subsection{Method \code{getNHSTrustAcuteDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSTrustAcuteDemographics(combineGenders = TRUE)}\if{html}{\out{</div>}}
@@ -115,6 +124,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSTrustIcuDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSTrustIcuDemographics}{}}}
 \subsection{Method \code{getNHSTrustIcuDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSTrustIcuDemographics(combineGenders = TRUE)}\if{html}{\out{</div>}}
@@ -123,6 +133,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSSiteAcuteDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSSiteAcuteDemographics}{}}}
 \subsection{Method \code{getNHSSiteAcuteDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSSiteAcuteDemographics(combineGenders = TRUE)}\if{html}{\out{</div>}}
@@ -131,6 +142,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getNHSSiteIcuDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getNHSSiteIcuDemographics}{}}}
 \subsection{Method \code{getNHSSiteIcuDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NHSCapacityProvider$getNHSSiteIcuDemographics(combineGenders = TRUE)}\if{html}{\out{</div>}}
@@ -139,6 +151,7 @@ Capacity data from NHS
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

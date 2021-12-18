@@ -39,12 +39,14 @@ Process metawards output
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{MetawardProcessingPipeline$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -53,6 +55,7 @@ Process metawards output
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-readSpatialFile"></a>}}
+\if{latex}{\out{\hypertarget{method-readSpatialFile}{}}}
 \subsection{Method \code{readSpatialFile()}}{
 loads a spatial model file
 \subsection{Usage}{
@@ -72,6 +75,7 @@ a data frame containing the simulation results
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-loadAgeTimeMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-loadAgeTimeMatrix}{}}}
 \subsection{Method \code{loadAgeTimeMatrix()}}{
 loads an age time matrix from a csv
 \subsection{Usage}{
@@ -91,6 +95,7 @@ a data frame containing the filter
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-applyAgeTimeMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-applyAgeTimeMatrix}{}}}
 \subsection{Method \code{applyAgeTimeMatrix()}}{
 applies a age time matrix to a dataframe containing an incidence, an age category column, and a date column
 \subsection{Usage}{
@@ -135,6 +140,7 @@ a data frame containing the simulation results
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-loadDefaultAgeTimeMatrices"></a>}}
+\if{latex}{\out{\hypertarget{method-loadDefaultAgeTimeMatrices}{}}}
 \subsection{Method \code{loadDefaultAgeTimeMatrices()}}{
 loads a ventilator demand matrices
 \subsection{Usage}{
@@ -147,6 +153,7 @@ a list of matrices
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

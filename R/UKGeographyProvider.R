@@ -378,6 +378,10 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
   #   })
   # },
   
+  getValidCodesForMap = function(mapId, shape = self$getMap(mapId)) {
+    return(shape %>% as_tibble() %>% select(code,codeType,name) %>% distinct())
+  },
+  
   #' @description standardise all maps to a minimal set of attributes with consistent naming
   
   standardiseMap = function(sf, codeCol, nameCol, altCodeCol, codeType) {
@@ -441,6 +445,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
       distanceModifier = function(distanceToSupply) {return(2/(1+distanceToSupply/min(0.1,mean(distanceToSupply))))},
       tweakNetwork = self$sources$tweak$DEMOG, outputMap = TRUE
     ) {
+    
+    stop("Use arear catchment function.")
     
       supplyIdVar = ensym(supplyIdVar)
       supplyVar = ensym(supplyVar)
@@ -591,6 +597,8 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
     
   },
   
+  ## Map plot ----
+  
   preview = function(shape=self$getMap(mapId), mapId = NA, nameVar = "name", codeVar = "code", poi=NULL, poiNameVar = "name", poiCodeVar = "code") {
     nameVar = ensym(nameVar)
     codeVar = ensym(codeVar)
@@ -609,7 +617,124 @@ UKGeographyProvider = R6::R6Class("UKGeographyProvider", inherit=DataProvider, p
  
  plot = function(shape=self$getMap(mapId), mapId = NA) {
    ggplot(shape)+geom_sf()
- }
+ },
+ 
+ 
+ 
+ 
+  plotLabelledMap = function(
+    map, 
+    fillExpr, 
+    fillLimit = c(NA,NA), 
+    fillName="incidence/1M", 
+    hardFillLimit=c(TRUE,FALSE),
+    labellingFilterExpr = Est.value/population > quantile(Est.value/population,0.75),
+    labellingCriteriaExpr = Est.value/population*1000000*exp(Growth.value), 
+    labels = 6,
+    labellingExpr = shortLabel(name),
+    insetMapShape = self$getMap("NHSER20") %>% filter(name=="London"),
+    insetTrim = FALSE,
+    insetPos.x = Inf, 
+    insetPos.y = Inf,
+    insetWidth = 0.4,
+    insetVjust = 1,
+    insetHjust = 1,
+    fillFunction = scale_fill_viridis_c, 
+    fillBreaks=waiver(), 
+    fillLabels=waiver(),
+    facets = vars(date),
+    tableText=6,
+    ... 
+  ) {
+   
+     fillDots = rlang::list2(...)
+     
+     fillExpr = enexpr(fillExpr)
+     labellingFilterExpr = enexpr(labellingFilterExpr)
+     labellingCriteriaExpr = enexpr(labellingCriteriaExpr)
+     labellingExpr = enexpr(labellingExpr)
+     
+     map = map %>% mutate(fillValue = scales::squish(!!fillExpr,fillLimit)) %>% ungroup() %>% sf::st_as_sf()
+     limits = range(fillLimit[hardFillLimit],map$fillValue,na.rm = TRUE)
+     
+     shapeFilter = insetMapShape %>% ungroup() %>% summarise() %>% sf::st_buffer(-0.01)
+     lonMap = map %>% filter(sf::st_intersects(shapeFilter,.,sparse = FALSE))
+     if (insetTrim) lonMap = lonMap %>% sf::st_intersection(insetMapShape)
+     #ggplot(lonMap)+geom_sf()+geom_sf(data=lonNHSER,fill=NA,colour="black",size=0.5)
+     
+     
+     
+     insPlots = lonMap %>% group_by(!!!facets) %>% group_modify(function(d,g, ...) {
+       
+       p2a_ins = ggplot(d) + 
+         geom_sf(aes(fill=fillValue),size = 0.05,colour="grey") + 
+         geom_sf(data=insetMapShape, fill=NA,size=0.1,colour="white") +
+         theme_void() + 
+         #theme(plot.margin = )
+         do.call(fillFunction,args = c(list(breaks=fillBreaks, labels=fillLabels, limit=limits, guide="none"), fillDots))
+       
+       # x range
+       xr = ggplot_build(p2a_ins)$layout$panel_params[[1]]$x_range
+       # N.b. should be x.range but not for sf objects
+       
+       # y range
+       yr = ggplot_build(p2a_ins)$layout$panel_params[[1]]$y_range
+       
+       return(tibble(label=list(p2a_ins), aspect = (xr[2]-xr[1])/(yr[2]-yr[1])))
+     })
+     
+     asp = min(insPlots$aspect)
+     
+     p2a = ggplot() + 
+       # Add in inset
+       ggpp::geom_plot(data=insPlots, mapping=aes(label=label), 
+                       x=insetPos.x, y=insetPos.y,
+                       vp.width = insetWidth,
+                       vp.height = insetWidth/asp, vjust=insetVjust,hjust=insetHjust) + #npcy = "top",npcx="right",vp.width = 0.35,vp.height = 0.35/asp) +
+       geom_sf(data = map, mapping=aes(fill=fillValue),size = 0.05,colour="grey") + 
+       fillFunction(breaks=fillBreaks, labels=fillLabels, limit=limits, name=fillName, ...) + 
+       standardPrintOutput::smallLegend(textSize = 6,spaceLegend = 1) + 
+       theme(legend.text = element_text(angle = 30, vjust = 1, hjust=1))
+     
+     if (labels>0) {
+       
+       labPoint = map %>% 
+         covidStandardDateGrouping(name,code) %>% 
+         filter(!!labellingFilterExpr) %>% 
+         mutate(criteria = !!labellingCriteriaExpr) %>% 
+         arrange(desc(criteria)) %>% 
+         filter(row_number()<=labels)
+       # browser()
+       mapLabs = labPoint %>% ungroup() %>%
+         sf::st_centroid() %>%
+         mutate(
+           x=sf::st_coordinates(.)[,"X"], 
+           y=sf::st_coordinates(.)[,"Y"],
+           label = !!labellingExpr
+         ) %>% 
+         as_tibble()
+       
+       p2b = p2a + ggrepel::geom_label_repel(
+         data = mapLabs,
+         mapping=aes(x=x,y=y,label=label),
+         inherit.aes = FALSE,
+         min.segment.length = 0, segment.colour = "blue",colour="blue",fill="#F0F0F0A0",size=2,segment.size=0.25,nudge_x = -1)
+       p2 = standardPrintOutput::simpleFigureTable(mapLabs %>% select(label,name) %>% distinct() %>% arrange(label),pts = tableText)
+       
+     } else {
+       
+       p2b = p2a
+       p2 = NA
+       mapLabs = NA
+       
+     }
+     
+     
+     
+     return(list(plot = p2b, legend=p2, labelDf = mapLabs))
+     
+   }
+ 
   
 ))
 

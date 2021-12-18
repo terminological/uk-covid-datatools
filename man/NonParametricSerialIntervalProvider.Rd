@@ -9,7 +9,7 @@ General timeseries processing
 General timeseries processing
 }
 \section{Super classes}{
-\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{\link[ukcovidtools:SerialIntervalProvider]{ukcovidtools::SerialIntervalProvider}} -> \code{\link[ukcovidtools:FittedSerialIntervalProvider]{ukcovidtools::FittedSerialIntervalProvider}} -> \code{NonParametricSerialIntervalProvider}
+\code{\link[ukcovidtools:PassthroughFilesystemCache]{ukcovidtools::PassthroughFilesystemCache}} -> \code{\link[ukcovidtools:DataProvider]{ukcovidtools::DataProvider}} -> \code{\link[ukcovidtools:CovidTimeseriesProvider]{ukcovidtools::CovidTimeseriesProvider}} -> \code{\link[ukcovidtools:SerialIntervalProvider]{ukcovidtools::SerialIntervalProvider}} -> \code{NonParametricSerialIntervalProvider}
 }
 \section{Methods}{
 \subsection{Public methods}{
@@ -39,6 +39,7 @@ General timeseries processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="complete">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-complete}{\code{ukcovidtools::CovidTimeseriesProvider$complete()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="completeAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-completeAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$completeAllRegions()}}\out{</span>}
@@ -47,16 +48,19 @@ General timeseries processing
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsent">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsent}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsent()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentAllRegions">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentAllRegions}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentAllRegions()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fillAbsentByRegion">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fillAbsentByRegion}{\code{ukcovidtools::CovidTimeseriesProvider$fillAbsentByRegion()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDates">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDates}{\code{ukcovidtools::CovidTimeseriesProvider$fixDates()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="fixDatesAndNames">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-fixDatesAndNames}{\code{ukcovidtools::CovidTimeseriesProvider$fixDatesAndNames()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="setTruncation">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-setTruncation}{\code{ukcovidtools::CovidTimeseriesProvider$setTruncation()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="timeseriesQA">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-timeseriesQA}{\code{ukcovidtools::CovidTimeseriesProvider$timeseriesQA()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="CovidTimeseriesProvider" data-id="trimNAs">}\href{../../ukcovidtools/html/CovidTimeseriesProvider.html#method-trimNAs}{\code{ukcovidtools::CovidTimeseriesProvider$trimNAs()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="SerialIntervalProvider" data-id="getInfectivityProfile">}\href{../../ukcovidtools/html/SerialIntervalProvider.html#method-getInfectivityProfile}{\code{ukcovidtools::SerialIntervalProvider$getInfectivityProfile()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="SerialIntervalProvider" data-id="printSerialInterval">}\href{../../ukcovidtools/html/SerialIntervalProvider.html#method-printSerialInterval}{\code{ukcovidtools::SerialIntervalProvider$printSerialInterval()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NonParametricSerialIntervalProvider$new(
@@ -70,6 +74,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-isUncertain"></a>}}
+\if{latex}{\out{\hypertarget{method-isUncertain}{}}}
 \subsection{Method \code{isUncertain()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NonParametricSerialIntervalProvider$isUncertain()}\if{html}{\out{</div>}}
@@ -78,6 +83,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-getSummary}{}}}
 \subsection{Method \code{getSummary()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NonParametricSerialIntervalProvider$getSummary(confint = c(0.025, 0.975))}\if{html}{\out{</div>}}
@@ -86,6 +92,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getBasicConfig"></a>}}
+\if{latex}{\out{\hypertarget{method-getBasicConfig}{}}}
 \subsection{Method \code{getBasicConfig()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NonParametricSerialIntervalProvider$getBasicConfig(
@@ -99,10 +106,11 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getCustomConfigs"></a>}}
+\if{latex}{\out{\hypertarget{method-getCustomConfigs}{}}}
 \subsection{Method \code{getCustomConfigs()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NonParametricSerialIntervalProvider$getCustomConfigs(
-  period = floor(quantile(self$bootstrapSamples$value, 0.95)),
+  period = 20,
   priorR0 = 1,
   priorR0Sd = 2,
   quick = TRUE,
@@ -113,6 +121,7 @@ General timeseries processing
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

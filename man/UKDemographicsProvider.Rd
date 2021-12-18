@@ -45,12 +45,14 @@ UK ONS demographics
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="downloadDaily">}\href{../../ukcovidtools/html/DataProvider.html#method-downloadDaily}{\code{ukcovidtools::DataProvider$downloadDaily()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="labelsFromBreaks">}\href{../../ukcovidtools/html/DataProvider.html#method-labelsFromBreaks}{\code{ukcovidtools::DataProvider$labelsFromBreaks()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseAgeCat">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseAgeCat}{\code{ukcovidtools::DataProvider$normaliseAgeCat()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseDemographics">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseDemographics}{\code{ukcovidtools::DataProvider$normaliseDemographics()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="DataProvider" data-id="normaliseGender">}\href{../../ukcovidtools/html/DataProvider.html#method-normaliseGender}{\code{ukcovidtools::DataProvider$normaliseGender()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$new(providerController, ...)}\if{html}{\out{</div>}}
@@ -59,6 +61,7 @@ UK ONS demographics
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDetailedDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getDetailedDemographics}{}}}
 \subsection{Method \code{getDetailedDemographics()}}{
 get the full range of demographics data at most detailed resolution
 \subsection{Usage}{
@@ -68,6 +71,7 @@ get the full range of demographics data at most detailed resolution
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDemographicsWithEstimatedEthnicity"></a>}}
+\if{latex}{\out{\hypertarget{method-getDemographicsWithEstimatedEthnicity}{}}}
 \subsection{Method \code{getDemographicsWithEstimatedEthnicity()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$getDemographicsWithEstimatedEthnicity(...)}\if{html}{\out{</div>}}
@@ -76,6 +80,7 @@ get the full range of demographics data at most detailed resolution
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getIMDData"></a>}}
+\if{latex}{\out{\hypertarget{method-getIMDData}{}}}
 \subsection{Method \code{getIMDData()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$getIMDData(...)}\if{html}{\out{</div>}}
@@ -84,6 +89,7 @@ get the full range of demographics data at most detailed resolution
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDemographicsMap"></a>}}
+\if{latex}{\out{\hypertarget{method-getDemographicsMap}{}}}
 \subsection{Method \code{getDemographicsMap()}}{
 LSOA & Scottish Data Zones
 \subsection{Usage}{
@@ -93,6 +99,7 @@ LSOA & Scottish Data Zones
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDemographicsForShape"></a>}}
+\if{latex}{\out{\hypertarget{method-getDemographicsForShape}{}}}
 \subsection{Method \code{getDemographicsForShape()}}{
 get demographics interpolated to a specific shape file and aggregated to a given set of age bands, with optionally combining genders
 \subsection{Usage}{
@@ -123,6 +130,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDemographicsForCodeTypes"></a>}}
+\if{latex}{\out{\hypertarget{method-getDemographicsForCodeTypes}{}}}
 \subsection{Method \code{getDemographicsForCodeTypes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$getDemographicsForCodeTypes(
@@ -135,6 +143,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getDemographicsFromWeightedMapping"></a>}}
+\if{latex}{\out{\hypertarget{method-getDemographicsFromWeightedMapping}{}}}
 \subsection{Method \code{getDemographicsFromWeightedMapping()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$getDemographicsFromWeightedMapping(
@@ -151,6 +160,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getSingleDigitDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-getSingleDigitDemographics}{}}}
 \subsection{Method \code{getSingleDigitDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$getSingleDigitDemographics(
@@ -166,6 +176,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-transitiveClosureWeightedMap"></a>}}
+\if{latex}{\out{\hypertarget{method-transitiveClosureWeightedMap}{}}}
 \subsection{Method \code{transitiveClosureWeightedMap()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$transitiveClosureWeightedMap(
@@ -179,6 +190,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-findDemographics"></a>}}
+\if{latex}{\out{\hypertarget{method-findDemographics}{}}}
 \subsection{Method \code{findDemographics()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{UKDemographicsProvider$findDemographics(
@@ -194,6 +206,7 @@ get demographics interpolated to a specific shape file and aggregated to a given
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

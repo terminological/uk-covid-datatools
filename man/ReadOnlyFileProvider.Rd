@@ -15,6 +15,7 @@ Read only file providers
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-getFile}{\code{ReadOnlyFileProvider$getFile()}}
+\item \href{#method-getZip}{\code{ReadOnlyFileProvider$getZip()}}
 \item \href{#method-processFiles}{\code{ReadOnlyFileProvider$processFiles()}}
 \item \href{#method-print}{\code{ReadOnlyFileProvider$print()}}
 \item \href{#method-clone}{\code{ReadOnlyFileProvider$clone()}}
@@ -32,6 +33,7 @@ Read only file providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFile"></a>}}
+\if{latex}{\out{\hypertarget{method-getFile}{}}}
 \subsection{Method \code{getFile()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ReadOnlyFileProvider$getFile(filename)}\if{html}{\out{</div>}}
@@ -39,7 +41,17 @@ Read only file providers
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getZip"></a>}}
+\if{latex}{\out{\hypertarget{method-getZip}{}}}
+\subsection{Method \code{getZip()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ReadOnlyFileProvider$getZip(filename, asFile = FALSE, unzipDir = tempdir())}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-processFiles"></a>}}
+\if{latex}{\out{\hypertarget{method-processFiles}{}}}
 \subsection{Method \code{processFiles()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ReadOnlyFileProvider$processFiles(func, paths)}\if{html}{\out{</div>}}
@@ -48,6 +60,7 @@ Read only file providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ReadOnlyFileProvider$print()}\if{html}{\out{</div>}}
@@ -56,6 +69,7 @@ Read only file providers
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

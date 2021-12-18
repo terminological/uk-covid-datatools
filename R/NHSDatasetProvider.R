@@ -227,6 +227,105 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
       }))
     },
     
+    getNHSAdmissions = function(truncate = 0,...) {
+      self$getDaily("NHS-ADMISSIONS", ..., orElse = function (...) covidTimeseriesFormat({
+        # Load landing page
+        tmp = xml2::read_html("https://www.england.nhs.uk/statistics/statistical-work-areas/covid-19-hospital-activity/")
+        links = tmp %>% rvest::html_nodes(xpath="//a") %>% rvest::html_attr(name = "href")
+        url = function(str) {return(links[links %>% stringr::str_detect(str)])}
+        #Load files matched from landing page
+        file = self$downloadDaily(id = "NHS_ADMISSIONS",url = url("Weekly-covid-admissions-and-beds-publication-([0-9]+)\\.xlsx"),type="xlsx")
+        
+        doTab = function(tab,statistic,type,subgroup) {
+          
+          NHS_ADMISSIONS <- suppressMessages(readxl::read_excel(file, sheet = tab, skip = 14))
+          NHS_ADMISSIONS = NHS_ADMISSIONS %>% 
+            dplyr::select(-c(2)) %>%
+            dplyr::rename(code=Code,name=Name,type1=`Type 1 Acute?`) %>%
+            dplyr::filter(!is.na(code) & name!="ENGLAND") %>%
+            dplyr::mutate(codeType = "NHS Trust")
+          
+        
+          out = NHS_ADMISSIONS %>% 
+            tidyr::pivot_longer(cols=c(-type1,-code,-codeType, -name), names_to = "date", values_to = "value") %>% 
+            dplyr::mutate(date=suppressWarnings(as.Date(as.numeric(date),"1899-12-30"))) %>% 
+            dplyr::filter(!is.na(date)) %>%
+            dplyr::mutate(
+              source = "Weekly-covid-admissions-and-beds",
+              subgroup= subgroup,
+              statistic=statistic,
+              type=type,
+              gender=NA_character_,
+              ageCat=NA_character_,
+              note = tab
+            ) 
+          
+          return(out)
+        }
+        
+        out2 = bind_rows(
+          doTab("Hosp ads & diag","hospital admission","incidence","Pillar 1+2"),
+          doTab("New hosp cases","hospital admission","incidence","Pillar 1"),
+          doTab("Hosp ads from comm","hospital admission","incidence","Pillar 2"),
+          doTab("Care home ads and diags","hospital admission","incidence","Care home Pillar 1+2"),
+          doTab("All beds COVID","hospital admission","prevalence","All"),
+          doTab("MV beds COVID","icu admission","prevalence","All"),
+          doTab("Adult G&A Beds Occupied COVID","hospital admission","prevalence","Adult G&A"),
+          doTab("Adult G&A Bed Occupied NonCOVID","non covid hospital admission","prevalence","Adult G&A"),
+          doTab("Adult G&A Beds Unoccupied","hospital capacity","background","Adult G&A"),
+          doTab("Adult CC Beds Occupied COVID","icu admission","prevalence","Adult ICU"),
+          doTab("Adult CC Bed Occupied NonCOVID","non covid icu admission","prevalence","Adult ICU"),
+          doTab("Adult CC Beds Unoccupied","icu capacity","background","Adult ICU"),
+        )
+        out2 = out2 %>%  self$fillAbsent() %>% self$fixDatesAndNames(truncate) %>% self$complete()
+        out2 = out2 %>% bind_rows(
+          out2 %>% covidStandardDateGrouping(code,name,codeType) %>% group_by(type1,.add=TRUE) %>% summarise(value = sum(value)) %>% dplyr::mutate(
+            code = "E92000001",
+            name = "England",
+            codeType = "CTRY")
+          )
+        
+        return(out2)
+        
+      }))
+    },
+    
+    getNHSCapacityEstimate = function(window=28) {
+      adm = self$getNHSAdmissions()
+      
+      tmp = bind_rows(
+        adm %>% filter(statistic == "hospital admission" & type == "prevalence" & subgroup == "Adult G&A"),
+        adm %>% filter(statistic == "non covid hospital admission" & type == "prevalence" & subgroup == "Adult G&A"),
+        adm %>% filter(statistic == "hospital capacity" & type == "background" & subgroup == "Adult G&A")
+      ) %>% 
+        mutate(statistic = "hospital capacity", type = "background", subgroup = "Adult G&A") %>%
+        covidStandardDateGrouping() %>%
+        group_by(type1,.add=TRUE) %>%
+        summarise(value = sum(value)) %>% 
+        covidStandardGrouping() %>%
+        group_by(type1,.add=TRUE) %>%
+        #mutate(Smooth.value = predict(loess(value~as.integer(date), span=pmin(window/n(),1),degree=1), newdata=as.integer(date)))
+        mutate(Smooth.value = slider::slide_dbl(value,.f = mean,na.rm=TRUE,.before=window/2,.after=window/2,.complete = FALSE))
+      
+      tmp2 = bind_rows(
+        adm %>% filter(statistic == "icu admission" & type == "prevalence" & subgroup == "Adult ICU"),
+        adm %>% filter(statistic == "non covid icu admission" & type == "prevalence" & subgroup == "Adult ICU"),
+        adm %>% filter(statistic == "icu capacity" & type == "background" & subgroup == "Adult ICU")
+      ) %>% 
+        mutate(statistic = "icu capacity", type = "background", subgroup = "Adult ICU") %>%
+        covidStandardDateGrouping() %>%
+        group_by(type1,.add=TRUE) %>%
+        summarise(value = sum(value)) %>% 
+        covidStandardGrouping() %>%
+        group_by(type1,.add=TRUE) %>%
+        #mutate(Smooth.value = predict(loess(value~as.integer(date), span=pmin(window/n(),1),degree=1), newdata=as.integer(date)))
+        mutate(Smooth.value = slider::slide_dbl(value,.f = mean,na.rm=TRUE,.before=window/2,.after=window/2,.complete = FALSE))
+      
+      return(bind_rows(tmp,tmp2))
+      
+    },
+    
+    # https://www.england.nhs.uk/statistics/wp-content/uploads/sites/2/2021/09/Weekly-covid-admissions-and-beds-publication-210916.xlsx
     
     # getPHEAdmissions = function(...) {
     #   csv = "https://api.coronavirus.data.gov.uk/v2/data?areaType=nhsTrust&metric=cumAdmissions&metric=newAdmissions&format=csv"
@@ -238,7 +337,24 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
     #     tidyr::complete(date,tidyr::nesting(code,name,type)) %>% 
     #     
     # }
-    
+    getPHELADCases = function(...) {
+      self$getDaily("PHE-LAD-CASES", ..., orElse=function(...) {
+        csv = readr::read_csv("https://api.coronavirus.data.gov.uk/v2/data?areaType=ltla&metric=newCasesBySpecimenDate&format=csv")
+        ph_cases = csv %>% select(date, code = `areaCode`, name=`areaName`,value = `newCasesBySpecimenDate`) %>% mutate(codeType="LAD")
+        full_ph_cases = ph_cases %>% 
+          tidyr::complete(date,tidyr::nesting(code,name,codeType), fill=list(value=0)) %>%
+          mutate(
+            statistic="case",
+            type="incidence",
+            source = "PHE api",
+            subgroup = NA_character_,
+            ageCat = NA_character_,
+            gender = NA_character_,
+            note = NA_character_,
+          )
+        return(full_ph_cases)
+      })
+    },
     
     #' @description Get UK outbreak timeseries data
     #' @return a covidTimeserisFormat data frame with several timeseries in it
@@ -383,7 +499,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
             structure = jsonlite::toJSON(structure, auto_unbox = TRUE),
             page      = current_page
           ),
-          httr::timeout(10)
+          httr::timeout(20)
         ) -> response
         
         # Handle errors:
@@ -484,6 +600,65 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
       })
     },
     
+    getLTLALineages = function(window=3, lineagesExpr=5, fitPoisson = NULL, ...) {
+      lineagesExpr = enexpr(lineagesExpr)
+      out = self$getDaily("SANGER", params=list(window, lineagesExpr, fitPoisson), ..., orElse = function(...) {
+        tsv = readr::read_tsv("https://covid-surveillance-data.cog.sanger.ac.uk/download/lineages_by_ltla_and_week.tsv")
+        if(is.numeric(lineagesExpr)) {
+          lineages = tsv %>% filter(WeekEndDate == max(WeekEndDate)) %>% group_by(Lineage) %>% summarise(Count = sum(Count)) %>% arrange(desc(Count)) %>% pull(Lineage) %>% head(lineages)
+          lineagesExpr = expr(ifelse(Lineage %in% lineages, Lineage, "Other"))
+        }
+        tsv = tsv %>% mutate(.x = Lineage, Lineage = !!lineagesExpr) %>% select(-.x) %>% group_by(Lineage,WeekEndDate,LTLA) %>% summarise(Count = sum(Count)) %>% ungroup() 
+        if (is.null(fitPoisson)) fitPoisson = length(unique(tsv$Lineage))<10
+        
+        tsv = tsv %>% tidyr::complete( LTLA,Lineage,WeekEndDate, fill=list(Count=0))
+        dates = as.Date((min(tsv$WeekEndDate)-6):max(tsv$WeekEndDate),"1970-01-01")
+        tsvRoll = tsv %>% 
+          rename(date = WeekEndDate) %>% 
+          tidyr::complete( LTLA,Lineage,date = dates, fill=list(Count=0)) %>% 
+          group_by(LTLA,Lineage) %>% arrange(date) %>% 
+          mutate(value = slider::slide_dbl(.x = Count,.f = sum,.after = 6,.complete = FALSE)/7) %>%
+          mutate(Roll.value = slider::slide_dbl(.x = value,.f = mean,.before=3, .after = 3,.complete = FALSE))
+        
+        if(fitPoisson) {
+          tsv2 = tsv %>% group_by(LTLA,Lineage) %>% group_modify(function(d,g,...) {
+            #d = tsv %>% filter(Lineage=="AY.4") %>% group_by(LTLA,Lineage) %>% filter(cur_group_id()==7)
+            #d = tsv %>% filter(LTLA=="E06000007",Lineage=="B.1.1.44")
+  
+            d = d %>% mutate(time = as.numeric(WeekEndDate-Sys.Date()-4))
+  
+            timepoints = dates-Sys.Date()
+            
+            if(sum(na.omit(d$Count) != 0) < 3) {
+  
+              modelled = tibble(date = dates, Est.value = 0, Est.value.se=NA_real_)
+  
+            } else {
+  
+              tmp_alpha_2 = min(window/nrow(d),1)
+  
+              suppressWarnings({
+              #tryCatch({
+                #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
+                tmp_intercept_model = locfit::locfit(Count ~ locfit::lp(time, nn=tmp_alpha_2, deg=1), d, family="qpois", link="log")
+                tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, newdata = timepoints)
+                modelled = tibble(date = dates, Est.value = tmp_intercept$fit/7, Est.value.se=tmp_intercept$se.fit/7)
+              #},error = browser)
+              })
+  
+            }
+            # ggplot(modelled, aes(x=date,y=value))+geom_line()+geom_point(data=d,aes(x=WeekEndDate-4,y=Count/7))
+            return(modelled)
+          })
+          tsv3 = tsvRoll %>% left_join(tsv2, by=c("Lineage","LTLA","date"))
+        } else {
+          tsv3 = tsvRoll
+        }
+      })
+      out = out %>% rename(lineage = Lineage, code=LTLA) %>% self$codes$findNamesByCode()
+      return(out)
+    },
+    
     getCOGUK = function(...) {
       self$getDaily("COG", ..., orElse = function (...) {
         cogDate = Sys.Date()
@@ -565,6 +740,8 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         return(tidyOut)
       })
     },
+    
+    
     
     ####TODO: ----
     # BBC contact tracing matrix data:

@@ -92,7 +92,7 @@ if (!("ctas" %in% tables)) {
 }
 tables = DBI::dbListTables(con)
 ctas = tbl(con,"ctas")
-event analysis
+# event analysis
 compute <- function(remote_df, ...) {
   existing_groups <- groups(remote_df)
   remote_df <-
@@ -352,7 +352,7 @@ testTimelines = dbplyr::tbl_memdb(testTimelines, indexes=list("FINALID","date","
  
  #Possible covid readmissions
  View(tmp2 %>% filter(FINALID == -2803137))
- Linkage analysis
+ # Linkage analysis
  # admissions %>% filter(!is.na(FINALID)) %>% semi_join(immunisations, by="FINALID") %>% select(FINALID) %>% distinct() %>% count()
  # admissions %>% filter(!is.na(FINALID)) %>% anti_join(immunisations, by="FINALID") %>% select(FINALID) %>% distinct() %>% count()
  # immunisations %>% filter(!is.na(FINALID)) %>% select(FINALID) %>% distinct() %>% count()

@@ -20,18 +20,20 @@ Read only file providers
 }
 }
 \if{html}{
-\out{<details open ><summary>Inherited methods</summary>}
+\out{<details ><summary>Inherited methods</summary>}
 \itemize{
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="listAllFiles">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-listAllFiles}{\code{ukcovidtools::AbstractFileProvider$listAllFiles()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="listFiles">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-listFiles}{\code{ukcovidtools::AbstractFileProvider$listFiles()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="AbstractFileProvider" data-id="relativePath">}\href{../../ukcovidtools/html/AbstractFileProvider.html#method-relativePath}{\code{ukcovidtools::AbstractFileProvider$relativePath()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="getFile">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-getFile}{\code{ukcovidtools::ReadOnlyFileProvider$getFile()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="getZip">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-getZip}{\code{ukcovidtools::ReadOnlyFileProvider$getZip()}}\out{</span>}
 \item \out{<span class="pkg-link" data-pkg="ukcovidtools" data-topic="ReadOnlyFileProvider" data-id="processFiles">}\href{../../ukcovidtools/html/ReadOnlyFileProvider.html#method-processFiles}{\code{ukcovidtools::ReadOnlyFileProvider$processFiles()}}\out{</span>}
 }
 \out{</details>}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 SFTP over SSH tunnel file provider
 \subsection{Usage}{
@@ -63,6 +65,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-print"></a>}}
+\if{latex}{\out{\hypertarget{method-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{SFTPFileProvider$print()}\if{html}{\out{</div>}}
@@ -71,6 +74,7 @@ the provider
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{
