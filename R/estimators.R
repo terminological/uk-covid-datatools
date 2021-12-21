@@ -210,7 +210,7 @@ locfitProportionEstimate = function(simpleTimeseries, degree = 1, window = 21, e
   # }
   
   capture.output({
-  tryCatch({
+  #tryCatch({
     model = locfit::locfit(
       locfitFormula(.prop, nrowDf = nrow(simpleTimeseries), window, degree, ...),
       # weights = fit.wt,
@@ -218,7 +218,7 @@ locfitProportionEstimate = function(simpleTimeseries, degree = 1, window = 21, e
       family="qbinomial",
       link="logit",
       ev=simpleTimeseries$time 
-    )}, error=function(e) browser()
+  #  )}, error=function(e) browser()
   )})
   
   # weightLbl = case_when(

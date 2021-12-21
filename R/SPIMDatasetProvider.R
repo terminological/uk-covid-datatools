@@ -158,7 +158,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
   getSQLLite = function(reset = FALSE, nocache=FALSE) {
     
     if (self$reproduceAt != getOption("ukcovid.reproduce.at",Sys.Date())) {
-      self$reproduceAt != getOption("ukcovid.reproduce.at",Sys.Date())
+      self$reproduceAt = getOption("ukcovid.reproduce.at",Sys.Date())
       reset=TRUE
     }
     

@@ -174,7 +174,7 @@ SyntheticDatasetProvider = R6::R6Class("SyntheticDatasetProvider", inherit=Covid
   },
   
   addBootrappedObservations = function(growthRateTs, bootstraps = 100, delayHalfLife = 0, lastObservation = nrow(growthRateTs$ts)) {
-    delayProb = rev(1-exp(-(1:lastObservation)*log(2)/delayHalfLife))
+    delayProb = rev(1-0.8*exp(-(0:(lastObservation-1))*log(2)/delayHalfLife))
     obsDate = growthRateTs$ts$date[[lastObservation]]
     growthRateTs$ts = growthRateTs$ts %>% 
       filter(time <= lastObservation) %>%
@@ -186,7 +186,7 @@ SyntheticDatasetProvider = R6::R6Class("SyntheticDatasetProvider", inherit=Covid
       summarise(
         tibble(
           subgroup = 1:bootstraps, 
-          value=rpois(bootstraps,Est.observed)
+          value=rpois(bootstraps,Est.delayed)
         )) %>%
       ungroup() %>%
       mutate(statistic = "case",type = "incidence", code="XYZ", name="Test",codeType = "TEST",gender=NA_character_,ageCat=NA_character_)
@@ -212,10 +212,10 @@ SyntheticDatasetProvider = R6::R6Class("SyntheticDatasetProvider", inherit=Covid
     }
     
     out = growthRateTs %>%
-      self$addImportations(times = 1, seeds = seed) %>%
+      self$addImportations(importDf = tibble(time = 1, import = seed)) %>%
       self$addPoissonRate() %>%
-      self$addObservedRate(weekendEffect = weekendEffect,delayHalfLife = 0) %>%
-      self$addBootstrappedObservations()
+      self$addObservedRate(weekendEffect = weekendEffect) %>%
+      self$addBootstrappedObservations(delayHalfLife = 0)
     
     return(out)
   },
