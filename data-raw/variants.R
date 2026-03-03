@@ -13,6 +13,7 @@ here::i_am("data-raw/variants.R")
 # dbmtcars = tbl(con,"mtcars")
 
 variantDesignation = readxl::read_excel(here::here("data-raw/Variant Designation.xlsx"))
+variantDesignation = variantDesignation %>% mutate(not_before_date = as.Date(not_before_date))
 usethis::use_data(variantDesignation, overwrite = TRUE)
 
 

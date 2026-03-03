@@ -717,7 +717,7 @@ NHSDatasetProvider = R6::R6Class("NHSDatasetProvider", inherit=CovidTimeseriesPr
         #https://api.coronavirus.data.gov.uk/v2/data?areaType=ltla&metric=alertLevel&format=csv
         decTiers = readr::read_csv("https://api.coronavirus.data.gov.uk/v2/data?areaType=ltla&metric=alertLevel&format=csv")
         
-        tidyTiers2 = decTiers %>% select(code = areaCode, name = areaName,FROM = date, alertLevel, alertLevelName) %>% 
+        tidyTiers2 = decTiers %>% select(code = areaCode, name = areaName,FROM = date, alertLevel) %>% 
           mutate(tier = case_when(
             alertLevel ==1 ~ "one+",
             alertLevel ==2 ~ "one+", #Scot 

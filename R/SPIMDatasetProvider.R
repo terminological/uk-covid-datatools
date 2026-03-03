@@ -14,11 +14,13 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
   fileProvider=NULL,
   con=NULL,
   reproduceAt=NULL,
+  useCtas=NULL,
     
   initialize = function(providerController, fileProvider, ...) {
     self$fileProvider = fileProvider
     super$initialize(providerController, ...)
     self$reproduceAt = getOption("ukcovid.reproduce.at",Sys.Date())
+    self$useCtas = getOption("ukcovid.use.ctas",FALSE)
   },
   
   finalize = function() {
@@ -46,6 +48,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     seroprevalence = "seroprev",
     negPillar1 = "Negatives pillar1",
     negPillar2 = "Negatives pillar2",
+    negatives = "TOTAL Negative tests",
     oneOneOneLineList = "111telephony_CLEANSED",
     fourNationsCases = "Casedata_AllNations",
     sgene = "SGTF_linelist",
@@ -400,6 +403,12 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
   },
   
   getCTASLineList = function(...) {
+    if(!self$useCtas) {
+      out = self$getTable("ctas", ..., orElse = function(con,table,...) {
+        dbplyr::db_copy_to(con, table, values=ukcovidtools::blankCtas, temporary=FALSE)
+      })
+      return(out)
+    }
     #/home/terminological/S3/encrypted/2021-03-29/20210329 CTAS SGTF data.zip
     path = self$getLatest(self$filter$ctasLineList)
     tmp = self$batchLoadTable("ctas", csvPath=path, ...,  wrangleBatch = function (tmp2) {
@@ -513,7 +522,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           age = suppressWarnings(as.numeric(age)),
           FINALID = as.integer(FINALID),
           imd_rank = as.integer(imd_rank),
-          imd_decile = as.integer(imd_decile)
+          imd_decile = as.integer(imd_decile),
+          EPISODE = as.integer(EPISODE)
         ) %>% select(-sex)
       
       tmp = tmp %>% mutate(across(where(lubridate::is.Date), ~ format(.x, "%Y-%m-%d")))
@@ -652,7 +662,73 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     attr(tmp,"paths") = path
     return(tmp)
   },
-  
+ 
+  #' @description Load line list
+  #' 
+  #' @return raw line list data set
+  getTotalNegatives = function(...) {
+    path = self$getLatest(self$filter$negatives)
+    tmp = self$batchLoadTable("negatives", csvPath = path, ..., wrangleBatch = function (tmp) {
+      tmp = tmp %>% 
+        mutate(gender = self$normaliseGender(Gender)) %>%
+        select(-Gender)
+      tmp = tmp %>% 
+        mutate(
+          agegroup = case_when(
+            agegroup == "1" ~ "<5",
+            agegroup == "2" ~ "5-14",
+            agegroup == "3" ~ "5-14",
+            agegroup == "4" ~ "15-24",
+            agegroup == "5" ~ "15-24",
+            agegroup == "6" ~ "25-34",
+            agegroup == "7" ~ "25-34",
+            agegroup == "8" ~ "35-44",
+            agegroup == "9" ~ "35-44",
+            agegroup == "10" ~ "45-54",
+            agegroup == "11" ~ "45-54",
+            agegroup == "12" ~ "55-64",
+            agegroup == "13" ~ "55-64",
+            agegroup == "14" ~ "65-74",
+            agegroup == "15" ~ "65-74",
+            agegroup == "16" ~ "75-84",
+            agegroup == "17" ~ "75-84",
+            agegroup == "18" ~ "85+",
+            agegroup == "19" ~ "85+",
+            agegroup == "0 to 4" ~ "<5",
+            agegroup == "5 to 9" ~ "5-14",
+            agegroup == "10 to 14" ~ "5-14",
+            agegroup == "15 to 19" ~ "15-24",
+            agegroup == "20 to 24" ~ "15-24",
+            agegroup == "25 to 29" ~ "25-34",
+            agegroup == "30 to 34" ~ "25-34",
+            agegroup == "35 to 39" ~ "35-44",
+            agegroup == "40 to 44" ~ "35-44",
+            agegroup == "45 to 49" ~ "45-54",
+            agegroup == "50 to 54" ~ "45-54",
+            agegroup == "55 to 59" ~ "55-64",
+            agegroup == "60 to 64" ~ "55-64",
+            agegroup == "65 to 69" ~ "65-74",
+            agegroup == "70 to 74" ~ "65-74",
+            agegroup == "75 to 79" ~ "75-84",
+            agegroup == "80 to 84" ~ "75-84",
+            agegroup == "85 to 89" ~ "85+",
+            agegroup == "90 or older" ~ "85+",
+            TRUE ~ "unknown"
+          ),
+          earliestspecimendate = as.Date(earliestspecimendate, tryFormats = c("%Y-%m-%d","%d%b%Y"), optional=TRUE),
+          case_category = ifelse(is.na(LFT_Flag), NA_character_, "LFT_Only"),
+          total_negative = as.integer(total_negative),
+          pillar = case_when(pillar = "1" ~ "Pillar 1",pillar = "2" ~ "Pillar 2",TRUE ~ NA_character_)
+        )
+      
+      tmp = tmp %>% mutate(across(where(lubridate::is.Date), ~ format(.x, "%Y-%m-%d")))
+      
+      return(tmp)
+    })
+    attr(tmp,"paths") = path
+    return(tmp)
+  }, 
+ 
   ## Filtered line lists ----
   
   getLinkedVaccinations = function(..., immunisations = self$getVaccinationLineList()) {
@@ -713,6 +789,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           exposure_type,
           seq_result
         ) %>%
+        filter(seq_result != "SGTF") %>% 
         mutate(
           source = "linked_genomics"
         ) %>% compute(temporary = TRUE, indexes = list(c("FINALID","date")))
@@ -738,7 +815,8 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       combined = fromVam %>% 
         union(fromCtas) %>% 
         mutate(phe_name = replace(replace(phe_name,"VOC-",""),"VUI-","")) %>%
-        left_join(variant_designation %>% mutate(matched=1), by="phe_name",copy=TRUE) %>%
+        left_join(variant_designation %>% mutate(matched=1, not_before_date = format(not_before_date,"%Y-%m-%d")), by="phe_name",copy=TRUE) %>%
+        filter(date >= not_before_date) %>%
         compute(indexes=list("FINALID","date","phe_name","who_name",c("record_id","source")), temporary=FALSE, name=table)
       
       if(!ignore_missing & combined %>% filter(is.na(matched)) %>% count() %>% pull(n)>0) {
@@ -776,25 +854,51 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           source = "sgene"
         ) %>% compute(temporary = TRUE, indexes = list("Specimen_Number"))
       
-      fromCtas =  linked_ctas %>% 
-        left_join(fromSgene %>% select(Specimen_Number) %>% mutate(tmp=1), by=c("sgtf_specimen_number"="Specimen_Number")) %>% 
-        filter(is.na(tmp)) %>% 
-        select(
-          record_id,
-          FINALID,
-          date = sgtf_specimen_date,
-          Specimen_Number = sgtf_specimen_number,
-          sgtf,
-          sgtf_under30CT = sgtf_under30ct,
-          P2CH3CQ = p2ch3cq,
-          P2CH1CQ = p2ch1cq,
-          P2CH2CQ = p2ch2cq,
-          P2CH4CQ = p2ch4cq
-        ) %>%
-        mutate(
-          source = "linked_ctas"
-        ) %>% 
-        compute(temporary = TRUE)
+      if("sgtf_specimen_number" %in% colnames(linked_ctas)) {
+        
+        fromCtas =  linked_ctas %>%
+          left_join(fromSgene %>% select(Specimen_Number) %>% mutate(tmp=1), by=c("sgtf_specimen_number"="Specimen_Number")) %>%
+          filter(is.na(tmp)) %>%
+          select(
+            record_id,
+            FINALID,
+            date = sgtf_specimen_date,
+            Specimen_Number = sgtf_specimen_number,
+            sgtf,
+            sgtf_under30CT = sgtf_under30ct,
+            P2CH3CQ = p2ch3cq,
+            P2CH1CQ = p2ch1cq,
+            P2CH2CQ = p2ch2cq,
+            P2CH4CQ = p2ch4cq
+          ) %>%
+          mutate(
+            source = "linked_ctas"
+          ) %>%
+          compute(temporary = TRUE)
+        
+      } else {
+        
+        fromCtas =  linked_ctas %>%
+          left_join(fromSgene %>% select(FINALID,date) %>% mutate(tmp=1), by=c("sgtf_finalid"="FINALID", "sgtf_specimen_date"="date")) %>%
+          filter(is.na(tmp)) %>%
+          select(
+            record_id,
+            FINALID,
+            date = sgtf_specimen_date,
+            sgtf,
+            sgtf_under30CT = sgtf_under30ct,
+            P2CH3CQ = p2ch3cq,
+            P2CH1CQ = p2ch1cq,
+            P2CH2CQ = p2ch2cq,
+            P2CH4CQ = p2ch4cq
+          ) %>%
+          mutate(
+            Specimen_Number = NA_character_,
+            source = "linked_ctas"
+          ) %>%
+          compute(temporary = TRUE)
+        
+      }
       
       combined = fromSgene %>% 
         union(fromCtas) %>% 
@@ -1141,7 +1245,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
   
   #### Episode analysis ----
   
-  getDiagnosisEpisodes = function(..., delay=56,
+  getDiagnosisEpisodes = function(..., delay=56, 
       diagnoses = self$getDiagnosisEvents(), 
       sgene = self$getCombinedSGene(),
       genomics = self$getCombinedGenomics()
@@ -1158,12 +1262,14 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           sgene %>% self$interpretSGene() %>% select(FINALID, record_id, sGene, sgtf_under30CT, result, CT_N) %>% mutate(source = "sgene"), by=c("FINALID", "source","record_id")
         ) %>% 
         left_join( 
-          genomics %>% select(FINALID, record_id,phe_name,pango_lineage,who_name) %>% mutate(source = "genomics"), by=c("FINALID", "source","record_id")
+          genomics %>% select(FINALID, record_id,phe_name,pango_lineage,who_name, not_before_date) %>% mutate(source = "genomics"), by=c("FINALID", "source","record_id")
         ) %>% 
         mutate(
           sGene = ifelse(is.na(sGene),"Unknown",sGene)
         ) %>% 
         group_by(FINALID) %>%
+        window_order(desc(date)) %>%
+        mutate(not_before_date = cummin(not_before_date)) %>%
         window_order(date) %>%
         mutate(newEraFlag = case_when(
           # no previous test
@@ -1172,6 +1278,11 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           julianday(lag(date)) < julianday(date)-2*delay ~ 1,
           # 1-2 delay since previous & previous is not equivocal
           julianday(lag(date)) < julianday(date)-delay & sGene != "Equivocal" ~ 1,
+          # TODO: different logic with regards to variants....
+          julianday(lag(date)) < julianday(not_before_date) & julianday(date) >= julianday(not_before_date) ~ 1,
+          # julianday(lag(date)) < julianday("2021-11-08") & who_name == "Omicron" ~ 1,
+          # julianday(lag(date)) < julianday("2020-10-08") & who_name == "Alpha" ~ 1,
+          # julianday(lag(date)) < julianday("2021-02-22") & who_name == "Delta" ~ 1,
           TRUE ~ 0
         )) %>%
         mutate(
@@ -1278,14 +1389,15 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     codeType,
     statistic,
     ageBreaks = NULL,
-    genderExpr = FALSE,
+    genderExpr = NA_character_,
     excludeExpr = FALSE,
-    subgroupExpr = NULL,
-    noteExpr = NULL,
+    subgroupExpr = NA_character_,
+    noteExpr = NA_character_,
     unmatchedCode = NA_character_,
     unmatchedName = NA_character_,
     source = "phe linked data",
     validCodes = NULL,
+    truncate=NULL,
     ...
   ) {
     
@@ -1303,10 +1415,16 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     
     name = paste0("xx_incid_",tolower(codeType),"_",stringr::str_replace_all(statistic," ","_"))
     
-    self$getTable(table = name, params=list(dateVar,codeExpr,codeType,ageBreaks,excludeExpr,subgroupExpr,genderExpr,noteExpr,unmatchedCode,validCodes), ..., orElse = function(con,table,...) {
+    tbl = self$getTable(table = name, params=list(dateVar,codeExpr,codeType,ageBreaks,excludeExpr,subgroupExpr,genderExpr,noteExpr,unmatchedCode,validCodes), ..., orElse = function(con,table,...) {
       message("Calculating incidence: ",table)
       ct = codeType
-      if(identical(validCodes,NULL)) validCodes = self$codes$getCodes() %>% filter(codeType==ct & status=="live") %>% select(code, codeType, name) 
+      if(identical(validCodes,NULL)) {
+        usedCodes = linelist %>% mutate(code = !!codeExpr) %>% select(code) %>% distinct() %>% collect()
+        validCodes = self$codes$getCodes() %>% inner_join(usedCodes, by=c("code")) %>% select(code, codeType, name) %>%
+          group_by(code) %>% arrange(name) %>% filter(row_number()==1)
+      }
+      if (validCodes %>% nrow() == 0) stop("No matching validCodes?")
+      
       if(!is.na(unmatchedCode)) validCodes = validCodes %>% bind_rows(tibble(code=unmatchedCode, codeType=ct, name=unmatchedName)) 
       
       ageMapping = tibble(
@@ -1322,6 +1440,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
           gender = !!genderExpr,
           subgroup = !!subgroupExpr,
           note = !!noteExpr,
+          age = as.integer(age)
         ) %>%
         left_join(ageMapping, by="age", copy=TRUE, suffix = c(".old","")) %>%
         left_join(validCodes, by="code", copy=TRUE, suffix = c(".old","")) %>%
@@ -1330,7 +1449,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         group_by(code,codeType,name,gender,ageCat,ageCatOrder,subgroup,note,date) %>% 
         summarise(value = n()) %>%
         ungroup() %>%
-        compute(prefix = "zz_tmp_incid")
+        compute(prefix = "zz_tmp_incid", ...)
       
       if (tmp %>% count() %>% pull(n) == 0) stop("No matching geographies. Do your validCodes match your data?")
       
@@ -1349,21 +1468,28 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
         inner_join(tmp %>% select(note) %>% distinct(), by=character()) %>%
         inner_join(validCodes, copy=TRUE, by=character()) %>%
         inner_join(dates, copy=TRUE, by=character()) %>%
-        compute(prefix = "zz_tmp_incid")
+        compute(prefix = "zz_tmp_incid", ...)
       
       out = complete %>% 
-        left_join(tmp, by = c("name","code","codeType","gender","ageCat","ageCatOrder","subgroup","note","date"), na_matches="na") %>%
+        left_join(
+          tmp %>% mutate(date = date(date)), # convert julianday representation to date characte
+          by = c("name","code","codeType","gender","ageCat","ageCatOrder","subgroup","note","date"), na_matches="na") %>%
         mutate(
           value = ifelse(is.na(value),0,value),
           statistic = statistic,
           type = "incidence",
           source = source,
         ) %>%
-        compute(name=table)
+        compute(name=table, ...)
       
       deleteTempTables(con, prefix = "zz_tmp_incid")
       return(out)
     })
+    
+    return(
+      tbl %>% collect() %>% 
+        self$fixDates(truncate) %>%
+        mutate(ageCat = ordered(ageCat, levels = unique(ageCat[order(ageCatOrder)]))))
   },
   
   #' @description Load deaths data from linelist - does not preserve ethnicity
@@ -1422,8 +1548,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       ) %>% collect()
     }))
     
-    out = out %>% filter(code %>% stringr::str_starts("E")) %>% self$fixDates(truncate) %>%
-      mutate(ageCat = ordered(ageCat, levels = unique(ageCat[order(ageCatOrder)]))) %>% select(-ageCatOrder)
+    out = out %>% filter(code %>% stringr::str_starts("E"))
     
     return(out)
     
@@ -1487,8 +1612,7 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       ) %>% collect()
     }))
     
-    out = out %>% filter(code %>% stringr::str_starts("E")) %>% self$fixDates(truncate) %>%
-      mutate(ageCat = ordered(ageCat, levels = unique(ageCat[order(ageCatOrder)])))
+    out = out %>% filter(code %>% stringr::str_starts("E")) 
     return(out)
     
   },
@@ -1622,7 +1746,14 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
     })
   },
    
-  getDiagnosisEvents = function(..., cases = self$getLineList(), sgene = self$getSGeneLineList(), genomics = self$getVAMLineList(), ctas = self$getLinkedCtas(), reinfect = self$getReinfectionLineList()) {
+  getDiagnosisEvents = function(
+    ..., 
+    cases = self$getLineList(), 
+    sgene = self$getSGeneLineList(), 
+    genomics = self$getVAMLineList(), 
+    ctas = self$getLinkedCtas(), 
+    reinfect = self$getReinfectionLineList()
+  ) {
     diagnosis_events = self$getTable("diagnosis_events", ..., orElse = function (con,table, ...) { 
       onsets = cases %>%
         filter(!is.na(Onsetdate)) %>%
@@ -1675,11 +1806,16 @@ SPIMDatasetProvider = R6::R6Class("SPIMDatasetProvider", inherit=CovidTimeseries
       ctasGenomics = ctas %>%
         filter(!is.na(genomic_finalid) & !is.na(genomic_specimen_date)) %>%
         mutate(event = "sequencing", subgroup=NA_character_, source="ctas", from_source=NA_character_, from_record_id=NA_character_) %>%
-        group_by(genomic_cdr_specimen_request_sk) %>%
-        window_order(genomic_specimen_date) %>%
-        filter(row_number() == 1) %>%
-        ungroup() %>%
-        mutate(date = julianday(genomic_specimen_date)) %>%
+        mutate(date = julianday(genomic_specimen_date))
+      if ("genomic_cdr_specimen_request_sk" %in% colnames(ctasGenomics)) {
+        # Not sure if this is required or not. Newer versions of the file does not have this column.
+        ctasGenomics = ctasGenomics %>%
+          group_by(genomic_cdr_specimen_request_sk) %>%
+          window_order(genomic_specimen_date) %>%
+          filter(row_number() == 1) %>%
+          ungroup()
+      }
+      ctasGenomics = ctasGenomics %>%
         select(FINALID=genomic_finalid, event, date, source, record_id, from_source, from_record_id,subgroup) %>%
         compute(unique_indexes=list("record_id"), indexes=list("FINALID","date"))
       # 

@@ -716,7 +716,7 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
             TRUE ~ weekendEffect)
         )
         
-        if(sum(na.omit(tmp$value) != 0) < polynomialDegree) {
+        if(sum(na.omit(tmp$value) != 0) <= polynomialDegree) {
           
           d$Est.value = 0
           d$Est.SE.value = NA_real_
@@ -742,15 +742,13 @@ TimeseriesProcessingPipeline = R6::R6Class("TimeseriesProcessingPipeline", inher
           suppressWarnings({
             #ev = seq(min(d$time)-1,max(d$time)+1,length.out = floor(2*nrow(d)/window+1))
             
-            tryCatch({
-            tmp_intercept_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
-            tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
-            }, error = browser)
+            tmp_intercept = NULL
+            try({
+              tmp_intercept_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", weights = tmp$weights, ev=d$time)
+              tmp_intercept = predict(tmp_intercept_model, band="global", se.fit=TRUE, where="fitp")
+            })
             
-            # if(any(is.na(tmp_intercept$fit))) 
-            #   tmp_intercept = predict(tmp_intercept_model, d$time, band="global", se.fit=TRUE)
-            if(any(is.na(tmp_intercept$fit))) 
-              browser()
+            if(is.null(tmp_intercept) | any(is.na(tmp_intercept$fit))) browser()
             
             tmp_slope_model = locfit::locfit(lpFormula, tmp, family="qpois", link="log", deriv=1, weights = tmp$weights, ev=d$time)
             tmp_slope = predict(tmp_slope_model, band="global", se.fit=TRUE, where="fitp")
